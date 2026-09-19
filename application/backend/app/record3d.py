@@ -59,7 +59,8 @@ USB_STUCK = (
     "usbmuxd is not answering: replug the iPhone while it is unlocked; if that does not help, "
     "run: sudo systemctl restart usbmuxd"
 )
-USB_WAITING = "connected over USB, waiting for frames: press the red button in Record3D"
+USB_WAITING = "connected over USB - now press the red record button in Record3D to start the stream"
+USB_RETRY_MAX_S = 2.0  # the app refuses while it is busy; be quick once the user has stopped it
 ROTATIONS = {0: None, 90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
 HOST_PATTERN = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(:\d{1,5})?$")
 
@@ -223,7 +224,7 @@ class Record3DClient:
             self.state, self.detail = "error", problem
             LOGGER.info("Record3D %s: %s; retrying in %.0f s", self._host, problem, delay)
             await asyncio.sleep(delay)
-            delay = min(delay * 2, RETRY_MAX_S)
+            delay = min(delay * 2, USB_RETRY_MAX_S if self._host == USB else RETRY_MAX_S)
 
     async def _session(self) -> None:
         base = f"http://{self._host}"

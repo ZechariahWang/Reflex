@@ -29,9 +29,13 @@ MAX_SIDE_PX = 640  # the panel is ~450 px wide; bigger frames only cost the brow
 MAX_FPS = 30.0  # the phone sends 60; the page cannot show more and pays for every frame
 
 NO_PHONE = "no iPhone on USB: plug it in, unlock it and tap Trust"
-NOT_STREAMING = (
-    "iPhone found, but Record3D is not accepting the connection: Settings > Live RGBD Video "
-    "Streaming > USB, then press the red button"
+# The app only listens while it is IDLE (USB Streaming mode on, record button not active):
+# the computer connects first, and the record button then starts the stream. With the
+# button already active nothing listens, and the connection is refused.
+NOT_ACCEPTING = (
+    "Record3D refused the connection. It only accepts one while idle: if the red record button "
+    "is active on the phone, press it to stop (Settings > USB Streaming mode on, app open). "
+    "This reconnects by itself - then press record."
 )
 
 
@@ -94,7 +98,7 @@ def run(conn: Connection, make_stream: Callable[[], object] = record3d_stream) -
     stream.on_new_frame = on_new_frame
     stream.on_stream_stopped = on_stream_stopped
     if stream.connect(devices[0]) is False:
-        conn.send(("error", NOT_STREAMING))
+        conn.send(("error", NOT_ACCEPTING))
         return
     with pipe:
         conn.send(("connected",))

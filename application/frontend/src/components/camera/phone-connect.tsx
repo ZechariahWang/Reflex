@@ -93,7 +93,7 @@ export function PhoneConnect({ phone, error, onDone }: PhoneState & { onDone?: (
 
         <span className="label-micro leading-relaxed tracking-normal normal-case">
           {error ?? (phone?.detail ? phone.detail : null) ??
-            "USB: cable, works on any network."}
+            "USB: cable, works on any network. Record3D open and idle, press USB here, then the red record button - in that order."}
         </span>
       </form>
     </motion.div>

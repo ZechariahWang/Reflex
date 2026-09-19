@@ -195,7 +195,7 @@ def test_only_the_watched_image_is_rendered():
     ("factory", "expected"),
     [
         (functools.partial(FakeUsbStream, devices=()), "no iPhone on USB"),
-        (functools.partial(FakeUsbStream, accepts=False), "not accepting the connection"),
+        (functools.partial(FakeUsbStream, accepts=False), "refused the connection"),
     ],
 )
 def test_usb_problems_are_explained(factory, expected):

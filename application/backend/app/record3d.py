@@ -59,7 +59,15 @@ USB_STUCK = (
     "usbmuxd is not answering: replug the iPhone while it is unlocked; if that does not help, "
     "run: sudo systemctl restart usbmuxd"
 )
-USB_WAITING = "connected over USB - now press the red record button in Record3D to start the stream"
+USB_WAITING = "connected over USB, waiting for the first frame"
+# A connection that stays silent is dead on the phone's side (the app streams to its newest
+# client and never closes the old one). Reconnecting is safe - killing the worker really
+# closes the socket - and the app resumes at once, so do not sit on a silent one.
+USB_FIRST_FRAME_TIMEOUT_S = 5.0
+USB_SILENT = (
+    "connected over USB but Record3D sends no frames: press the red record button on the "
+    "phone (twice if it already looks active). Reconnecting."
+)
 USB_RETRY_MAX_S = 2.0  # the app refuses while it is busy; be quick once the user has stopped it
 ROTATIONS = {0: None, 90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
 HOST_PATTERN = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(:\d{1,5})?$")
@@ -208,7 +216,9 @@ class Record3DClient:
     async def _run(self) -> None:
         delay = RETRY_MIN_S
         while True:
-            self.state, self.detail = "connecting", ""
+            # `detail` keeps the last problem through the retry, so the card does not flicker
+            # between an explanation and nothing every couple of seconds.
+            self.state = "connecting"
             try:
                 await (self._usb_session() if self._host == USB else self._session())
                 problem = "stream ended"
@@ -278,20 +288,21 @@ class Record3DClient:
         try:
             # Frames can overtake the "connected" notice (the library starts reading before
             # connect() returns), so every message is handled in whatever order it arrives.
-            timeout: float | None = USB_START_TIMEOUT_S
+            timeout = USB_START_TIMEOUT_S
+            problem = USB_STUCK  # what a timeout means at this stage
             started = False
             while True:
                 try:
                     message = await asyncio.wait_for(messages.get(), timeout)
                 except asyncio.TimeoutError:
-                    raise ConnectionError("the iPhone stopped sending frames" if started else USB_STUCK) from None
+                    raise ConnectionError(problem) from None
                 if message[0] == "frame":
                     self.state, self.detail, timeout, started = "streaming", "", FRAME_TIMEOUT_S, True
+                    problem = USB_SILENT
                     self._on_frame(RgbdFrame(message[1], message[2]))
                 elif message[0] == "connected" and not started:
-                    # Hold the connection however long the frames take to start: giving up
-                    # and reconnecting only churns the phone's single client slot.
-                    self.detail, timeout, started = USB_WAITING, None, True
+                    self.detail, timeout, started = self.detail or USB_WAITING, USB_FIRST_FRAME_TIMEOUT_S, True
+                    problem = USB_SILENT
                 elif message[0] == "error":
                     raise ConnectionError(message[1])
                 elif message[0] == "stopped":

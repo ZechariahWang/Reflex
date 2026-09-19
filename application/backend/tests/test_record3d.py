@@ -109,8 +109,9 @@ class FakeUsbStream:
     inside the spawned worker process, so it has to be picklable by reference.
     """
 
-    def __init__(self, devices=("iphone",), accepts=True, wedged=False, frames_for_s=None):
+    def __init__(self, devices=("iphone",), accepts=True, wedged=False, frames_for_s=None, silent=False):
         self._devices, self._accepts, self._wedged, self._frames_for_s = list(devices), accepts, wedged, frames_for_s
+        self._silent = silent  # connected, but the phone streams to someone else and never closes us
         self.on_new_frame = self.on_stream_stopped = lambda: None
 
     def get_connected_devices(self):
@@ -119,7 +120,7 @@ class FakeUsbStream:
         return self._devices
 
     def connect(self, device):
-        if self._accepts:
+        if self._accepts and not self._silent:
             threading.Thread(target=self._pump, daemon=True).start()
         return self._accepts
 
@@ -195,12 +196,15 @@ def test_only_the_watched_image_is_rendered():
     ("factory", "expected"),
     [
         (functools.partial(FakeUsbStream, devices=()), "no iPhone on USB"),
-        (functools.partial(FakeUsbStream, accepts=False), "refused the connection"),
+        (functools.partial(FakeUsbStream, accepts=False), "not streaming yet"),
+        (functools.partial(FakeUsbStream, frames_for_s=0.0, silent=True), "sends no frames"),
     ],
 )
-def test_usb_problems_are_explained(factory, expected):
+def test_usb_problems_are_explained(factory, expected, monkeypatch):
+    monkeypatch.setattr("app.record3d.USB_FIRST_FRAME_TIMEOUT_S", 0.5)
     status, frames = run_usb(factory, 2.5)
-    assert status["state"] == "error" and expected in status["detail"] and not frames
+    # Mid-retry the state reads "connecting", but the explanation stays put.
+    assert status["state"] in ("error", "connecting") and expected in status["detail"] and not frames
     assert usb_workers() == []
 
 

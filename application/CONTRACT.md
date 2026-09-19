@@ -33,10 +33,13 @@ it can deadlock against the GIL when the stream ends at the same moment (the
 whole backend freezes and survives Ctrl-C as an orphan holding port 8000), and
 `get_connected_devices()` blocks forever on a wedged usbmuxd. Once connected the
 client holds the connection and waits for frames instead of reconnecting.
-**Order matters on the phone**: the app listens (port 1337 over usbmux) only
-while idle with USB Streaming mode on. The backend connects first, the record
-button then starts the stream. With the button already active the connection
-is refused; stopping it lets the 2 s retry connect.
+**What the phone does** (measured by probing usbmux port 1337 on a real
+iPhone; the library README's "connect, then press record" is not how it behaves):
+the port is closed while the app is idle and opens when the red record button
+is pressed; the app streams to its NEWEST connection and silently abandons the
+older one without closing it. So: refused = app idle (retry every 2 s, tell the
+user to press record); connected but silent for 5 s = abandoned, reconnect.
+Never probe port 1337 while debugging - every probe steals the stream.
 
 **Wi-Fi** (address = the IP the app shows) - the way
 github.com/ZechariahWang/record_3d does it in the browser. Needs phone and backend

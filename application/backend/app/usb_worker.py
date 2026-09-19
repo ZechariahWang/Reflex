@@ -29,13 +29,11 @@ MAX_SIDE_PX = 640  # the panel is ~450 px wide; bigger frames only cost the brow
 MAX_FPS = 30.0  # the phone sends 60; the page cannot show more and pays for every frame
 
 NO_PHONE = "no iPhone on USB: plug it in, unlock it and tap Trust"
-# The app only listens while it is IDLE (USB Streaming mode on, record button not active):
-# the computer connects first, and the record button then starts the stream. With the
-# button already active nothing listens, and the connection is refused.
+# Measured on a real phone (usbmux port 1337): the port is closed while the app is idle and
+# opens when the red record button is pressed; the app then streams to whoever connected last.
 NOT_ACCEPTING = (
-    "Record3D refused the connection. It only accepts one while idle: if the red record button "
-    "is active on the phone, press it to stop (Settings > USB Streaming mode on, app open). "
-    "This reconnects by itself - then press record."
+    "Record3D is not streaming yet: open the app (Settings > USB Streaming mode on) and press "
+    "the red record button. This connects by itself within 2 s."
 )
 
 

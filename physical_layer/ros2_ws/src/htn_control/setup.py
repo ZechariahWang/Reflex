@@ -14,13 +14,14 @@ setup(
     zip_safe=True,
     maintainer='zech',
     maintainer_email='zechariahwang@gmail.com',
-    description='Hand HAL (sim / serial backends) and keyboard teleop',
+    description='Hand HAL (sim / feetech backends) and keyboard teleop',
     license='MIT',
     entry_points={
         'console_scripts': [
             'teleop = htn_control.teleop:main',
             'hal = htn_control.hal_node:main',
             'teleop_gui = htn_control.teleop_gui:main',
+            'servo_tool = htn_control.servo_tool:main',
         ],
     },
 )

@@ -1,0 +1,146 @@
+import os
+import threading
+
+import pytest
+
+from htn_control.hal.feetech import FeetechBus, FeetechError, from_u16, u16
+from htn_control.hal.feetech_backend import to_norm, to_step
+from htn_control.servo_tool import set_id
+
+
+class FakeServos:
+    """Servos on the master side of a pty; answers like the real bus."""
+
+    def __init__(self, ids):
+        self.registers = {i: bytearray(80) for i in ids}
+        self.silent = set()
+        self.corrupt = False
+        self.requests = []
+        self.master, slave = os.openpty()
+        self.port = os.ttyname(slave)
+        threading.Thread(target=self.run, daemon=True).start()
+
+    def run(self):
+        buffer = b''
+        while True:
+            try:
+                buffer += os.read(self.master, 256)
+            except OSError:
+                return
+            while len(buffer) >= 4 and len(buffer) >= 4 + buffer[3]:
+                packet, buffer = buffer[:4 + buffer[3]], buffer[4 + buffer[3]:]
+                self.requests.append(packet)
+                self.handle(packet[2], packet[4], packet[5:-1])
+
+    def reply(self, servo_id, data=b''):
+        if servo_id in self.silent or servo_id not in self.registers:
+            return
+        body = bytes([servo_id, len(data) + 2, 0]) + data
+        checksum = ~sum(body) & 0xFF
+        if self.corrupt:
+            checksum ^= 0xFF
+        os.write(self.master, b'\xff\xff' + body + bytes([checksum]))
+
+    def store(self, servo_id, addr, data):
+        registers = self.registers.get(servo_id)
+        if registers is None:
+            return
+        if addr == 5 and registers[55] != 0:
+            return  # EEPROM locked
+        registers[addr:addr + len(data)] = data
+        if addr == 5:
+            self.registers[data[0]] = self.registers.pop(servo_id)
+
+    def handle(self, servo_id, instruction, params):
+        if instruction == 0x01:
+            self.reply(servo_id)
+        elif instruction == 0x02:
+            addr, length = params
+            if servo_id in self.registers:
+                self.reply(servo_id, bytes(self.registers[servo_id][addr:addr + length]))
+        elif instruction == 0x03:
+            self.store(servo_id, params[0], params[1:])
+            self.reply(servo_id if servo_id in self.registers else params[1])
+        elif instruction == 0x83:
+            addr, length = params[0], params[1]
+            for i in range(2, len(params), length + 1):
+                self.store(params[i], addr, params[i + 1:i + 1 + length])
+        elif instruction == 0x82:
+            addr, length = params[0], params[1]
+            for i in params[2:]:
+                if i in self.registers:
+                    self.reply(i, bytes(self.registers[i][addr:addr + length]))
+
+
+@pytest.fixture
+def servos():
+    return FakeServos([1, 2, 3])
+
+
+@pytest.fixture
+def bus(servos):
+    bus = FeetechBus(servos.port, timeout=0.2)
+    yield bus
+    bus.close()
+
+
+def test_ping_packet_matches_known_bytes(servos, bus):
+    assert bus.ping(1)
+    assert servos.requests[0] == bytes.fromhex('ffff010201fb')
+
+
+def test_ping_absent_servo_is_false(bus):
+    assert not bus.ping(9)
+
+
+def test_write_then_read_is_little_endian(servos, bus):
+    bus.write(1, 42, u16(0x0123))
+    assert servos.registers[1][42:44] == b'\x23\x01'
+    assert from_u16(bus.read(1, 42, 2)) == 0x0123
+
+
+def test_corrupt_checksum_raises(servos, bus):
+    servos.corrupt = True
+    with pytest.raises(FeetechError):
+        bus.read(1, 56, 2)
+
+
+def test_read_timeout_raises(servos, bus):
+    servos.silent.add(1)
+    with pytest.raises(FeetechError):
+        bus.read(1, 56, 2)
+
+
+def test_sync_write_reaches_each_servo(servos, bus):
+    bus.sync_write(42, {1: u16(100), 2: u16(2000), 3: u16(4095)})
+    bus.ping(1)  # a sync write has no reply; wait for the bus to drain
+    assert [from_u16(servos.registers[i][42:44]) for i in (1, 2, 3)] == [100, 2000, 4095]
+
+
+def test_sync_read_omits_silent_servo(servos, bus):
+    for i in (1, 2, 3):
+        servos.registers[i][56:58] = u16(1000 + i)
+    servos.silent.add(2)
+    result = bus.sync_read(56, 2, [1, 2, 3])
+    assert {i: from_u16(d) for i, d in result.items()} == {1: 1001, 3: 1003}
+
+
+def test_set_id_changes_id_and_locks_eeprom(servos, bus):
+    servos.registers[1][55] = 1
+    set_id(bus, 1, 7)
+    assert 7 in servos.registers and 1 not in servos.registers
+    assert servos.registers[7][55] == 1
+
+
+def test_set_id_refuses_id_in_use(servos, bus):
+    with pytest.raises(ValueError):
+        set_id(bus, 1, 2)
+    assert 1 in servos.registers
+
+
+def test_step_mapping_round_trips_with_mirrored_servo():
+    assert to_step(0.0, 3000, 1000) == 3000
+    assert to_step(1.0, 3000, 1000) == 1000
+    assert to_step(0.25, 3000, 1000) == 2500
+    assert to_norm(2500, 3000, 1000) == pytest.approx(0.25)
+    assert to_norm(to_step(0.6, 1000, 3000), 1000, 3000) == pytest.approx(0.6, abs=1e-3)

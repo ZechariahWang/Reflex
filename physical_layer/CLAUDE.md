@@ -43,8 +43,9 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
   - `hal_node.py`: subscribes `/hand/command` (5 x 0..1), clamps, rate-limits
     (`max_speed`), writes to a backend, publishes `/hand/state`.
   - `hal/`: `HandBackend` base class, `SimBackend` (radians ->
-    `/hand_position_controller/commands`), `SerialBackend` (servo degrees over
-    serial; wire protocol documented in the file - firmware must match it).
+    `/hand_position_controller/commands`), `FeetechBackend` (Feetech ST bus servos on
+    a USB bus adapter, no MCU; `hal/feetech.py` is the wire protocol, no ROS in
+    it; design in `docs/specs/feetech-hal-design.md`).
     New hardware = new subclass registered in `hal/__init__.py`.
   - `teleop_gui.py` (tkinter window, started by the launch files): hold-to-move,
     open/close key pairs `Q/A W/S E/D R/F T/G` = thumb..pinky; releasing holds
@@ -119,5 +120,6 @@ ros2 topic echo /hand/state --once
 ros2 control list_controllers      # both must be active
 ```
 
-The serial backend can be tested without hardware by pointing `serial_port` at a
-pty and reading the `S ...` lines it writes.
+The Feetech protocol has tests with a fake servo bus on a pty (no hardware):
+`python3 -m pytest ros2_ws/src/htn_control/test` with ROS sourced. Servo setup:
+`ros2 run htn_control servo_tool scan | set-id <old> <new> | jog <id>`.

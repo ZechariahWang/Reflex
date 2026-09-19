@@ -25,7 +25,7 @@ def generate_launch_description():
             default_value=PathJoinSubstitution([description_pkg, 'config', 'hand_params.yaml']),
             description='Physical parameters of the hand'),
         DeclareLaunchArgument('serial_port', default_value='/dev/ttyACM0'),
-        DeclareLaunchArgument('baud_rate', default_value='115200'),
+        DeclareLaunchArgument('baud_rate', default_value='1000000'),
         DeclareLaunchArgument('teleop', default_value='true',
                               description='Open the finger control window'),
         DeclareLaunchArgument('foxglove', default_value='true',
@@ -39,12 +39,12 @@ def generate_launch_description():
             parameters=[{'robot_description': robot_description}],
         ),
 
-        # HAL: /hand/command (0..1 per finger) -> microcontroller. Also
+        # HAL: /hand/command (0..1 per finger) -> servo bus. Also
         # publishes /joint_states so the model in Foxglove follows the hand.
         Node(
             package='htn_control',
             executable='hal',
-            parameters=[{'backend': 'serial', 'params_file': params_file,
+            parameters=[{'backend': 'feetech', 'params_file': params_file,
                          'serial_port': LaunchConfiguration('serial_port'),
                          'baud_rate': ParameterValue(LaunchConfiguration('baud_rate'), value_type=int)}],
             output='screen',

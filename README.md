@@ -6,7 +6,7 @@ Monorepo for the exoskeleton hand.
   - `ros2_ws/` - ROS 2 (Humble) workspace
     - `htn_description` - URDF of the hand, generated from `config/hand_params.yaml`
     - `htn_launch` - `sim.launch.py` and `hardware.launch.py`
-    - `htn_control` - hand HAL (sim / serial backends) and keyboard teleop
+    - `htn_control` - hand HAL (sim / feetech backends) and keyboard teleop
     - `htn_auto` - autonomous finger control (stub; policy/VLA details live outside the workspace)
 
 ## Run
@@ -50,7 +50,7 @@ same control window.
 
 ```
 teleop / auto --/hand/command--> HAL --+-- sim backend    -> ros2_control -> Gazebo
-               (5 x 0..1)         |    +-- serial backend -> microcontroller -> servos
+               (5 x 0..1)         |    +-- feetech backend -> USB bus adapter -> servos
                                   +--/hand/state-->
 ```
 
@@ -62,5 +62,6 @@ teleop / auto --/hand/command--> HAL --+-- sim backend    -> ros2_control -> Gaz
   servo calibration. The URDF and the HAL both read it; pass
   `params_file:=/path/to/other.yaml` to either launch file to try another hand.
 - New hardware = a new `HandBackend` subclass in `htn_control/hal/`, registered
-  in `hal/__init__.py`. The serial protocol the firmware must speak is
-  documented in `hal/serial_backend.py`.
+  in `hal/__init__.py`. The real hand uses Feetech ST bus servos
+  (`hal/feetech.py`, `hal/feetech_backend.py`); `servo_tool` sets ids and finds
+  calibration steps.

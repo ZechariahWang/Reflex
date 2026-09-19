@@ -82,11 +82,13 @@ sim_mount:
   xyz: [0.0, 0.0, 0.30]
   rpy: [0.0, -1.5708, 0.0]
 
-# Real servos (HAL serial backend only): servo angle, in degrees, at finger
-# fully open / fully closed. Swap the two numbers for a mirrored servo.
+# Real servos (HAL feetech backend only). Steps are 0..4095 (4096 per turn).
+# closed_step < open_step is correct for a mirrored servo. Find the values with
+# `ros2 run htn_control servo_tool jog <id>`.
 servos:
-  thumb:  {open_deg: 0.0, closed_deg: 90.0}
-  index:  {open_deg: 0.0, closed_deg: 90.0}
-  middle: {open_deg: 0.0, closed_deg: 90.0}
-  ring:   {open_deg: 0.0, closed_deg: 90.0}
-  pinky:  {open_deg: 0.0, closed_deg: 90.0}
+  torque_limit: 300    # 0..1000, fraction of stall torque, set at each start
+  thumb:  {id: 1, open_step: 2048, closed_step: 3072}
+  index:  {id: 2, open_step: 2048, closed_step: 3072}
+  middle: {id: 3, open_step: 2048, closed_step: 3072}
+  ring:   {id: 4, open_step: 2048, closed_step: 3072}
+  pinky:  {id: 5, open_step: 2048, closed_step: 3072}

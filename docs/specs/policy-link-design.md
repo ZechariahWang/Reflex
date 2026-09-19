@@ -194,8 +194,21 @@ time, and fails if `/hand/state` does not follow.
    simulated camera, so `connect()` fails with a RealSense unplugged.
 4. Full loop: `policy_server` and `RobotClient` with `smolvla_base` (the
    actions have no meaning, the loop and the timing are the test). Measure the
-   frame age and the command rate.
-5. Remove `htn_auto`, update the CLAUDE.md files.
+   frame age and the command rate. The commands are in
+   `policy/README.md`, checked against the 0.6.1 source, not run.
+5. Done: `htn_auto` removed, the CLAUDE.md files and the README updated.
+
+## Open: the camera key
+
+In lerobot 0.6.1, `RobotClient` does not pass a `rename_map`, and
+`policy_server` overrides the map of the checkpoint with that empty map. It
+then looks up `observation.images.<camera key of the robot>` in the image
+features of the policy. With the key `wrist` and a policy that expects
+`camera2` this is a `KeyError`. A `rename_map` works in training and in
+`lerobot-record`, but not in async inference. Option: name the camera
+`camera2` in the adapter (`CAMERA` in `convert.py`), so that no map is
+necessary anywhere. Decide before the first recording; the key is in the
+dataset.
 
 ## Not verified
 

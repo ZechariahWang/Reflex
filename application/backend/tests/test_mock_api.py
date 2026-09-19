@@ -104,3 +104,13 @@ def test_passive_request_round_trips_through_the_state(client):
         for _ in range(10):
             message = ws.receive_json()
         assert message["passive"] is False
+
+
+def test_meshes_and_linkage_come_from_the_description_package(client):
+    stl = client.get("/api/meshes/index_horn.stl")
+    assert stl.status_code == 200 and len(stl.content) > 1000
+    assert client.get("/api/meshes/..%2Fconfig%2Flinkage.yaml").status_code == 404
+    assert client.get("/api/meshes/nope.stl").status_code == 404
+    linkage = client.get("/api/linkage").json()
+    assert set(linkage) == set(FINGERS)
+    assert set(linkage["thumb"]["pivots"]) == {"G0", "G1", "G2", "P", "A", "B", "M", "E", "T", "U"}

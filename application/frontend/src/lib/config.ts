@@ -11,6 +11,9 @@ const WS_BASE_URL = BACKEND_URL.replace(/^http/, "ws")
 export const API = {
   health: `${BACKEND_URL}/api/health`,
   urdf: `${BACKEND_URL}/api/urdf`,
+  linkage: `${BACKEND_URL}/api/linkage`,
+  /** A `package://htn_description/meshes/<name>` visual of the URDF. */
+  mesh: (name: string) => `${BACKEND_URL}/api/meshes/${encodeURIComponent(name)}`,
   iphone: `${BACKEND_URL}/api/iphone`,
 } as const
 

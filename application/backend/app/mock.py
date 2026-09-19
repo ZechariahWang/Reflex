@@ -14,7 +14,7 @@ from .depth import HEADER_BYTES
 from .hub import FINGERS, Hub, ticks
 from .record3d import encode_hue_depth
 
-JOINT_MAX_RAD = 1.57
+JOINT_MAX_RAD = 1.25  # within every finger's max_angle in hand_params.yaml
 JOINT_RATE_HZ = 100
 CAMERA_RATE_HZ = 15
 CURL_PERIOD_S = 4.0

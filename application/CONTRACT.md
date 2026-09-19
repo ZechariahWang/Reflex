@@ -84,6 +84,9 @@ The backend reconnects to rosbridge forever with backoff and never exits because
 ```
 `hz` = messages/s received from ROS over the last ~2 s, `age_ms` = ms since the last one (`null` if never).
 
+### `GET /api/meshes/{name}.stl`, `GET /api/linkage`
+The hand's meshes and linkage geometry are files of `htn_description` (env `DESCRIPTION_DIR`, default: this repo's package), not topics. `meshes/<name>` serves the STL behind a URDF visual `package://htn_description/meshes/<name>` (millimetres, CAD frame). `linkage` is `config/linkage.yaml` as JSON: per finger the ten pivots, the closing sense and the limits. The URDF is a tree and cannot say where its loops close, and nobody publishes passive joints for the COMMANDED pose, so the viewer solves the linkage itself (`components/hand/linkage.ts`, a port of `htn_control/linkage.py`, equal to 1e-14 rad).
+
 ### `GET /api/urdf`
 `200 text/xml` - the latest `/robot_description`. `503` until one has arrived. In mock mode serve a bundled copy (`backend/mock/hand.urdf`, generated once from the real xacro).
 

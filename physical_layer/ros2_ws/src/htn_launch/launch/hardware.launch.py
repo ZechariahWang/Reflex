@@ -44,6 +44,15 @@ def generate_launch_description():
             parameters=[{'robot_description': robot_description}],
         ),
 
+
+        # The URDF is a tree, the finger linkages have loops: this closes them
+        # by publishing the passive joints next to the driven ones
+        Node(
+            package='htn_control',
+            executable='linkage_publisher',
+            parameters=[{'params_file': params_file}],
+        ),
+
         # HAL: /hand/command (0..1 per finger) -> servo bus. Also
         # publishes /joint_states so the model in Foxglove follows the hand.
         Node(

@@ -22,6 +22,7 @@ setup(
             'hal = htn_control.hal_node:main',
             'teleop_gui = htn_control.teleop_gui:main',
             'servo_tool = htn_control.servo_tool:main',
+            'linkage_publisher = htn_control.linkage_publisher:main',
         ],
     },
 )

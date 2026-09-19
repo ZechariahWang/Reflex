@@ -8,6 +8,9 @@ from pathlib import Path
 
 DEFAULT_CORS_ORIGINS = ("http://localhost:3000", "http://127.0.0.1:3000")
 MOCK_URDF_PATH = Path(__file__).resolve().parent.parent / "mock" / "hand.urdf"
+# The hand's meshes and linkage geometry are files, not topics: they come from the description
+# package of this repository (the URDF itself still arrives over ROS).
+REPO_DESCRIPTION_DIR = Path(__file__).resolve().parents[3] / "physical_layer" / "ros2_ws" / "src" / "htn_description"
 
 
 @dataclass(frozen=True)
@@ -19,6 +22,7 @@ class Settings:
     depth_min_mm: int = 150
     depth_max_mm: int = 2000
     record3d_host: str = ""
+    description_dir: Path = REPO_DESCRIPTION_DIR
     record3d_rotation: int = 90  # the phone's sensor is portrait; 90 / 270 show it landscape
 
     @property
@@ -37,5 +41,6 @@ class Settings:
             depth_min_mm=int(env.get("DEPTH_MIN_MM", "150")),
             depth_max_mm=int(env.get("DEPTH_MAX_MM", "2000")),
             record3d_host=env.get("RECORD3D_HOST", "").strip(),
+            description_dir=Path(env.get("DESCRIPTION_DIR", str(REPO_DESCRIPTION_DIR))),
             record3d_rotation=int(env.get("RECORD3D_ROTATION", "90")),
         )

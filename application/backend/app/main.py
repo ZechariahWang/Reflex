@@ -5,11 +5,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Callable, Coroutine, Sequence
 
+import yaml
 from fastapi import FastAPI, HTTPException, Response, WebSocket, WebSocketDisconnect, status
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -22,6 +25,7 @@ from .ros_client import RosClient
 STATE_PERIOD_S = 0.033
 META_PERIOD_S = 1.0
 
+MESH_NAME = re.compile(r"^[a-z0-9_]+\.stl$")
 MOCK_PHONE = {"host": "mock", "state": "streaming", "detail": ""}
 
 LOGGER = logging.getLogger(__name__)
@@ -112,6 +116,23 @@ def create_app(settings: Settings) -> FastAPI:
         if xml is None:
             return Response("robot_description has not arrived yet", status_code=503, media_type="text/plain")
         return Response(xml, media_type="text/xml")
+
+    @app.get("/api/meshes/{name}")
+    def mesh(name: str) -> FileResponse:
+        """A visual of the URDF: `package://htn_description/meshes/<name>` (STL, millimetres)."""
+        path = settings.description_dir / "meshes" / name
+        if not MESH_NAME.fullmatch(name) or not path.is_file():
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "no such mesh")
+        return FileResponse(path, media_type="model/stl", headers={"Cache-Control": "max-age=3600"})
+
+    @app.get("/api/linkage")
+    def linkage() -> dict:
+        """Pivots of every finger's linkage (config/linkage.yaml). The URDF is a tree and cannot
+        say where its loops close, and the viewer has to pose a commanded hand ROS never publishes."""
+        path = settings.description_dir / "config" / "linkage.yaml"
+        if not path.is_file():
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "no linkage.yaml in the description package")
+        return yaml.safe_load(path.read_text())["fingers"]
 
     def phone_status() -> dict:
         return {**(MOCK_PHONE if settings.mock else phone.status()), "rotation": hub.iphone_rotation}

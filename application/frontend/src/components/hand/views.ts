@@ -9,8 +9,9 @@ const LEVEL = (84 * Math.PI) / 180
 export const VIEW_ANGLES: Record<ViewPreset, { azimuth: number; polar: number }> = {
   iso: { azimuth: 0.72, polar: 1.08 },
   top: { azimuth: Math.PI / 2, polar: 0.02 },
-  side: { azimuth: 0, polar: LEVEL },
-  front: { azimuth: Math.PI / 2, polar: LEVEL },
+  // The fingers point at +Z: from there it is the front, from +X the profile that shows the linkages work.
+  side: { azimuth: Math.PI / 2, polar: LEVEL },
+  front: { azimuth: 0, polar: LEVEL },
 }
 
 /** The idle orbit would walk the camera off an orthographic-style preset, so only these drift. */

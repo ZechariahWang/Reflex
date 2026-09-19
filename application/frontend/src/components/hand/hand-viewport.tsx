@@ -21,7 +21,7 @@ const HandScene = dynamic(() => import("./hand-scene"), { ssr: false })
 
 const URDF_TOPIC = "/robot_description"
 /** How the model is stood up in the viewport; the gizmo shows the same frame. */
-const FRAME_NOTE = "base_link, -Z up"
+const FRAME_NOTE = "base_link, +Z up"
 const EASE = [0.22, 1, 0.36, 1] as const
 /** Gaps shorter than this (first message, a quick reconnect) never raise the notice. */
 const NOTICE_DELAY_S = 1.2
@@ -117,7 +117,7 @@ export function HandViewport() {
           >
             <SceneBoundary onError={sceneFailed}>
               <HandScene
-                urdf={urdf.xml}
+                description={urdf}
                 view={view}
                 ghost={ghost}
                 reducedMotion={reducedMotion}

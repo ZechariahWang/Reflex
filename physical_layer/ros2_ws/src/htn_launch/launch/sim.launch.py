@@ -29,6 +29,13 @@ def generate_launch_description():
                  ' params_file:=', params_file,
                  ' controllers_file:=', controllers_file]),
         value_type=str)
+    # Gazebo cannot close the loops of the finger linkages, and free passive
+    # links would dangle: it simulates base + servo horns only. Everything that
+    # draws the hand gets the full description above plus linkage_publisher.
+    physics_description = Command(['xacro ', xacro_file,
+                                   ' sim:=gazebo parts:=horns',
+                                   ' params_file:=', params_file,
+                                   ' controllers_file:=', controllers_file])
 
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution(
@@ -43,7 +50,7 @@ def generate_launch_description():
     spawn = Node(
         package='ros_gz_sim',
         executable='create',
-        arguments=['-topic', 'robot_description', '-name', 'htn_hand'],
+        arguments=['-string', physics_description, '-name', 'htn_hand'],
         output='screen',
     )
 
@@ -98,6 +105,15 @@ def generate_launch_description():
             target_action=spawn, on_exit=[joint_state_broadcaster])),
         RegisterEventHandler(OnProcessExit(
             target_action=joint_state_broadcaster, on_exit=[hand_position_controller])),
+
+
+        # The URDF is a tree, the finger linkages have loops: this closes them
+        # by publishing the passive joints next to the driven ones
+        Node(
+            package='htn_control',
+            executable='linkage_publisher',
+            parameters=[{'params_file': params_file, 'use_sim_time': True}],
+        ),
 
         # HAL: /hand/command (0..1 per finger) -> simulated servos
         Node(

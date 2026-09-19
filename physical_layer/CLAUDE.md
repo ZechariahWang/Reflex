@@ -30,12 +30,28 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
 
 ## Packages (`ros2_ws/src`)
 
-- `htn_description` - `urdf/hand.urdf.xacro` builds the whole URDF from
-  `config/hand_params.yaml` (palm/finger sizes, masses, angle limits, mount
-  poses, joint physics, sim mount, servo calibration). Change the hand by
-  editing the YAML, not the xacro. Mount poses in the YAML are written for a
-  right hand; `handedness: left` (current) mirrors them in the xacro. `sim:=gazebo` pulls in `hand.gazebo.xacro`
-  (world mount + ros2_control).
+- `htn_description` - the hand as built, from the Fusion CAD export.
+  `tools/cad_to_linkage.py <export folder>` generates `meshes/` (decimated STL,
+  mm, CAD assembly frame) and `config/linkage.yaml`: the export only contains
+  the joints somebody defined in Fusion (2 of ~50), so the tool finds the
+  pivots from the pin holes parts share. Every finger is the same 1-DOF chain
+  of three four-bars (horn - pushrod - triangle - ternary bar - adapter + pad,
+  with a long link and a binary bar; diagram in the tool). `urdf/hand.urdf.xacro`
+  builds the URDF from that plus `config/hand_params.yaml` (limits, masses,
+  colours, sim mount, servo calibration - what a person decides).
+  - `<finger>_joint` is the SERVO HORN, 0 = open = CAD pose, positive closes,
+    `max_angle` = horn angle for a 90 deg curl of the contact pad (~72-74 deg);
+    the linkage binds at 84-100 deg (`lock_rad`). `<finger>_finger` is the
+    adapter + contact pad. `base_link` is the CAD frame: fingers along +Y,
+    curling to -Z, thumb on +X (a left hand).
+  - URDF is a tree, the linkage has loops: each part hangs on one pivot, and the
+    six passive joints per finger (`<finger>_{rod,triangle,ternary,long,binary,adapter}_joint`)
+    are published by `htn_control`'s `linkage_publisher` from the horn angles
+    (`htn_control/linkage.py`, pure maths; `test_linkage.py` checks on the
+    generated URDF that every loop closes to < 0.05 mm).
+  - `sim:=gazebo` pulls in `hand.gazebo.xacro` (world mount + ros2_control).
+    Gazebo cannot close loops, so `sim.launch.py` spawns `parts:=horns` (base +
+    horns, marker cubes) while robot_state_publisher gets the full description.
 - `htn_launch` - `sim.launch.py`, `hardware.launch.py`, `config/controllers.yaml`,
   `worlds/`. `camera.launch.py` is the camera HAL, included by both (the camera
   is real even when the hand is simulated): it pins the RealSense driver to the
@@ -71,13 +87,18 @@ rosbridge, see `docs/specs/policy-link-design.md`.
 
 ## Gotchas
 
-- **URDF visuals are boxes only, main body first.** The web viewer in
-  `application/` restyles every box, builds the ghost hand from them and reads
-  each fingertip off the finger link's *first* box. Cylinders/spheres/meshes
-  would show up as solid lumps in the ghost overlay. Decorative parts go through
-  the `vbox` macro; colours live under `appearance:` in `hand_params.yaml`.
-  Collisions and inertia stay the plain palm plate / finger box - looks never
-  change physics.
+- **What the web viewer reads off the URDF**: material NAMES pick the look
+  (`body servo finger accent pad wearer`, see `hand-model.ts`), links called
+  `<finger>_...` belong to that finger (ghost, per-finger fade), and the `pad`
+  mesh of `<finger>_finger` is where the fingertip label sits. Keep those when
+  editing the xacro. `wearer` is the CAD's mannequin hand: a static reference,
+  drawn faint, ignored when framing the camera.
+- **New CAD export**: rerun `tools/cad_to_linkage.py` (needs numpy, trimesh,
+  fast-simplification, scipy, networkx), then regenerate the web mock:
+  `xacro urdf/hand.urdf.xacro > application/backend/mock/hand.urdf`. If the
+  closed angles changed, copy `closed_rad` into `max_angle` in hand_params.yaml.
+  The real servo calibration (`servos.*_step`) must be redone on hardware: step
+  values now mean horn angles of this linkage.
 
 - **DART joint limits**: in Gazebo a joint resting exactly on its limit ignores
   velocity commands and sticks forever. `hand.urdf.xacro` therefore widens the

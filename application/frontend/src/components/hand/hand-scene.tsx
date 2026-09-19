@@ -11,6 +11,7 @@ import { FINGERS } from "@/lib/types"
 
 import { LABEL_LAYOUT, resolveHud, type HudNodes, type HudRefs } from "./hand-hud"
 import { OVERLAY_LAYER, buildHandModel, type HandModel } from "./hand-model"
+import type { HandDescription } from "./use-urdf"
 import { VIEW_ANGLES, allowsAutoOrbit, type ViewPreset } from "./views"
 
 const PAGE = "#f6f6f6"
@@ -42,11 +43,11 @@ const GIZMO_LABEL_PX = 28
 
 const LABEL_RATE = 12
 
-/** base_link axes in the Y-up world, matching the model root's rotation: fingers hang along -Z, shown as up. */
-const ROS_AXES = { x: new Vector3(1, 0, 0), y: new Vector3(0, 0, 1), z: new Vector3(0, -1, 0) } as const
+/** base_link axes in the Y-up world, matching the model root's rotation: +Z (the back of the hand) is shown as up. */
+const ROS_AXES = { x: new Vector3(-1, 0, 0), y: new Vector3(0, 0, 1), z: new Vector3(0, 1, 0) } as const
 
 export interface HandSceneProps {
-  urdf: string
+  description: HandDescription
   view: ViewPreset | null
   ghost: boolean
   reducedMotion: boolean
@@ -171,7 +172,7 @@ function Hand({ solid, ghost, ghostEnabled, hud, onMovingChange }: HandProps) {
       moved = Math.max(moved, Math.abs(step))
       angles[i] += step
       curls[i] += (curl - curls[i]) * follow
-      rig.joint.setJointValue(angles[i])
+      rig.setAngle(angles[i])
     }
 
     // The shadow map only depends on the pose, never on the camera: redraw it while the fingers
@@ -196,7 +197,7 @@ function Hand({ solid, ghost, ghostEnabled, hud, onMovingChange }: HandProps) {
         const target = command[i] * rig.travel
         // A ghost that fades in should already be at the command, not sweep there from zero.
         ghostAngles[i] = wasHidden ? target : ghostAngles[i] + (target - ghostAngles[i]) * follow
-        rig.joint.setJointValue(ghostAngles[i])
+        rig.setAngle(ghostAngles[i])
         // Loud while the finger is still travelling to its target, a faint outline once it has arrived.
         const divergence = Math.min(1, Math.abs(command[i] - curls[i]) / GHOST_FULL_AT)
         ghost.setPresence(rig, pose.current.presence * MathUtils.lerp(GHOST_SETTLED, 1, divergence))
@@ -405,8 +406,11 @@ function CameraRig({
   )
 }
 
-function Stage({ urdf, view, ghost, reducedMotion, hud, onFreeLook }: HandSceneProps) {
-  const models = useMemo(() => ({ solid: buildHandModel(urdf, "solid"), ghost: buildHandModel(urdf, "ghost") }), [urdf])
+function Stage({ description, view, ghost, reducedMotion, hud, onFreeLook }: HandSceneProps) {
+  const models = useMemo(
+    () => ({ solid: buildHandModel(description, "solid"), ghost: buildHandModel(description, "ghost") }),
+    [description],
+  )
 
   const [moving, setMoving] = useState(true)
 

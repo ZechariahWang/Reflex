@@ -3,7 +3,7 @@ project(htn_description)
 
 find_package(ament_cmake REQUIRED)
 
-install(DIRECTORY config urdf
+install(DIRECTORY config urdf meshes
   DESTINATION share/${PROJECT_NAME}
 )
 

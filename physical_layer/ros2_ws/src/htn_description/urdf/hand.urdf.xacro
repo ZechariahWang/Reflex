@@ -1,24 +1,46 @@
 <?xml version="1.0"?>
 <robot name="htn_hand" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <!-- All dimensions, limits and physics come from this YAML -->
+  <!-- The hand as built: CAD meshes, and per finger the real linkage
+       (servo horn -> pushrod -> triangle -> bars -> adapter + contact pad).
+
+       URDF is a tree, the linkage has loops. So every part hangs on ONE of its
+       pivots, <finger>_joint (the servo horn) is the only driven joint, and the
+       other six joints of a finger are passive: htn_control's linkage_publisher
+       computes them from the horn angle, which closes the loops again.
+       Pivots come from config/linkage.yaml (generated from the CAD by
+       tools/cad_to_linkage.py); limits, masses and colours from hand_params.yaml.
+
+       base_link is the CAD assembly frame, in metres: fingers point along +Y,
+       they curl towards -Z (the palm side), the thumb is on the +X side. -->
+
   <xacro:arg name="params_file" default="$(find htn_description)/config/hand_params.yaml"/>
+  <xacro:arg name="linkage_file" default="$(find htn_description)/config/linkage.yaml"/>
   <!-- none: plain URDF (visualization) | gazebo: adds world mount + ros2_control -->
   <xacro:arg name="sim" default="none"/>
   <!-- controller_manager yaml, needed for sim:=gazebo -->
   <xacro:arg name="controllers_file" default=""/>
+  <!-- full: every part | horns: base + servo horns only. Gazebo gets `horns`:
+       it cannot close the loops, and free passive links would just dangle. -->
+  <xacro:arg name="parts" default="full"/>
 
   <xacro:property name="params" value="${xacro.load_yaml('$(arg params_file)')}"/>
-  <xacro:property name="palm" value="${params['palm']}"/>
+  <xacro:property name="linkage" value="${xacro.load_yaml('$(arg linkage_file)')['fingers']}"/>
   <xacro:property name="joint_params" value="${params['joint']}"/>
-  <!-- Mount poses in the YAML describe a right hand; a left hand is its mirror
-       image across the XZ plane: y, roll and yaw change sign -->
-  <xacro:property name="mirror" value="${-1.0 if params['handedness'] == 'left' else 1.0}"/>
+  <xacro:property name="full" value="${'$(arg parts)' == 'full'}"/>
+  <xacro:property name="MESHES" value="package://htn_description/meshes"/>
 
   <!-- Gazebo (DART) stops obeying velocity commands once a joint rests exactly
        on its limit, so in sim the hard stops sit slightly outside the commanded
        range [min_angle, max_angle] and the servos never touch them. -->
   <xacro:property name="limit_margin" value="${0.05 if '$(arg sim)' == 'gazebo' else 0.0}"/>
+
+  <!-- A pivot of finger `l` (linkage.yaml entry) as "x y z" in metres, relative to
+       pivot `origin` (None = the base frame). Pivots are 2-D in the linkage plane. -->
+  <xacro:property name="at" value="${lambda l, name, origin=None: ' '.join(str(v / 1000.0) for v in (
+      lambda p, o, c: ((c, p[0] - o[0], p[1] - o[1]) if l['axis'] == 'x' else (p[0] - o[0], p[1] - o[1], c)))(
+      l['pivots'][name], l['pivots'][origin] if origin else (0.0, 0.0), 0.0 if origin else l['plane']))}"/>
+  <xacro:property name="axis_of" value="${lambda l, sign=1: '%g 0 0' % sign if l['axis'] == 'x' else '0 0 %g' % sign}"/>
 
   <xacro:property name="look" value="${params['appearance']}"/>
   <xacro:macro name="colour" params="name">
@@ -29,106 +51,93 @@
   <xacro:colour name="finger"/>
   <xacro:colour name="accent"/>
   <xacro:colour name="pad"/>
+  <xacro:colour name="wearer"/>
 
-  <!-- A decorative box. Visuals are boxes only, and every link's first visual
-       is its main body: the web viewer in application/ restyles boxes and reads
-       fingertip positions off each finger's first box. Collisions and inertia
-       stay the plain palm plate / finger box. -->
-  <xacro:macro name="vbox" params="size xyz material">
+  <!-- A CAD mesh (mm, assembly frame) on a link whose frame sits at `pivot`. The
+       physics-only model gets a marker cube instead: Gazebo does not resolve
+       package:// paths by itself, and nobody looks at that model. -->
+  <xacro:macro name="part" params="mesh material pivot:='0 0 0'">
     <visual>
-      <origin xyz="${xyz}"/>
-      <geometry><box size="${size}"/></geometry>
+      <xacro:if value="${full}">
+        <origin xyz="${' '.join(str(-float(v)) for v in pivot.split())}"/>
+        <geometry><mesh filename="${MESHES}/${mesh}.stl" scale="0.001 0.001 0.001"/></geometry>
+      </xacro:if>
+      <xacro:unless value="${full}">
+        <geometry><box size="0.01 0.01 0.01"/></geometry>
+      </xacro:unless>
       <material name="${material}"/>
     </visual>
   </xacro:macro>
 
-  <!-- Inertia of a solid box about its centre -->
-  <xacro:macro name="box_inertial" params="m x y z xyz:='0 0 0'">
+  <!-- Gazebo needs an inertia on every moving link; a small solid cube will do -->
+  <xacro:macro name="cube_inertial" params="m side">
     <inertial>
-      <origin xyz="${xyz}"/>
       <mass value="${m}"/>
-      <inertia ixx="${m*(y*y+z*z)/12}" iyy="${m*(x*x+z*z)/12}" izz="${m*(x*x+y*y)/12}"
-               ixy="0" ixz="0" iyz="0"/>
+      <inertia ixx="${m*side*side/6}" iyy="${m*side*side/6}" izz="${m*side*side/6}" ixy="0" ixz="0" iyz="0"/>
     </inertial>
   </xacro:macro>
 
-  <!-- Palm: a flat plate, origin at its centre. +Z is the back of the hand -->
-  <xacro:property name="PL" value="${palm['length']}"/>
-  <xacro:property name="PW" value="${palm['width']}"/>
-  <xacro:property name="PT" value="${palm['thickness']}"/>
-  <xacro:property name="HOUSING_H" value="0.010"/>
-
-  <!-- Servo block on the back of the palm, right behind a finger's knuckle -->
-  <xacro:macro name="servo_block" params="name">
-    <xacro:property name="f" value="${params['fingers'][name]}"/>
-    <xacro:property name="yaw" value="${f['mount_rpy'][2]}"/>
-    <visual>
-      <origin xyz="${f['mount_xyz'][0] - 0.010 * cos(yaw)} ${mirror * (f['mount_xyz'][1] - 0.010 * sin(yaw))} ${PT/2 + 0.006}"
-              rpy="0 0 ${mirror * yaw}"/>
-      <geometry><box size="0.016 ${f['width'] + 0.004} 0.012"/></geometry>
-      <material name="servo"/>
-    </visual>
-  </xacro:macro>
-
   <link name="base_link">
-    <xacro:vbox size="${PL} ${PW} ${PT}" xyz="0 0 0" material="body"/>
-    <!-- back housing with an accent stripe -->
-    <xacro:vbox size="${PL*0.62} ${PW*0.78} ${HOUSING_H}" xyz="${-PL*0.10} 0 ${PT/2 + HOUSING_H/2}" material="body"/>
-    <xacro:vbox size="0.004 ${PW*0.78} 0.0012" xyz="${-PL*0.27} 0 ${PT/2 + HOUSING_H + 0.0006}" material="accent"/>
-    <!-- rubber wrist cuff -->
-    <xacro:vbox size="0.012 ${PW*0.86} 0.014" xyz="${-PL/2 - 0.004} 0 0.002" material="pad"/>
-    <!-- bracket carrying the thumb hinge, when it sits outside the plate -->
-    <xacro:property name="thumb" value="${params['fingers']['thumb']}"/>
-    <xacro:property name="overhang" value="${fabs(thumb['mount_xyz'][1]) + thumb['width']/2 - PW/2}"/>
-    <xacro:if value="${overhang > 0}">
-      <xacro:vbox size="0.020 ${overhang + 0.002} ${PT}"
-                  xyz="${thumb['mount_xyz'][0]} ${mirror * (PW/2 + overhang/2 - 0.001) * (1 if thumb['mount_xyz'][1] > 0 else -1)} 0"
-                  material="body"/>
+    <xacro:part mesh="base" material="body"/>
+    <xacro:if value="${full}">
+      <!-- the mannequin hand of the CAD, open: a reference for scale, it does not move -->
+      <xacro:part mesh="wearer" material="wearer"/>
     </xacro:if>
-    <xacro:servo_block name="thumb"/>
-    <xacro:servo_block name="index"/>
-    <xacro:servo_block name="middle"/>
-    <xacro:servo_block name="ring"/>
-    <xacro:servo_block name="pinky"/>
-    <collision>
-      <geometry><box size="${palm['length']} ${palm['width']} ${palm['thickness']}"/></geometry>
-    </collision>
-    <xacro:box_inertial m="${palm['mass']}" x="${palm['length']}" y="${palm['width']}" z="${palm['thickness']}"/>
+    <xacro:cube_inertial m="${params['base']['mass']}" side="0.10"/>
   </link>
 
-  <!-- One finger: a rigid box hanging down (-Z) from a single hinge -->
+  <!-- A passive link on its parent's pivot -->
+  <xacro:macro name="passive" params="finger role l parent pivot origin material">
+    <link name="${finger}_${role}">
+      <xacro:part mesh="${finger}_${role}" material="${material}" pivot="${at(l, pivot)}"/>
+    </link>
+    <joint name="${finger}_${role}_joint" type="continuous">
+      <parent link="${parent}"/>
+      <child link="${finger}_${role}"/>
+      <origin xyz="${at(l, pivot, origin)}"/>
+      <axis xyz="${axis_of(l)}"/>
+    </joint>
+  </xacro:macro>
+
   <xacro:macro name="finger" params="name">
     <xacro:property name="f" value="${params['fingers'][name]}"/>
-    <xacro:property name="L" value="${f['length']}"/>
-    <xacro:property name="W" value="${f['width']}"/>
+    <xacro:property name="l" value="${linkage[name]}"/>
 
-    <link name="${name}_finger">
-      <!-- main body first (see vbox note) -->
-      <xacro:vbox size="${W} ${W} ${L}" xyz="0 0 ${-L/2}" material="finger"/>
-      <!-- hinge block at the knuckle -->
-      <xacro:vbox size="${W*1.15} ${W*1.25} ${W*1.15}" xyz="0 0 0" material="accent"/>
-      <!-- two bands suggesting the finger segments -->
-      <xacro:vbox size="${W*1.06} ${W*1.06} 0.0015" xyz="0 0 ${-L*0.42}" material="body"/>
-      <xacro:vbox size="${W*1.06} ${W*1.06} 0.0015" xyz="0 0 ${-L*0.70}" material="body"/>
-      <!-- rubber fingertip pad on the palm-facing (-X) side -->
-      <xacro:vbox size="0.0025 ${W*0.80} ${L*0.26}" xyz="${-W/2 - 0.0008} 0 ${-L*0.85}" material="pad"/>
-      <collision>
-        <origin xyz="0 0 ${-L/2}"/>
-        <geometry><box size="${W} ${W} ${L}"/></geometry>
-      </collision>
-      <xacro:box_inertial m="${f['mass']}" x="${W}" y="${W}" z="${L}" xyz="0 0 ${-L/2}"/>
+    <!-- The servo horn: the one driven joint. Its axis is turned so that a
+         positive angle closes the finger, whichever way the horn really turns. -->
+    <link name="${name}_horn">
+      <xacro:part mesh="${name}_horn" material="servo" pivot="${at(l, 'G0')}"/>
+      <xacro:cube_inertial m="${f['mass']}" side="0.02"/>
     </link>
-
     <joint name="${name}_joint" type="revolute">
       <parent link="base_link"/>
-      <child link="${name}_finger"/>
-      <origin xyz="${f['mount_xyz'][0]} ${mirror * f['mount_xyz'][1]} ${f['mount_xyz'][2]}"
-              rpy="${mirror * f['mount_rpy'][0]} ${f['mount_rpy'][1]} ${mirror * f['mount_rpy'][2]}"/>
-      <axis xyz="0 1 0"/>
+      <child link="${name}_horn"/>
+      <origin xyz="${at(l, 'G0')}"/>
+      <axis xyz="${axis_of(l, l['closing'])}"/>
       <limit lower="${f['min_angle'] - limit_margin}" upper="${f['max_angle'] + limit_margin}"
              effort="${joint_params['max_effort']}" velocity="${joint_params['max_velocity']}"/>
       <dynamics damping="${joint_params['damping']}" friction="${joint_params['friction']}"/>
     </joint>
+
+    <xacro:if value="${full}">
+      <xacro:passive finger="${name}" role="rod" l="${l}" parent="${name}_horn" pivot="P" origin="G0" material="finger"/>
+      <xacro:passive finger="${name}" role="triangle" l="${l}" parent="base_link" pivot="G1" origin="${None}" material="accent"/>
+      <xacro:passive finger="${name}" role="ternary" l="${l}" parent="${name}_triangle" pivot="B" origin="G1" material="finger"/>
+      <xacro:passive finger="${name}" role="long" l="${l}" parent="base_link" pivot="G2" origin="${None}" material="finger"/>
+      <xacro:passive finger="${name}" role="binary" l="${l}" parent="${name}_long" pivot="T" origin="G2" material="finger"/>
+
+      <!-- <finger>_finger is the part on the wearer's finger: adapter + contact pad -->
+      <link name="${name}_finger">
+        <xacro:part mesh="${name}_adapter" material="accent" pivot="${at(l, 'E')}"/>
+        <xacro:part mesh="${name}_contact" material="pad" pivot="${at(l, 'E')}"/>
+      </link>
+      <joint name="${name}_adapter_joint" type="continuous">
+        <parent link="${name}_ternary"/>
+        <child link="${name}_finger"/>
+        <origin xyz="${at(l, 'E', 'B')}"/>
+        <axis xyz="${axis_of(l)}"/>
+      </joint>
+    </xacro:if>
   </xacro:macro>
 
   <xacro:finger name="thumb"/>

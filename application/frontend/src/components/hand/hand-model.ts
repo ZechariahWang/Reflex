@@ -1,6 +1,5 @@
 import {
   Box3,
-  BoxGeometry,
   EdgesGeometry,
   Group,
   LineBasicMaterial,
@@ -14,10 +13,12 @@ import {
   type BufferGeometry,
   type Material,
 } from "three"
-import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js"
 import URDFLoader, { type URDFJoint, type URDFRobot } from "urdf-loader"
 
 import { FINGERS, JOINT_MAX_RAD, type Finger } from "@/lib/types"
+
+import { PASSIVE_ROLES, passiveJointSolver, type PassiveAngles } from "./linkage"
+import type { HandDescription } from "./use-urdf"
 
 /** `solid` is the measured hand; `ghost` is the commanded pose drawn as a wireframe. */
 export type HandVariant = "solid" | "ghost"
@@ -28,31 +29,42 @@ const HAND_ROOT_LINK = "base_link"
 /** Layer for everything that must not end up in the contact-shadow pass (lines, the ghost). */
 export const OVERLAY_LAYER = 1
 
-/** The accent belongs to the commanded ghost alone; the measured hand is white and graphite. */
+/** The accent belongs to the commanded ghost alone; the measured hand is white, metal and graphite. */
 const SIGNAL = "#f2490c"
 const INK = "#242424"
-const CERAMIC = "#f4f4f2"
-const GRAPHITE = "#2b2c2f"
 
-/** Corner radius as a share of a box's thinnest side. */
-const BEVEL_RATIO = 0.14
-/** Edge lines sit on the bevel's arc rather than on the sharp corner it replaced. */
-const EDGE_INSET_RATIO = 0.25
-/** Gap between the ground and the palm resting over it, as a share of the hand's height. */
+/** Looks by URDF material name (`appearance` in hand_params.yaml names the parts, not these colours). */
+const SURFACES: Record<string, ConstructorParameters<typeof MeshPhysicalMaterial>[0]> = {
+  body: { color: "#2b2c2f", roughness: 0.55, metalness: 0.1 },
+  servo: { color: "#3b3c41", roughness: 0.45, metalness: 0.2 },
+  finger: { color: "#f4f4f2", roughness: 0.5, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.6 },
+  accent: { color: "#c4c6ca", roughness: 0.35, metalness: 0.65 },
+  pad: { color: "#1c1c1e", roughness: 0.9, metalness: 0 },
+  // The mannequin hand of the CAD: a quiet reference behind the machine, not part of it.
+  wearer: { color: "#d9d6d1", roughness: 0.95, metalness: 0, transparent: true, opacity: 0.32, depthWrite: false },
+}
+/** Parts drawn as a backdrop: no edge lines, no shadow. */
+const BACKDROP = new Set(["wearer"])
+const FALLBACK_SURFACE = SURFACES.finger
+
+/** Faces that meet at less than this stay one surface: CAD fillets must not become line hatching. */
+const EDGE_ANGLE_DEG = 38
+/** Gap between the ground and the lowest point of the hand, as a share of the hand's height. */
 const GROUND_CLEARANCE_RATIO = 0.04
 
 const GHOST_FILL_OPACITY = 0.05
-const GHOST_EDGE_OPACITY = 0.85
-const SOLID_EDGE_OPACITY = 0.18
+const GHOST_EDGE_OPACITY = 0.7
+const SOLID_EDGE_OPACITY = 0.16
 
 export interface FingerRig {
   finger: Finger
   /** Position in the system-wide finger order. */
   index: number
-  joint: URDFJoint
-  /** Joint travel in radians for a curl of 1. */
+  /** Travel of the driven joint (the servo horn) in radians for a curl of 1. */
   travel: number
-  /** Empty object at the far end of the finger link; labels anchor to it. */
+  /** Poses the whole finger for a driven-joint angle: the horn, and the linkage that follows it. */
+  setAngle: (angle: number) => void
+  /** Empty object in the middle of the contact pad; labels anchor to it. */
   tip: Object3D
   /** Per-finger materials, so each ghost finger can fade on its own. */
   materials: Material[]
@@ -72,8 +84,9 @@ export interface HandModel {
   dispose: () => void
 }
 
+/** Every part of a finger's linkage is a link called `<finger>_<part>`. */
 function fingerOfLink(name: string): Finger | null {
-  return FINGERS.find((finger) => name === `${finger}_finger`) ?? null
+  return FINGERS.find((finger) => name.startsWith(`${finger}_`)) ?? null
 }
 
 function owningLink(object: Object3D): string {
@@ -83,24 +96,23 @@ function owningLink(object: Object3D): string {
   return ""
 }
 
-/** The end of a finger link: its visual's centre pushed out to the far face, in link space. */
-function tipPosition(visualMesh: Mesh, size: Vector3, link: Object3D): Vector3 {
-  link.updateWorldMatrix(true, true)
-  const centre = link.worldToLocal(visualMesh.getWorldPosition(new Vector3()))
-  if (centre.lengthSq() === 0) return centre
-  const direction = centre.clone().normalize()
-  const halfExtent = Math.abs(direction.x) * size.x + Math.abs(direction.y) * size.y + Math.abs(direction.z) * size.z
-  return centre.addScaledVector(direction, halfExtent / 2)
-}
-
 /**
- * Parses the URDF and restyles it as a designed object: bevelled boxes sized from
- * the URDF geometry, physically based materials and thin edge lines (ink on the
- * measured hand, the accent on the ghost).
- * `<gazebo>` / `<ros2_control>` tags are skipped by the parser.
+ * Parses the URDF onto the CAD meshes and restyles it as a designed object: physically based
+ * materials by part, thin edge lines (ink on the measured hand, the accent on the ghost).
+ * `<gazebo>` / `<ros2_control>` tags are skipped by the parser. The meshes belong to the
+ * description and are shared by both variants, so they are not disposed here.
  */
-export function buildHandModel(urdf: string, variant: HandVariant): HandModel {
-  const robot = new URDFLoader().parse(urdf)
+export function buildHandModel(description: HandDescription, variant: HandVariant): HandModel {
+  const loader = new URDFLoader()
+  // Keep `package://` paths as they are: they are the keys of `description.meshes`.
+  loader.packages = (name: string) => `package://${name}`
+  // The loader hands over the URDF material; its name says which part this is (see SURFACES).
+  loader.loadMeshCb = (path, _manager, material, done) => {
+    const geometry = description.meshes.get(path)
+    if (geometry) done(new Mesh(geometry, material))
+    else done(new Object3D(), new Error(`mesh not loaded: ${path}`))
+  }
+  const robot = loader.parse(description.xml)
   const isGhost = variant === "ghost"
   const geometries: BufferGeometry[] = []
   const materials: Material[] = []
@@ -109,7 +121,6 @@ export function buildHandModel(urdf: string, variant: HandVariant): HandModel {
     materials.push(material)
     return material
   }
-
   const edgeMaterial = () =>
     track(
       new LineBasicMaterial({
@@ -119,35 +130,36 @@ export function buildHandModel(urdf: string, variant: HandVariant): HandModel {
         depthWrite: false,
       }),
     )
-  const palmEdges = edgeMaterial()
-  const graphite = isGhost
-    ? null
-    : track(
-        new MeshPhysicalMaterial({
-          color: GRAPHITE,
-          roughness: 0.5,
-          metalness: 0.1,
-        }),
-      )
+  const baseEdges = edgeMaterial()
+  const shared = new Map<string, Material>()
+  const surface = (name: string) => {
+    if (!shared.has(name)) shared.set(name, track(new MeshPhysicalMaterial(SURFACES[name] ?? FALLBACK_SURFACE)))
+    return shared.get(name)!
+  }
+  const edgesOf = new Map<BufferGeometry, EdgesGeometry>()
+  const edgeGeometry = (geometry: BufferGeometry) => {
+    if (!edgesOf.has(geometry)) {
+      const edges = new EdgesGeometry(geometry, EDGE_ANGLE_DEG)
+      geometries.push(edges)
+      edgesOf.set(geometry, edges)
+    }
+    return edgesOf.get(geometry)!
+  }
 
-  const fingerMaterials = new Map<Finger, Material[]>()
-  const tips = new Map<Finger, Object3D>()
-  const boxes: Mesh[] = []
+  const parts: Mesh[] = []
   robot.traverse((object) => {
-    if (object instanceof Mesh && object.geometry instanceof BoxGeometry) boxes.push(object)
+    if (object instanceof Mesh) parts.push(object)
   })
 
-  for (const mesh of boxes) {
-    const finger = fingerOfLink(owningLink(mesh))
-    const size = mesh.scale.clone()
-    const radius = Math.min(size.x, size.y, size.z) * BEVEL_RATIO
-
-    const stale = [mesh.geometry, mesh.material].flat()
-    stale.forEach((resource) => resource.dispose())
-
-    mesh.scale.setScalar(1)
-    mesh.geometry = new RoundedBoxGeometry(size.x, size.y, size.z, 3, radius)
-    geometries.push(mesh.geometry)
+  const backdrop = new Set<Mesh>()
+  const fingerMaterials = new Map<Finger, Material[]>()
+  const fingerEdges = new Map<Finger, LineBasicMaterial>()
+  const tips = new Map<Finger, Object3D>()
+  for (const mesh of parts) {
+    const link = owningLink(mesh)
+    const finger = fingerOfLink(link)
+    const look = (mesh.material as Material).name
+    ;[mesh.material].flat().forEach((material) => material.dispose()) // the loader's placeholder
 
     const own: Material[] = []
     if (isGhost) {
@@ -158,45 +170,36 @@ export function buildHandModel(urdf: string, variant: HandVariant): HandModel {
       mesh.material = fill
       mesh.layers.set(OVERLAY_LAYER)
       mesh.renderOrder = 2
-      // The palm never moves, so a commanded copy of it would only add noise.
+      // The base never moves, so a commanded copy of it would only add noise.
       mesh.visible = finger !== null
     } else {
-      mesh.castShadow = true
-      mesh.receiveShadow = true
-      if (finger) {
-        const surface = track(
-          new MeshPhysicalMaterial({
-            color: CERAMIC,
-            roughness: 0.5,
-            metalness: 0,
-            clearcoat: 0.3,
-            clearcoatRoughness: 0.6,
-          }),
-        )
-        own.push(surface)
-        mesh.material = surface
-      } else {
-        mesh.material = graphite!
-      }
+      mesh.castShadow = !BACKDROP.has(look)
+      mesh.receiveShadow = !BACKDROP.has(look)
+      mesh.material = surface(look)
+    }
+    if (BACKDROP.has(look)) {
+      mesh.renderOrder = 1 // after the opaque machine, which then shows through it
+      if (isGhost) mesh.visible = false
+      backdrop.add(mesh)
+      continue
     }
 
-    const inset = radius * EDGE_INSET_RATIO * 2
-    const outline = new BoxGeometry(size.x - inset, size.y - inset, size.z - inset)
-    const edgeGeometry = new EdgesGeometry(outline)
-    outline.dispose()
-    geometries.push(edgeGeometry)
-    const edges = new LineSegments(edgeGeometry, finger ? edgeMaterial() : palmEdges)
-    if (finger) own.push(edges.material)
+    if (finger && !fingerEdges.has(finger)) {
+      fingerEdges.set(finger, edgeMaterial())
+      own.push(fingerEdges.get(finger)!)
+    }
+    const edges = new LineSegments(edgeGeometry(mesh.geometry), finger ? fingerEdges.get(finger)! : baseEdges)
     edges.layers.set(OVERLAY_LAYER)
     edges.renderOrder = 3
     edges.visible = mesh.visible
     mesh.add(edges)
 
-    if (finger && !tips.has(finger)) {
-      const link = robot.links[`${finger}_finger`]
+    // The contact pad is where the wearer's finger sits: that is "the fingertip" of this hand.
+    if (finger && link === `${finger}_finger` && look === "pad") {
+      mesh.geometry.computeBoundingBox()
       const tip = new Object3D()
-      tip.position.copy(tipPosition(mesh, size, link))
-      link.add(tip)
+      mesh.geometry.boundingBox!.getCenter(tip.position) // mesh space (mm), scaled with the mesh
+      mesh.add(tip)
       tips.set(finger, tip)
     }
     if (finger) fingerMaterials.set(finger, [...(fingerMaterials.get(finger) ?? []), ...own])
@@ -204,35 +207,50 @@ export function buildHandModel(urdf: string, variant: HandVariant): HandModel {
 
   const fingers: FingerRig[] = []
   for (const finger of FINGERS) {
-    const joint = robot.joints[`${finger}_joint`]
+    const joint: URDFJoint | undefined = robot.joints[`${finger}_joint`]
     const tip = tips.get(finger)
     if (!joint || !tip) continue
     const upper = Number(joint.limit?.upper)
+    const travel = upper > 0 ? upper : JOINT_MAX_RAD
+
+    // The loops of the linkage close only if its passive joints follow the horn.
+    const geometry = description.linkage?.[finger]
+    const passive = PASSIVE_ROLES.map((role) => robot.joints[`${finger}_${role}_joint`])
+    const solve = geometry && passive.every(Boolean) ? passiveJointSolver(geometry, travel) : null
+    const angles: PassiveAngles = [0, 0, 0, 0, 0, 0]
+
     fingers.push({
       finger,
       index: FINGERS.indexOf(finger),
-      joint,
-      travel: upper > 0 ? upper : JOINT_MAX_RAD,
+      travel,
+      setAngle: (angle) => {
+        joint.setJointValue(angle)
+        if (!solve) return
+        solve(angle, angles)
+        for (let k = 0; k < passive.length; k++) passive[k].setJointValue(angles[k])
+      },
       tip,
       materials: fingerMaterials.get(finger) ?? [],
     })
   }
 
-  // Presented in its own `base_link` frame, palm resting over the ground and the open fingers
-  // standing up: base_link -Z (the way fingers hang) becomes three.js +Y. The sim bolts the hand
-  // to `world` through a rotated mount, which must not change how it is presented.
+  // Presented in its own `base_link` frame, which is the CAD frame: +Z is the back of the hand,
+  // the fingers point along +Y and curl towards -Z. base_link +Z becomes three.js +Y, so the
+  // hand hovers palm down. The sim bolts it to `world` through a mount, which must not show.
+  // Turned about the vertical as well, so the fingers point at the default camera (+Z).
   const root = new Group()
-  root.rotation.x = Math.PI / 2
+  root.rotation.set(-Math.PI / 2, 0, Math.PI)
   root.add(robot.links[HAND_ROOT_LINK] ?? robot)
 
   // Frame on the hand itself (whatever the URDF root is), over its whole travel.
   const box = new Box3()
   for (const curl of [0, 1]) {
-    fingers.forEach((rig) => rig.joint.setJointValue(rig.travel * curl))
+    fingers.forEach((rig) => rig.setAngle(rig.travel * curl))
     root.updateMatrixWorld(true)
-    boxes.forEach((mesh) => box.expandByObject(mesh))
+    // The camera frames the machine; the mannequin's forearm would push it into a corner.
+    parts.forEach((mesh) => backdrop.has(mesh) || box.expandByObject(mesh))
   }
-  fingers.forEach((rig) => rig.joint.setJointValue(0))
+  fingers.forEach((rig) => rig.setAngle(0))
 
   const size = box.getSize(new Vector3())
   const centre = box.getCenter(new Vector3())

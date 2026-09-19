@@ -7,7 +7,7 @@ Monorepo for the exoskeleton hand.
     - `htn_description` - URDF of the hand, generated from `config/hand_params.yaml`
     - `htn_launch` - `sim.launch.py` and `hardware.launch.py`
     - `htn_control` - hand HAL (sim / feetech backends) and keyboard teleop
-    - `htn_auto` - autonomous finger control (stub; policy/VLA details live outside the workspace)
+- `policy/` - LeRobot side of the learned policy (runs on the GPU laptop, talks to ROS through rosbridge), see `policy/README.md`
 
 ## Run
 

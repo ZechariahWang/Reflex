@@ -96,6 +96,21 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
 - A ROS package must never be called `launch` (shadows the `launch` Python
   module) - hence the `htn_` prefix everywhere.
 
+## Testing while someone else has the sim running
+
+Never `pkill` Gazebo / HAL processes and never start a second sim in the default
+ROS domain - the user (or `application/dev.sh`) often has one running. Test in
+isolation and kill only your own launch's children:
+
+```bash
+export ROS_DOMAIN_ID=77 IGN_PARTITION=claude_test
+ros2 launch htn_launch sim.launch.py teleop:=false foxglove:=false rosbridge:=false
+```
+
+If Gazebo dies, `sim.launch.py` shuts the whole launch down on purpose: the HAL
+runs on sim time, so without Gazebo it freezes silently and the control window
+looks alive while nothing moves.
+
 ## Testing without a GUI
 
 ```bash

@@ -1,0 +1,391 @@
+"use client"
+
+import { useEffect, useMemo, useRef } from "react"
+import { Canvas, useFrame, useThree } from "@react-three/fiber"
+import { ContactShadows, Environment, Grid, Lightformer, OrbitControls } from "@react-three/drei"
+import { MathUtils, NeutralToneMapping, Quaternion, Spherical, Vector3 } from "three"
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib"
+
+import { useSimStore } from "@/lib/sim-store"
+import { FINGERS } from "@/lib/types"
+
+import { LABEL_LAYOUT, resolveHud, type HudNodes, type HudRefs } from "./hand-hud"
+import { OVERLAY_LAYER, buildHandModel, type HandModel } from "./hand-model"
+import { VIEW_ANGLES, allowsAutoOrbit, type ViewPreset } from "./views"
+
+const PAGE = "#f6f6f6"
+const FOV_DEG = 28
+/** Breathing room around the hand's bounding sphere, which already spans the whole joint travel. */
+const FIT_MARGIN = 1.02
+/** 1/s. Turns 30 Hz samples into continuous motion with ~50 ms of lag. */
+const FOLLOW_RATE = 20
+const GHOST_FADE_RATE = 9
+/** Share of the ghost that stays drawn once the measured finger sits on its command. */
+const GHOST_SETTLED = 0.15
+/** Command/state gap (0..1 curl) at which the ghost is fully drawn. */
+const GHOST_FULL_AT = 0.06
+const VIEW_RATE = 4.5
+const VIEW_DONE = 1e-3
+const AUTO_ORBIT_RESUME_MS = 3500
+const GIZMO_AXIS_PX = 20
+const GIZMO_LABEL_PX = 28
+
+const LABEL_RATE = 12
+
+/** base_link axes in the Y-up world, matching the model root's rotation: fingers hang along -Z, shown as up. */
+const ROS_AXES = { x: new Vector3(1, 0, 0), y: new Vector3(0, 0, 1), z: new Vector3(0, -1, 0) } as const
+
+export interface HandSceneProps {
+  urdf: string
+  view: ViewPreset | null
+  ghost: boolean
+  reducedMotion: boolean
+  hud: HudRefs
+  /** The user took over the camera, so no preset applies any more. */
+  onFreeLook: () => void
+}
+
+function fitDistance(radius: number, aspect: number): number {
+  const vertical = MathUtils.degToRad(FOV_DEG) / 2
+  const horizontal = Math.atan(Math.tan(vertical) * aspect)
+  return (radius / Math.sin(Math.min(vertical, horizontal))) * FIT_MARGIN
+}
+
+function damp(rate: number, dt: number): number {
+  return 1 - Math.exp(-rate * dt)
+}
+
+/** Softbox studio built from Lightformers: no HDRI download, rendered once. */
+function Studio({ model }: { model: HandModel }) {
+  const { radius } = model.bounds
+  const extent = radius * 2.4
+
+  return (
+    <>
+      <color attach="background" args={[PAGE]} />
+      <Environment resolution={256} frames={1} environmentIntensity={0.8}>
+        <color attach="background" args={["#e6e6e6"]} />
+        <Lightformer form="rect" intensity={3.2} position={[0, 5, 0]} scale={[7, 7, 1]} target={[0, 0, 0]} />
+        <Lightformer form="rect" intensity={2.4} position={[-5, 2, 3]} scale={[6, 3, 1]} target={[0, 0, 0]} />
+        <Lightformer form="rect" intensity={1.4} position={[5, 1.5, -3]} scale={[6, 3, 1]} target={[0, 0, 0]} />
+        <Lightformer form="ring" intensity={1.8} position={[2, 3, 5]} scale={2.5} target={[0, 0, 0]} />
+      </Environment>
+
+      <hemisphereLight args={["#ffffff", "#d8d8d8", 0.25]} />
+      <directionalLight
+        castShadow
+        intensity={1.15}
+        position={[radius * 3, radius * 7, radius * 4]}
+        shadow-mapSize={[1024, 1024]}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.002}
+        shadow-radius={5}
+      >
+        <orthographicCamera attach="shadow-camera" args={[-extent, extent, extent, -extent, radius * 0.1, radius * 20]} />
+      </directionalLight>
+
+      <ContactShadows
+        position={[0, 0, 0]}
+        scale={radius * 4}
+        far={model.top}
+        resolution={512}
+        blur={1.6}
+        opacity={0.55}
+        color="#242424"
+      />
+      <Grid
+        position={[0, -0.0005, 0]}
+        infiniteGrid
+        cellSize={0.01}
+        cellThickness={0.6}
+        cellColor="#dcdcdc"
+        sectionSize={0.05}
+        sectionThickness={1.1}
+        sectionColor="#bdbdbd"
+        fadeDistance={radius * 10}
+        fadeStrength={1.2}
+      />
+    </>
+  )
+}
+
+interface HandProps {
+  solid: HandModel
+  ghost: HandModel
+  ghostEnabled: boolean
+  hud: HudRefs
+}
+
+/** Measured hand, commanded ghost, and the fingertip labels that follow the measured tips. */
+function Hand({ solid, ghost, ghostEnabled, hud }: HandProps) {
+  const pose = useRef({
+    angles: new Float32Array(FINGERS.length),
+    curls: new Float32Array(FINGERS.length),
+    ghostAngles: new Float32Array(FINGERS.length),
+    presence: 0,
+  })
+  const nodes = useRef<HudNodes | null>(null)
+  const projected = useRef(new Vector3())
+  const callouts = useRef({
+    tips: FINGERS.map(() => ({ x: 0, y: 0, shown: false })),
+    order: FINGERS.map((_, i) => i),
+    rows: new Float32Array(FINGERS.length).fill(Number.NaN),
+  })
+
+  useFrame(({ camera, size }, dt) => {
+    const message = useSimStore.getState().live.message
+    const { angles, curls, ghostAngles } = pose.current
+    const follow = damp(FOLLOW_RATE, dt)
+
+    for (const rig of solid.fingers) {
+      const i = rig.index
+      const angle = message?.joints[`${rig.finger}_joint`] ?? 0
+      const curl = message?.state[i] ?? 0
+      angles[i] += (angle - angles[i]) * follow
+      curls[i] += (curl - curls[i]) * follow
+      rig.joint.setJointValue(angles[i])
+    }
+
+    const command = message?.command ?? null
+    const wasHidden = pose.current.presence < 0.01
+    const presenceGoal = ghostEnabled && command ? 1 : 0
+    pose.current.presence += (presenceGoal - pose.current.presence) * damp(GHOST_FADE_RATE, dt)
+    ghost.setVisible(pose.current.presence > 0.01)
+    if (command) {
+      for (const rig of ghost.fingers) {
+        const i = rig.index
+        const target = command[i] * rig.travel
+        // A ghost that fades in should already be at the command, not sweep there from zero.
+        ghostAngles[i] = wasHidden ? target : ghostAngles[i] + (target - ghostAngles[i]) * follow
+        rig.joint.setJointValue(ghostAngles[i])
+        // Loud while the finger is still travelling to its target, a faint outline once it has arrived.
+        const divergence = Math.min(1, Math.abs(command[i] - curls[i]) / GHOST_FULL_AT)
+        ghost.setPresence(rig, pose.current.presence * MathUtils.lerp(GHOST_SETTLED, 1, divergence))
+      }
+    }
+
+    nodes.current ??= resolveHud(hud)
+    if (!nodes.current) return
+    solid.root.updateMatrixWorld()
+    camera.updateMatrixWorld()
+    const { tips, order, rows } = callouts.current
+    for (const rig of solid.fingers) {
+      const point = rig.tip.getWorldPosition(projected.current).project(camera)
+      const tip = tips[rig.index]
+      tip.x = (point.x * 0.5 + 0.5) * size.width
+      tip.y = (-point.y * 0.5 + 0.5) * size.height
+      tip.shown = point.z < 1
+    }
+
+    // Rows follow the tips' screen order, pushed apart to the pitch and kept inside the column.
+    // Two rows trade places only once their tips are a full row apart, so chips never flicker.
+    const { chipWidth, inset, elbow, pitch, top, bottom } = LABEL_LAYOUT
+    if (Number.isNaN(rows[0])) order.sort((a, b) => tips[a].y - tips[b].y)
+    for (let pass = 0; pass < order.length; pass++) {
+      for (let i = 0; i + 1 < order.length; i++) {
+        const [upper, lower] = [order[i], order[i + 1]]
+        if (tips[upper].y <= tips[lower].y + pitch) continue
+        // The two chips keep their rows and trade fingers, so they never slide through each other.
+        order[i] = lower
+        order[i + 1] = upper
+        const row = rows[upper]
+        rows[upper] = rows[lower]
+        rows[lower] = row
+      }
+    }
+    const floor = Math.max(top, size.height - bottom)
+    const ease = damp(LABEL_RATE, dt)
+    let previous = top - pitch
+    order.forEach((finger, rank) => {
+      const lowest = floor - (order.length - 1 - rank) * pitch
+      const goal = Math.max(previous + pitch, Math.min(tips[finger].y, lowest))
+      previous = goal
+      rows[finger] = Number.isNaN(rows[finger]) ? goal : rows[finger] + (goal - rows[finger]) * ease
+    })
+
+    const column = size.width - inset - chipWidth
+    for (const rig of solid.fingers) {
+      const item = nodes.current.labels[rig.index]
+      const tip = tips[rig.index]
+      const row = rows[rig.index]
+      const opacity = tip.shown ? "1" : "0"
+      item.dot.style.transform = `translate3d(${tip.x.toFixed(1)}px, ${tip.y.toFixed(1)}px, 0)`
+      item.dot.style.opacity = opacity
+      item.chip.style.transform = `translate3d(0, ${row.toFixed(1)}px, 0)`
+      item.chip.style.opacity = opacity
+      item.leader.style.opacity = opacity
+      item.leader.setAttribute(
+        "points",
+        `${tip.x.toFixed(1)},${tip.y.toFixed(1)} ${(column - elbow).toFixed(1)},${row.toFixed(1)} ${column},${row.toFixed(1)}`,
+      )
+      const text = `${Math.round(curls[rig.index] * 100)}%`
+      if (text !== item.text) {
+        item.text = text
+        item.value.textContent = text
+      }
+    }
+  })
+
+  return (
+    <>
+      <primitive object={solid.root} />
+      <primitive object={ghost.root} />
+    </>
+  )
+}
+
+/** Orbit controls, preset transitions, the idle orbit, and the HUD's gizmo and readout. */
+function CameraRig({
+  model,
+  view,
+  reducedMotion,
+  hud,
+  onFreeLook,
+}: Pick<HandSceneProps, "view" | "reducedMotion" | "hud" | "onFreeLook"> & { model: HandModel }) {
+  const controls = useRef<OrbitControlsImpl>(null)
+  const aspect = useThree((state) => state.size.width / Math.max(1, state.size.height))
+  const fit = fitDistance(model.bounds.radius, aspect)
+  const target = model.bounds.center
+
+  const rig = useRef({
+    goal: null as Spherical | null,
+    placed: false,
+    orbitAfter: 0,
+    current: new Spherical(),
+    offset: new Vector3(),
+    axis: new Vector3(),
+    inverse: new Quaternion(),
+    lastQuaternion: new Quaternion(0, 0, 0, 0),
+    lastPosition: new Vector3(),
+    nodes: null as HudNodes | null,
+    readout: "",
+  })
+
+  useEffect(() => {
+    if (!view) return
+    const { azimuth, polar } = VIEW_ANGLES[view]
+    rig.current.goal = new Spherical(fit, polar, azimuth)
+  }, [view, fit])
+
+  useFrame(({ camera }, dt) => {
+    const orbit = controls.current
+    if (!orbit) return
+    const state = rig.current
+    const { current, offset } = state
+
+    if (!state.placed) {
+      // Opening move: start wide and off-axis, then settle into the first preset.
+      state.placed = true
+      const start = state.goal ?? new Spherical(fit, VIEW_ANGLES.iso.polar, VIEW_ANGLES.iso.azimuth)
+      const lead = reducedMotion ? 0 : 1
+      current.set(start.radius * (1 + 0.35 * lead), start.phi - 0.18 * lead, start.theta - 0.7 * lead)
+      camera.position.setFromSpherical(current).add(target)
+      orbit.update()
+    }
+
+    const goal = state.goal
+    if (goal) {
+      current.setFromVector3(offset.copy(camera.position).sub(target))
+      const dTheta = MathUtils.euclideanModulo(goal.theta - current.theta + Math.PI, Math.PI * 2) - Math.PI
+      const dPhi = goal.phi - current.phi
+      const dRadius = goal.radius - current.radius
+      const k = reducedMotion ? 1 : damp(VIEW_RATE, dt)
+      current.set(current.radius + dRadius * k, current.phi + dPhi * k, current.theta + dTheta * k)
+      camera.position.setFromSpherical(current).add(target)
+      orbit.update()
+      if (Math.abs(dTheta) + Math.abs(dPhi) + Math.abs(dRadius) / goal.radius < VIEW_DONE) state.goal = null
+    }
+
+    orbit.autoRotate = !goal && !reducedMotion && allowsAutoOrbit(view) && performance.now() > state.orbitAfter
+
+    state.nodes ??= resolveHud(hud)
+    if (!state.nodes) return
+    if (state.lastQuaternion.equals(camera.quaternion) && state.lastPosition.equals(camera.position)) return
+    state.lastQuaternion.copy(camera.quaternion)
+    state.lastPosition.copy(camera.position)
+    state.inverse.copy(camera.quaternion).invert()
+
+    for (const { axis, group, line, label } of state.nodes.axes) {
+      const seen = state.axis.copy(ROS_AXES[axis]).applyQuaternion(state.inverse)
+      line.setAttribute("x2", (seen.x * GIZMO_AXIS_PX).toFixed(2))
+      line.setAttribute("y2", (-seen.y * GIZMO_AXIS_PX).toFixed(2))
+      label.setAttribute("x", (seen.x * GIZMO_LABEL_PX).toFixed(2))
+      label.setAttribute("y", (-seen.y * GIZMO_LABEL_PX).toFixed(2))
+      group.setAttribute("opacity", (0.3 + 0.7 * (seen.z * 0.5 + 0.5)).toFixed(2))
+    }
+
+    current.setFromVector3(offset.copy(camera.position).sub(target))
+    const azimuth = Math.round(MathUtils.euclideanModulo(MathUtils.radToDeg(current.theta), 360)) % 360
+    const elevation = 90 - MathUtils.radToDeg(current.phi)
+    const pad = (value: number) => String(Math.round(value)).padStart(3, "0")
+    const text = `AZ ${pad(azimuth)}°  EL ${pad(elevation)}°  D ${pad(current.radius * 1000)} mm`
+    if (text !== state.readout) {
+      state.readout = text
+      state.nodes.readout.textContent = text
+    }
+  })
+
+  return (
+    <OrbitControls
+      ref={controls}
+      makeDefault
+      target={target}
+      enablePan={false}
+      enableDamping
+      dampingFactor={0.08}
+      rotateSpeed={0.7}
+      zoomSpeed={0.6}
+      autoRotateSpeed={0.55}
+      minDistance={fit * 0.55}
+      maxDistance={fit * 2}
+      minPolarAngle={VIEW_ANGLES.top.polar}
+      maxPolarAngle={Math.PI / 2}
+      onStart={() => {
+        rig.current.goal = null
+        rig.current.orbitAfter = Number.POSITIVE_INFINITY
+        onFreeLook()
+      }}
+      onEnd={() => {
+        rig.current.orbitAfter = performance.now() + AUTO_ORBIT_RESUME_MS
+      }}
+    />
+  )
+}
+
+function Stage({ urdf, view, ghost, reducedMotion, hud, onFreeLook }: HandSceneProps) {
+  const models = useMemo(() => ({ solid: buildHandModel(urdf, "solid"), ghost: buildHandModel(urdf, "ghost") }), [urdf])
+
+  useEffect(
+    () => () => {
+      models.solid.dispose()
+      models.ghost.dispose()
+    },
+    [models],
+  )
+
+  return (
+    <>
+      <Studio model={models.solid} />
+      {/* The rig moves the camera first, so the labels project through this frame's view. */}
+      <CameraRig model={models.solid} view={view} reducedMotion={reducedMotion} hud={hud} onFreeLook={onFreeLook} />
+      <Hand solid={models.solid} ghost={models.ghost} ghostEnabled={ghost} hud={hud} />
+    </>
+  )
+}
+
+export default function HandScene(props: HandSceneProps) {
+  return (
+    <Canvas
+      shadows="percentage"
+      dpr={[1, 2]}
+      camera={{ fov: FOV_DEG, near: 0.01, far: 20, position: [0.3, 0.3, 0.3] }}
+      gl={{ antialias: true, powerPreference: "high-performance" }}
+      onCreated={({ gl, camera }) => {
+        gl.toneMapping = NeutralToneMapping
+        camera.layers.enable(OVERLAY_LAYER)
+      }}
+    >
+      <Stage {...props} />
+    </Canvas>
+  )
+}

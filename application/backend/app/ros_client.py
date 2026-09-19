@@ -1,0 +1,90 @@
+"""rosbridge connection: subscriptions feed the Hub, commands go out to /hand/command.
+
+roslibpy runs a Twisted reactor on its own daemon thread and invokes the
+callbacks below on it. Its client factory retries forever with exponential
+backoff, and every Topic replays its subscribe/advertise after a reconnect.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import base64
+import logging
+
+import roslibpy
+
+from .config import Settings
+from .hub import Hub
+
+LOGGER = logging.getLogger(__name__)
+
+STATE_THROTTLE_MS = 33
+IMAGE_THROTTLE_MS = 66
+RECONNECT_INITIAL_S = 1.0
+RECONNECT_MAX_S = 5.0
+
+COLOR_TOPIC = "/camera/color/image_raw/compressed"
+DEPTH_TOPIC = "/camera/aligned_depth_to_color/image_raw/compressedDepth"
+MULTI_ARRAY = "std_msgs/Float64MultiArray"
+COMPRESSED_IMAGE = "sensor_msgs/CompressedImage"
+
+
+class RosClient:
+    def __init__(self, settings: Settings, hub: Hub) -> None:
+        self._settings = settings
+        self._hub = hub
+        self._ros: roslibpy.Ros | None = None
+        self._command_out: roslibpy.Topic | None = None
+
+    @property
+    def connected(self) -> bool:
+        return self._ros is not None and bool(self._ros.is_connected)
+
+    def start(self) -> None:
+        logging.getLogger("twisted").setLevel(logging.WARNING)  # three lines per retry otherwise
+        LOGGER.info("connecting to rosbridge at %s, retrying until it is up", self._settings.rosbridge_url)
+        ros = roslibpy.Ros(self._settings.rosbridge_host, self._settings.rosbridge_port)
+        ros.factory.set_initial_delay(RECONNECT_INITIAL_S)
+        ros.factory.set_max_delay(RECONNECT_MAX_S)
+        ros.on("ready", lambda _: LOGGER.info("rosbridge connected: %s", self._settings.rosbridge_url))
+        ros.on("close", lambda _: LOGGER.warning("rosbridge connection lost, retrying"))
+
+        hub = self._hub
+        self._subscribe(ros, "/robot_description", "std_msgs/String", 0, lambda m: hub.on_urdf(m["data"]))
+        self._subscribe(
+            ros,
+            "/joint_states",
+            "sensor_msgs/JointState",
+            STATE_THROTTLE_MS,
+            lambda m: hub.on_joint_states(m["name"], m["position"]),
+        )
+        self._subscribe(ros, "/hand/state", MULTI_ARRAY, STATE_THROTTLE_MS, lambda m: hub.on_hand_state(m["data"]))
+        self._subscribe(ros, "/hand/command", MULTI_ARRAY, STATE_THROTTLE_MS, lambda m: hub.on_hand_command(m["data"]))
+        self._subscribe(
+            ros, COLOR_TOPIC, COMPRESSED_IMAGE, IMAGE_THROTTLE_MS, lambda m: hub.on_color(base64.b64decode(m["data"]))
+        )
+        self._subscribe(
+            ros, DEPTH_TOPIC, COMPRESSED_IMAGE, IMAGE_THROTTLE_MS, lambda m: hub.on_depth(base64.b64decode(m["data"]))
+        )
+
+        # A Topic replays only one message on reconnect, so publishing gets its own.
+        self._command_out = roslibpy.Topic(ros, "/hand/command", MULTI_ARRAY, queue_size=1)
+        self._command_out.advertise()
+        self._ros = ros
+        ros.factory.manager.run()
+
+    @staticmethod
+    def _subscribe(ros: roslibpy.Ros, name: str, message_type: str, throttle_ms: int, callback) -> None:
+        roslibpy.Topic(ros, name, message_type, throttle_rate=throttle_ms, queue_length=1).subscribe(callback)
+
+    def send_command(self, values: list[float]) -> None:
+        if self.connected and self._command_out is not None:
+            self._command_out.publish(roslibpy.Message({"data": values}))
+
+    async def stop(self) -> None:
+        if self._ros is None:
+            return
+        try:
+            await asyncio.to_thread(self._ros.terminate)
+        except roslibpy.core.RosTimeoutError:
+            LOGGER.warning("rosbridge did not acknowledge the close; shutting down anyway")

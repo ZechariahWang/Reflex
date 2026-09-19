@@ -12,6 +12,10 @@ everything else goes in a top-level subfolder per concern.
 
 - `physical_layer/` - ROS 2 workspace: hand model, sim, HAL, teleop. See
   `physical_layer/CLAUDE.md` before touching anything in there.
+- `application/` - web simulator / console: FastAPI backend (`backend/`) that
+  reads the ROS topics through rosbridge (`ws://localhost:9090`, started by both
+  launch files) and a Next.js + three.js frontend (`frontend/`). A pure consumer
+  of the contracts below; interfaces are in `application/CONTRACT.md`.
 - (planned) a separate top-level folder for the VLA / policy code (training,
   datasets, inference). It stays plain Python outside ROS so torch & co. never
   enter the colcon build; `htn_auto` in the ROS workspace is the thin bridge.

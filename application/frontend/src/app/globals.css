@@ -1,0 +1,171 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Light only: pin shadcn's `dark:` classes to a class that is never set,
+   so an OS-level dark preference cannot activate them. */
+@custom-variant dark (&:is(.dark *));
+
+/* The fixed, no-scroll console layout: only when the window can hold it. */
+@custom-variant console {
+  @media (min-width: 1024px) and (min-height: 640px) {
+    @slot;
+  }
+}
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-fragment-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --font-heading: var(--font-sans);
+
+  /* Console palette (CONTRACT.md "Design language"). */
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-mute: var(--ink-mute);
+  --color-hairline: var(--hairline);
+  --color-signal: var(--signal);
+  --color-signal-soft: var(--signal-soft);
+
+  /* shadcn semantic tokens, mapped onto the same palette. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Radii stay within 0-4 px whatever size a component asks for. */
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: var(--radius);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-4xl: var(--radius);
+
+  --animate-pulse-live: pulse-live 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  --animate-blink-wait: blink-wait 1.2s steps(2, jump-none) infinite;
+
+  @keyframes pulse-live {
+    0% {
+      transform: scale(1);
+      opacity: 0.55;
+    }
+    70%,
+    100% {
+      transform: scale(3.2);
+      opacity: 0;
+    }
+  }
+
+  @keyframes blink-wait {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0.25;
+    }
+  }
+}
+
+:root {
+  --page: #f6f6f6;
+  --surface: #ffffff;
+  --ink: #242424;
+  --ink-soft: #484848;
+  --ink-mute: #727272;
+  --hairline: rgb(36 36 36 / 0.12);
+  /* The single accent: live / active things only. Never decoration. */
+  --signal: #f2490c;
+  --signal-soft: rgb(242 73 12 / 0.12);
+
+  --background: var(--page);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--surface);
+  --secondary: var(--page);
+  --secondary-foreground: var(--ink-soft);
+  --muted: var(--page);
+  --muted-foreground: var(--ink-mute);
+  /* shadcn's "accent" is a neutral hover surface, not the brand accent (that is --signal). */
+  --accent: #ededed;
+  --accent-foreground: var(--ink);
+  --destructive: #b3261e;
+  --border: var(--hairline);
+  --input: rgb(36 36 36 / 0.14);
+  --ring: rgb(36 36 36 / 0.45);
+  --radius: 4px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: var(--ink);
+    color: var(--surface);
+  }
+}
+
+/* Mono micro-label: every caption, topic name and unit. */
+@utility label-micro {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+/* Mono tabular numerals: every number. */
+@utility num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums slashed-zero;
+  letter-spacing: -0.01em;
+}
+
+/* 1 px hairline frame on the panel surface. */
+@utility hairline-frame {
+  background-color: var(--surface);
+  border: 1px solid var(--hairline);
+}
+
+/* Fine dotted grid, 16 px pitch. */
+@utility bg-dot-grid {
+  background-image: radial-gradient(circle at 0.5px 0.5px, rgb(36 36 36 / 0.24) 0.75px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* Fine line grid, 32 px pitch. */
+@utility bg-line-grid {
+  background-image:
+    linear-gradient(to right, rgb(36 36 36 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(36 36 36 / 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+}

@@ -34,7 +34,7 @@ The camera may be absent (`camera:=none`) and ROS may be down entirely; both are
 
 ## Backend API (port 8000)
 
-Env: `ROSBRIDGE_HOST` (default `localhost`), `ROSBRIDGE_PORT` (`9090`), `MOCK` (`0`; `1` = no ROS at all, synthesize everything, for UI work and tests), `CORS_ORIGINS` (default `http://localhost:3000`).
+Env: `ROSBRIDGE_HOST` (default `localhost`), `ROSBRIDGE_PORT` (`9090`), `MOCK` (`0`; `1` = no ROS at all, synthesize everything, for UI work and tests), `CORS_ORIGINS` (default `http://localhost:3000,http://127.0.0.1:3000`; also the allow-list for websocket `Origin` headers - a browser page from anywhere else is closed with 1008, clients that send no Origin are accepted).
 
 The backend reconnects to rosbridge forever with backoff and never exits because ROS is down.
 
@@ -70,7 +70,7 @@ Client -> server, JSON text:
 ### `WS /ws/camera/color` and `WS /ws/camera/depth`
 Server -> client, **binary** messages, each one complete JPEG. Latest-frame only: if the client is slow, drop frames, never queue.
 - `color`: the ROS JPEG bytes passed through untouched.
-- `depth`: decoded from the 16-bit PNG, colorized server-side and re-encoded as JPEG (quality ~80). Colormap: near = warm, far = cool, over `DEPTH_MIN_MM=150 .. DEPTH_MAX_MM=2000` (env-overridable); pixels with value 0 (no reading) are rendered as the light UI background `#f6f6f6` so holes look intentional on a white page rather than black.
+- `depth`: decoded from the 16-bit PNG, colorized server-side and re-encoded as JPEG (quality ~80). Colormap: near = warm, far = cool (a desaturated two-hue ramp, far `#2f4a63` `#7f9bb3` `#d9dde0` `#e9c9a8` `#c2410c` near, mirrored in `frontend/src/lib/depth-ramp.ts`), over `DEPTH_MIN_MM=150 .. DEPTH_MAX_MM=2000` (env-overridable); pixels with value 0 (no reading) are rendered as the light UI background `#f6f6f6` so holes look intentional on a white page rather than black.
 
 Right after connect, and whenever it changes, the server also sends a JSON **text** message on the same socket:
 ```json
@@ -79,7 +79,7 @@ Right after connect, and whenever it changes, the server also sends a JSON **tex
 (`min_mm`/`max_mm` only on depth.) `available: false` = no frame received in the last 2 s.
 
 ### Mock mode (`MOCK=1`)
-No rosbridge connection. Joints: each finger curls on its own smooth, phase-shifted sine so the hand looks alive. Color: a generated moving test image. Depth: a generated moving depth field run through the real colorize path. `/ws/state` commands are accepted and override the animation for that finger for 3 s. Everything above behaves identically otherwise.
+No rosbridge connection. Joints: each finger curls on its own smooth, phase-shifted sine so the hand looks alive. Color: a generated moving test image. Depth: a generated moving depth field run through the real colorize path. `/ws/state` commands are accepted and override the animation for 3 s. The 5-vector overrides all fingers; when the 3 s hold expires the mock sets `command` back to `null` (live mode never does). Everything above behaves identically otherwise.
 
 ## Frontend
 

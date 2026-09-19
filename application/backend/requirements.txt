@@ -1,0 +1,6 @@
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+roslibpy==2.1.0
+numpy==2.2.6
+opencv-python-headless==5.0.0.93
+wsaccel==0.6.7

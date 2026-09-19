@@ -1,6 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription,
-                            RegisterEventHandler)
+                            RegisterEventHandler, Shutdown)
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -73,6 +73,13 @@ def generate_launch_description():
                               description='Start rosbridge on ws://localhost:9090 (application/ backend)'),
 
         gazebo,
+        # Without Gazebo the sim clock stops and the HAL (which runs on sim time)
+        # silently freezes: the control window then looks alive but nothing
+        # moves. Bring everything down instead so the failure is obvious.
+        RegisterEventHandler(OnProcessExit(
+            on_exit=lambda event, context: (
+                [Shutdown(reason='Gazebo exited - shutting the sim down')]
+                if 'gazebo' in event.process_name else None))),
         Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',

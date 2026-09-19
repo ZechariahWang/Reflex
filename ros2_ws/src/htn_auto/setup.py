@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'htn_vla'
+package_name = 'htn_auto'
 
 setup(
     name=package_name,
@@ -14,11 +14,11 @@ setup(
     zip_safe=True,
     maintainer='zech',
     maintainer_email='zechariahwang@gmail.com',
-    description='Autonomous finger control from the VLA policy',
+    description='Autonomous finger control',
     license='MIT',
     entry_points={
         'console_scripts': [
-            'vla = htn_vla.vla:main',
+            'auto = htn_auto.auto:main',
         ],
     },
 )

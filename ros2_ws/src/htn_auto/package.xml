@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>htn_vla</name>
+  <name>htn_auto</name>
   <version>0.0.1</version>
-  <description>Autonomous finger control from the VLA policy</description>
+  <description>Autonomous finger control</description>
   <maintainer email="zechariahwang@gmail.com">zech</maintainer>
   <license>MIT</license>
 

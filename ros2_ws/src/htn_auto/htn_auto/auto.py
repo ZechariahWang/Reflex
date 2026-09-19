@@ -8,18 +8,18 @@ from std_msgs.msg import Float64MultiArray
 COMMAND_TOPIC = '/hand_position_controller/commands'
 
 
-class Vla(Node):
-    """Autonomous finger control. TODO: subscribe to cameras/IMU, run the policy, publish finger targets."""
+class Auto(Node):
+    """Autonomous finger control. TODO: subscribe to cameras/IMU, query the policy, publish finger targets."""
 
     def __init__(self):
-        super().__init__('vla')
+        super().__init__('auto')
         self.command_pub = self.create_publisher(Float64MultiArray, COMMAND_TOPIC, 10)
-        self.get_logger().info('vla node up (stub)')
+        self.get_logger().info('auto node up (stub)')
 
 
 def main():
     rclpy.init()
-    node = Vla()
+    node = Auto()
     try:
         rclpy.spin(node)
     except (KeyboardInterrupt, ExternalShutdownException):

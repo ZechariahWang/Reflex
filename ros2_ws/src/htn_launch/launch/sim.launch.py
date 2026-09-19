@@ -7,7 +7,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('mode', default_value='teleop',
-                              choices=['teleop', 'vla'],
+                              choices=['teleop', 'auto'],
                               description='Who drives the fingers'),
 
         # TODO: simulator, robot description, controllers
@@ -19,9 +19,9 @@ def generate_launch_description():
             condition=LaunchConfigurationEquals('mode', 'teleop'),
         ),
         Node(
-            package='htn_vla',
-            executable='vla',
+            package='htn_auto',
+            executable='auto',
             output='screen',
-            condition=LaunchConfigurationEquals('mode', 'vla'),
+            condition=LaunchConfigurationEquals('mode', 'auto'),
         ),
     ])

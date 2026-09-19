@@ -1,0 +1,86 @@
+<?xml version="1.0"?>
+<robot name="htn_hand" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- All dimensions, limits and physics come from this YAML -->
+  <xacro:arg name="params_file" default="$(find htn_description)/config/hand_params.yaml"/>
+  <!-- none: plain URDF (visualization) | gazebo: adds world mount + ros2_control -->
+  <xacro:arg name="sim" default="none"/>
+  <!-- controller_manager yaml, needed for sim:=gazebo -->
+  <xacro:arg name="controllers_file" default=""/>
+
+  <xacro:property name="params" value="${xacro.load_yaml('$(arg params_file)')}"/>
+  <xacro:property name="palm" value="${params['palm']}"/>
+  <xacro:property name="joint_params" value="${params['joint']}"/>
+
+  <!-- Gazebo (DART) stops obeying velocity commands once a joint rests exactly
+       on its limit, so in sim the hard stops sit slightly outside the commanded
+       range [min_angle, max_angle] and the servos never touch them. -->
+  <xacro:property name="limit_margin" value="${0.05 if '$(arg sim)' == 'gazebo' else 0.0}"/>
+
+  <material name="dark"><color rgba="0.15 0.15 0.15 1"/></material>
+  <material name="light"><color rgba="0.85 0.85 0.85 1"/></material>
+
+  <!-- Inertia of a solid box about its centre -->
+  <xacro:macro name="box_inertial" params="m x y z xyz:='0 0 0'">
+    <inertial>
+      <origin xyz="${xyz}"/>
+      <mass value="${m}"/>
+      <inertia ixx="${m*(y*y+z*z)/12}" iyy="${m*(x*x+z*z)/12}" izz="${m*(x*x+y*y)/12}"
+               ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- Palm: a flat plate, origin at its centre -->
+  <link name="base_link">
+    <visual>
+      <geometry><box size="${palm['length']} ${palm['width']} ${palm['thickness']}"/></geometry>
+      <material name="dark"/>
+    </visual>
+    <collision>
+      <geometry><box size="${palm['length']} ${palm['width']} ${palm['thickness']}"/></geometry>
+    </collision>
+    <xacro:box_inertial m="${palm['mass']}" x="${palm['length']}" y="${palm['width']}" z="${palm['thickness']}"/>
+  </link>
+
+  <!-- One finger: a rigid box hanging down (-Z) from a single hinge -->
+  <xacro:macro name="finger" params="name">
+    <xacro:property name="f" value="${params['fingers'][name]}"/>
+    <xacro:property name="L" value="${f['length']}"/>
+    <xacro:property name="W" value="${f['width']}"/>
+
+    <link name="${name}_finger">
+      <visual>
+        <origin xyz="0 0 ${-L/2}"/>
+        <geometry><box size="${W} ${W} ${L}"/></geometry>
+        <material name="light"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${-L/2}"/>
+        <geometry><box size="${W} ${W} ${L}"/></geometry>
+      </collision>
+      <xacro:box_inertial m="${f['mass']}" x="${W}" y="${W}" z="${L}" xyz="0 0 ${-L/2}"/>
+    </link>
+
+    <joint name="${name}_joint" type="revolute">
+      <parent link="base_link"/>
+      <child link="${name}_finger"/>
+      <origin xyz="${' '.join(str(v) for v in f['mount_xyz'])}"
+              rpy="${' '.join(str(v) for v in f['mount_rpy'])}"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="${f['min_angle'] - limit_margin}" upper="${f['max_angle'] + limit_margin}"
+             effort="${joint_params['max_effort']}" velocity="${joint_params['max_velocity']}"/>
+      <dynamics damping="${joint_params['damping']}" friction="${joint_params['friction']}"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:finger name="thumb"/>
+  <xacro:finger name="index"/>
+  <xacro:finger name="middle"/>
+  <xacro:finger name="ring"/>
+  <xacro:finger name="pinky"/>
+
+  <xacro:if value="${'$(arg sim)' == 'gazebo'}">
+    <xacro:include filename="hand.gazebo.xacro"/>
+  </xacro:if>
+
+</robot>

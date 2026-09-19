@@ -1,0 +1,23 @@
+running develop
+running egg_info
+creating htn_control.egg-info
+writing htn_control.egg-info/PKG-INFO
+writing dependency_links to htn_control.egg-info/dependency_links.txt
+writing entry points to htn_control.egg-info/entry_points.txt
+writing requirements to htn_control.egg-info/requires.txt
+writing top-level names to htn_control.egg-info/top_level.txt
+writing manifest file 'htn_control.egg-info/SOURCES.txt'
+reading manifest file 'htn_control.egg-info/SOURCES.txt'
+writing manifest file 'htn_control.egg-info/SOURCES.txt'
+running build_ext
+Creating /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn-control.egg-link (link to .)
+Installing hal script to /home/zech/htn-2026/install/htn_control/lib/htn_control
+Installing teleop script to /home/zech/htn-2026/install/htn_control/lib/htn_control
+
+Installed /home/zech/htn-2026/build/htn_control
+running symlink_data
+creating /home/zech/htn-2026/install/htn_control/share/ament_index
+creating /home/zech/htn-2026/install/htn_control/share/ament_index/resource_index
+creating /home/zech/htn-2026/install/htn_control/share/ament_index/resource_index/packages
+symbolically linking /home/zech/htn-2026/build/htn_control/resource/htn_control -> /home/zech/htn-2026/install/htn_control/share/ament_index/resource_index/packages
+symbolically linking /home/zech/htn-2026/build/htn_control/package.xml -> /home/zech/htn-2026/install/htn_control/share/htn_control

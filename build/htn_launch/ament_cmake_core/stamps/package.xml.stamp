@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>htn_launch</name>
+  <version>0.0.1</version>
+  <description>Sim and hardware launch files for the exoskeleton hand</description>
+  <maintainer email="zechariahwang@gmail.com">zech</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>htn_control</exec_depend>
+  <exec_depend>htn_auto</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

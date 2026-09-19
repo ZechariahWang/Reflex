@@ -1,0 +1,45 @@
+[0.009s] Invoking command in '/home/zech/htn-2026/build/htn_launch': AMENT_PREFIX_PATH=/home/zech/htn-2026/install/htn_control:/home/zech/htn-2026/install/htn_description:/home/zech/htn-2026/install/htn_auto:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/zech/htn-2026/install/htn_description:/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_msgs:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble PYTHONPATH=/home/zech/htn-2026/build/htn_control:/home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages:/home/zech/htn-2026/build/htn_auto:/home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/cmake /home/zech/htn-2026/ros2_ws/src/htn_launch -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/zech/htn-2026/install/htn_launch
+[0.051s] -- The C compiler identification is GNU 11.4.0
+[0.088s] -- The CXX compiler identification is GNU 11.4.0
+[0.093s] -- Detecting C compiler ABI info
+[0.147s] -- Detecting C compiler ABI info - done
+[0.151s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.151s] -- Detecting C compile features
+[0.151s] -- Detecting C compile features - done
+[0.153s] -- Detecting CXX compiler ABI info
+[0.211s] -- Detecting CXX compiler ABI info - done
+[0.217s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.217s] -- Detecting CXX compile features
+[0.218s] -- Detecting CXX compile features - done
+[0.219s] -- Found ament_cmake: 1.3.14 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.336s] -- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+[0.376s] -- Override CMake install command with custom implementation using symlinks instead of copying resources
+[0.456s] -- Configuring done
+[0.457s] -- Generating done
+[0.458s] -- Build files have been written to: /home/zech/htn-2026/build/htn_launch
+[0.461s] Invoked command in '/home/zech/htn-2026/build/htn_launch' returned '0': AMENT_PREFIX_PATH=/home/zech/htn-2026/install/htn_control:/home/zech/htn-2026/install/htn_description:/home/zech/htn-2026/install/htn_auto:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/zech/htn-2026/install/htn_description:/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_msgs:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble PYTHONPATH=/home/zech/htn-2026/build/htn_control:/home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages:/home/zech/htn-2026/build/htn_auto:/home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/cmake /home/zech/htn-2026/ros2_ws/src/htn_launch -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/zech/htn-2026/install/htn_launch
+[0.462s] Invoking command in '/home/zech/htn-2026/build/htn_launch': AMENT_PREFIX_PATH=/home/zech/htn-2026/install/htn_control:/home/zech/htn-2026/install/htn_description:/home/zech/htn-2026/install/htn_auto:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/zech/htn-2026/install/htn_description:/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_msgs:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble PYTHONPATH=/home/zech/htn-2026/build/htn_control:/home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages:/home/zech/htn-2026/build/htn_auto:/home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/cmake --build /home/zech/htn-2026/build/htn_launch -- -j20 -l20
+[0.495s] Invoked command in '/home/zech/htn-2026/build/htn_launch' returned '0': AMENT_PREFIX_PATH=/home/zech/htn-2026/install/htn_control:/home/zech/htn-2026/install/htn_description:/home/zech/htn-2026/install/htn_auto:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/zech/htn-2026/install/htn_description:/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_msgs:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble PYTHONPATH=/home/zech/htn-2026/build/htn_control:/home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages:/home/zech/htn-2026/build/htn_auto:/home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/cmake --build /home/zech/htn-2026/build/htn_launch -- -j20 -l20
+[0.496s] Invoking command in '/home/zech/htn-2026/build/htn_launch': AMENT_PREFIX_PATH=/home/zech/htn-2026/install/htn_control:/home/zech/htn-2026/install/htn_description:/home/zech/htn-2026/install/htn_auto:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/zech/htn-2026/install/htn_description:/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_msgs:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble PYTHONPATH=/home/zech/htn-2026/build/htn_control:/home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages:/home/zech/htn-2026/build/htn_auto:/home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/cmake --install /home/zech/htn-2026/build/htn_launch
+[0.503s] -- Install configuration: ""
+[0.503s] -- Execute custom install script
+[0.503s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/launch/hardware.launch.py
+[0.510s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/launch/sim.launch.py
+[0.515s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/config/controllers.yaml
+[0.520s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/worlds/empty.sdf
+[0.526s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/ament_index/resource_index/package_run_dependencies/htn_launch
+[0.534s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/ament_index/resource_index/parent_prefix_path/htn_launch
+[0.544s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/environment/ament_prefix_path.sh
+[0.551s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/environment/ament_prefix_path.dsv
+[0.562s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/environment/path.sh
+[0.572s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/environment/path.dsv
+[0.579s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/local_setup.bash
+[0.590s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/local_setup.sh
+[0.602s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/local_setup.zsh
+[0.613s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/local_setup.dsv
+[0.626s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/package.dsv
+[0.637s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/ament_index/resource_index/packages/htn_launch
+[0.651s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/cmake/htn_launchConfig.cmake
+[0.658s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/cmake/htn_launchConfig-version.cmake
+[0.669s] -- Symlinking: /home/zech/htn-2026/install/htn_launch/share/htn_launch/package.xml
+[0.682s] Invoked command in '/home/zech/htn-2026/build/htn_launch' returned '0': AMENT_PREFIX_PATH=/home/zech/htn-2026/install/htn_control:/home/zech/htn-2026/install/htn_description:/home/zech/htn-2026/install/htn_auto:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/zech/htn-2026/install/htn_description:/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_msgs:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble PYTHONPATH=/home/zech/htn-2026/build/htn_control:/home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages:/home/zech/htn-2026/build/htn_auto:/home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/cmake --install /home/zech/htn-2026/build/htn_launch

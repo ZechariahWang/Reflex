@@ -1,0 +1,13 @@
+package.xml
+setup.cfg
+setup.py
+htn_auto/__init__.py
+htn_auto/auto.py
+htn_auto.egg-info/PKG-INFO
+htn_auto.egg-info/SOURCES.txt
+htn_auto.egg-info/dependency_links.txt
+htn_auto.egg-info/entry_points.txt
+htn_auto.egg-info/requires.txt
+htn_auto.egg-info/top_level.txt
+htn_auto.egg-info/zip-safe
+resource/htn_auto

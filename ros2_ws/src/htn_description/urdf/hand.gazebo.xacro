@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Gazebo-only parts: world mount and the simulated servos -->
+
+  <xacro:property name="mount" value="${params['sim_mount']}"/>
+  <link name="world"/>
+  <joint name="world_mount" type="fixed">
+    <parent link="world"/>
+    <child link="base_link"/>
+    <origin xyz="${' '.join(str(v) for v in mount['xyz'])}"
+            rpy="${' '.join(str(v) for v in mount['rpy'])}"/>
+  </joint>
+
+  <xacro:macro name="servo" params="name">
+    <xacro:property name="f" value="${params['fingers'][name]}"/>
+    <joint name="${name}_joint">
+      <command_interface name="position">
+        <param name="min">${f['min_angle']}</param>
+        <param name="max">${f['max_angle']}</param>
+      </command_interface>
+      <state_interface name="position">
+        <param name="initial_value">${f['min_angle']}</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+  </xacro:macro>
+
+  <ros2_control name="htn_hand" type="system">
+    <hardware>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+    <xacro:servo name="thumb"/>
+    <xacro:servo name="index"/>
+    <xacro:servo name="middle"/>
+    <xacro:servo name="ring"/>
+    <xacro:servo name="pinky"/>
+  </ros2_control>
+
+  <gazebo>
+    <plugin filename="gz_ros2_control-system"
+            name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>$(arg controllers_file)</parameters>
+    </plugin>
+  </gazebo>
+
+</robot>

@@ -1,0 +1,3 @@
+[console_scripts]
+auto = htn_auto.auto:main
+

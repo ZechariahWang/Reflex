@@ -1,27 +1,106 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.conditions import LaunchConfigurationEquals
+from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription,
+                            RegisterEventHandler)
+from launch.conditions import IfCondition
+from launch.event_handlers import OnProcessExit
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import (Command, LaunchConfiguration,
+                                  PathJoinSubstitution, PythonExpression)
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
+    description_pkg = FindPackageShare('htn_description')
+    launch_pkg = FindPackageShare('htn_launch')
+
+    xacro_file = PathJoinSubstitution([description_pkg, 'urdf', 'hand.urdf.xacro'])
+    controllers_file = PathJoinSubstitution([launch_pkg, 'config', 'controllers.yaml'])
+    world = PathJoinSubstitution([launch_pkg, 'worlds', 'empty.sdf'])
+
+    params_file = LaunchConfiguration('params_file')
+    gui = LaunchConfiguration('gui')
+    foxglove = LaunchConfiguration('foxglove')
+
+    robot_description = ParameterValue(
+        Command(['xacro ', xacro_file,
+                 ' sim:=gazebo',
+                 ' params_file:=', params_file,
+                 ' controllers_file:=', controllers_file]),
+        value_type=str)
+
+    gazebo = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution(
+            [FindPackageShare('ros_gz_sim'), 'launch', 'gz_sim.launch.py'])),
+        launch_arguments={
+            # -s: server only (no Gazebo window)
+            'gz_args': PythonExpression([
+                "'-r ' + ('' if '", gui, "' == 'true' else '-s ') + '", world, "'"]),
+        }.items(),
+    )
+
+    spawn = Node(
+        package='ros_gz_sim',
+        executable='create',
+        arguments=['-topic', 'robot_description', '-name', 'htn_hand'],
+        output='screen',
+    )
+
+    joint_state_broadcaster = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['joint_state_broadcaster'],
+    )
+    hand_position_controller = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['hand_position_controller'],
+    )
+
     return LaunchDescription([
-        DeclareLaunchArgument('mode', default_value='teleop',
-                              choices=['teleop', 'auto'],
-                              description='Who drives the fingers'),
+        DeclareLaunchArgument(
+            'params_file',
+            default_value=PathJoinSubstitution([description_pkg, 'config', 'hand_params.yaml']),
+            description='Physical parameters of the hand'),
+        DeclareLaunchArgument('gui', default_value='false',
+                              description='Open the Gazebo window (Foxglove is the default viewer)'),
+        DeclareLaunchArgument('foxglove', default_value='true',
+                              description='Start foxglove_bridge on ws://localhost:8765'),
 
-        # TODO: simulator, robot description, controllers
+        gazebo,
+        Node(
+            package='robot_state_publisher',
+            executable='robot_state_publisher',
+            parameters=[{'robot_description': robot_description,
+                         'use_sim_time': True}],
+        ),
+        spawn,
+        Node(
+            package='ros_gz_bridge',
+            executable='parameter_bridge',
+            arguments=['/clock@rosgraph_msgs/msg/Clock[ignition.msgs.Clock'],
+        ),
+        # The controller_manager lives inside Gazebo and only exists once the
+        # hand has been spawned
+        RegisterEventHandler(OnProcessExit(
+            target_action=spawn, on_exit=[joint_state_broadcaster])),
+        RegisterEventHandler(OnProcessExit(
+            target_action=joint_state_broadcaster, on_exit=[hand_position_controller])),
 
+        # HAL: /hand/command (0..1 per finger) -> simulated servos
         Node(
             package='htn_control',
-            executable='teleop',
+            executable='hal',
+            parameters=[{'backend': 'sim', 'params_file': params_file,
+                         'use_sim_time': True}],
             output='screen',
-            condition=LaunchConfigurationEquals('mode', 'teleop'),
         ),
+
         Node(
-            package='htn_auto',
-            executable='auto',
-            output='screen',
-            condition=LaunchConfigurationEquals('mode', 'auto'),
+            package='foxglove_bridge',
+            executable='foxglove_bridge',
+            parameters=[{'port': 8765, 'use_sim_time': True}],
+            condition=IfCondition(foxglove),
         ),
     ])

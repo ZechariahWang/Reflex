@@ -3,9 +3,9 @@ from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
 
-# Finger order for every command: thumb, index, middle, ring, pinky
-# Values in radians, 0 = open
-COMMAND_TOPIC = '/hand_position_controller/commands'
+# HAL interface: 5 values in thumb, index, middle, ring, pinky order,
+# normalized 0 = open .. 1 = closed
+COMMAND_TOPIC = '/hand/command'
 
 
 class Auto(Node):

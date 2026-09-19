@@ -1,0 +1,19 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 100  # Hz
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    hand_position_controller:
+      type: position_controllers/JointGroupPositionController
+
+# Radians, in this joint order. Only the HAL's sim backend talks to this.
+hand_position_controller:
+  ros__parameters:
+    joints:
+      - thumb_joint
+      - index_joint
+      - middle_joint
+      - ring_joint
+      - pinky_joint

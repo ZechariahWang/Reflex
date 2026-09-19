@@ -1,0 +1,4 @@
+[console_scripts]
+hal = htn_control.hal_node:main
+teleop = htn_control.teleop:main
+

@@ -1,0 +1,24 @@
+[0.537s] Invoking command in '/home/zech/htn-2026/build/htn_auto': PYTHONPATH=/home/zech/htn-2026/build/htn_auto/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/zech/htn-2026/build/htn_auto/build --no-deps symlink_data
+[0.686s] running develop
+[0.777s] running egg_info
+[0.777s] creating htn_auto.egg-info
+[0.777s] writing htn_auto.egg-info/PKG-INFO
+[0.777s] writing dependency_links to htn_auto.egg-info/dependency_links.txt
+[0.777s] writing entry points to htn_auto.egg-info/entry_points.txt
+[0.778s] writing requirements to htn_auto.egg-info/requires.txt
+[0.778s] writing top-level names to htn_auto.egg-info/top_level.txt
+[0.778s] writing manifest file 'htn_auto.egg-info/SOURCES.txt'
+[0.779s] reading manifest file 'htn_auto.egg-info/SOURCES.txt'
+[0.779s] writing manifest file 'htn_auto.egg-info/SOURCES.txt'
+[0.813s] running build_ext
+[0.813s] Creating /home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages/htn-auto.egg-link (link to .)
+[0.814s] Installing auto script to /home/zech/htn-2026/install/htn_auto/lib/htn_auto
+[0.814s] 
+[0.814s] Installed /home/zech/htn-2026/build/htn_auto
+[0.814s] running symlink_data
+[0.814s] creating /home/zech/htn-2026/install/htn_auto/share/ament_index
+[0.814s] creating /home/zech/htn-2026/install/htn_auto/share/ament_index/resource_index
+[0.814s] creating /home/zech/htn-2026/install/htn_auto/share/ament_index/resource_index/packages
+[0.814s] symbolically linking /home/zech/htn-2026/build/htn_auto/resource/htn_auto -> /home/zech/htn-2026/install/htn_auto/share/ament_index/resource_index/packages
+[0.814s] symbolically linking /home/zech/htn-2026/build/htn_auto/package.xml -> /home/zech/htn-2026/install/htn_auto/share/htn_auto
+[0.836s] Invoked command in '/home/zech/htn-2026/build/htn_auto' returned '0': PYTHONPATH=/home/zech/htn-2026/build/htn_auto/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/zech/htn-2026/build/htn_auto/build --no-deps symlink_data

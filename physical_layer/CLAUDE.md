@@ -38,7 +38,7 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
     serial; wire protocol documented in the file - firmware must match it).
     New hardware = new subclass registered in `hal/__init__.py`.
   - `teleop_gui.py` (tkinter window, started by the launch files): hold-to-move,
-    close/open key pairs `Q/A W/S E/D R/F T/G` = thumb..pinky; releasing holds
+    open/close key pairs `Q/A W/S E/D R/F T/G` = thumb..pinky; releasing holds
     position. Key auto-repeat arrives as release+press pairs, hence the
     release debounce. `teleop.py` is the terminal version (same keys, steps per
     repeated character; needs its own TTY so it is never launched).

@@ -11,7 +11,7 @@ COMMAND_TOPIC = '/hand/command'  # normalized: 0 = open, 1 = closed
 STATE_TOPIC = '/hand/state'
 
 # One key pair per finger, in FINGERS order: (close, open)
-KEYS = [('q', 'a'), ('w', 's'), ('e', 'd'), ('r', 'f'), ('t', 'g')]
+KEYS = [('a', 'q'), ('s', 'w'), ('d', 'e'), ('f', 'r'), ('g', 't')]
 TICK_MS = 20
 # Keyboard auto-repeat shows up as release+press pairs a few ms apart; a release
 # only counts once no press has followed it within this time
@@ -44,7 +44,7 @@ class TeleopGui(Node):
         root.title('Hand teleop')
         frame = ttk.Frame(root, padding=12)
         frame.grid()
-        for column, title in enumerate(['', 'close / open', 'target (0 open .. 1 closed)', 'measured']):
+        for column, title in enumerate(['', 'open / close', 'target (0 open .. 1 closed)', 'measured']):
             ttk.Label(frame, text=title).grid(row=0, column=column, padx=6)
 
         self.targets = []
@@ -53,7 +53,7 @@ class TeleopGui(Node):
             target = tk.DoubleVar(value=0.0)
             measured = tk.DoubleVar(value=0.0)
             ttk.Label(frame, text=name, width=8).grid(row=i + 1, column=0, sticky='w')
-            ttk.Label(frame, text=f'{close_key.upper()} / {open_key.upper()}').grid(row=i + 1, column=1)
+            ttk.Label(frame, text=f'{open_key.upper()} / {close_key.upper()}').grid(row=i + 1, column=1)
             tk.Scale(frame, variable=target, from_=0.0, to=1.0, resolution=0.001,
                      orient='horizontal', length=260).grid(row=i + 1, column=2)
             ttk.Progressbar(frame, variable=measured, maximum=1.0,

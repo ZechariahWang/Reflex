@@ -25,8 +25,8 @@ position (window must be focused). Several keys can be held at once.
 
 | finger | thumb | index | middle | ring | pinky |
 |---|---|---|---|---|---|
-| close | `Q` | `W` | `E` | `R` | `T` |
-| open  | `A` | `S` | `D` | `F` | `G` |
+| open  | `Q` | `W` | `E` | `R` | `T` |
+| close | `A` | `S` | `D` | `F` | `G` |
 
 Sliders do the same with the mouse, the bars show the measured position.
 `teleop:=false` skips the window; `ros2 run htn_control teleop` is a terminal

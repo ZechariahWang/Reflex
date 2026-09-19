@@ -11,15 +11,15 @@ from htn_control.hand_config import FINGERS
 
 COMMAND_TOPIC = '/hand/command'  # normalized: 0 = open, 1 = closed
 # One key pair per finger, in FINGERS order: (close, open)
-KEYS = [('q', 'a'), ('w', 's'), ('e', 'd'), ('r', 'f'), ('t', 'g')]
+KEYS = [('a', 'q'), ('s', 'w'), ('d', 'e'), ('f', 'r'), ('g', 't')]
 # A terminal can't see key releases, only the characters auto-repeat produces
 # while a key is held: every character moves the finger one small step.
 STEP = 0.03
 
 HELP = """
 Hand teleop - hold a key to move a finger, let go to stop
-  close:  q thumb   w index   e middle   r ring   t pinky
-  open:   a thumb   s index   d middle   f ring   g pinky
+  open:   q thumb   w index   e middle   r ring   t pinky
+  close:  a thumb   s index   d middle   f ring   g pinky
   x: quit
 """
 

@@ -10,7 +10,6 @@
 
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>htn_control</exec_depend>
-  <exec_depend>htn_auto</exec_depend>
   <exec_depend>realsense2_camera</exec_depend>
   <exec_depend>rosbridge_server</exec_depend>
 

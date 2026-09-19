@@ -18,9 +18,11 @@ everything else goes in a top-level subfolder per concern.
   of the contracts below; interfaces are in `application/CONTRACT.md`.
 - `docs/` - design documents. Read `docs/system-design.md` (devices, ROS
   layout, policy, safety, open questions) before design work. Specs for single features go in `docs/specs/`.
-- (planned) a separate top-level folder for the VLA / policy code (training,
-  datasets, inference). It stays plain Python outside ROS so torch & co. never
-  enter the colcon build; `htn_auto` in the ROS workspace is the thin bridge.
+- `policy/` - the learned policy side, plain Python (>= 3.12) outside ROS so
+  torch & co. never enter the colcon build. `lerobot_robot_exo_hand` is the
+  LeRobot `Robot` for the hand; it runs on the GPU laptop and reaches the
+  contracts below through rosbridge, never through `rclpy`. Training, datasets
+  and inference scripts go here too. See `docs/specs/policy-link-design.md`.
 
 ## Contracts that cross folders
 

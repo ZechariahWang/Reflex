@@ -111,8 +111,9 @@ instruction.
   `camera2`, `camera3` (top, wrist, side in the pretraining data). Map the
   dataset keys to the slots with `--rename_map`, and mask unused slots with
   `--policy.empty_cameras=N`. Put the wrist RGB in `camera2`.
-- Keep the camera order and the `rename_map` identical in training and
-  inference.
+- Async inference in lerobot 0.6.1 ignores `rename_map`, so the adapter names
+  its camera `camera2` directly and no map is used, see
+  `specs/policy-link-design.md`.
 - **Depth:** record it as a second video stream (color map) and map it to a
   camera slot. The vision encoder has not seen depth images, so unfreeze it for
   that run (`freeze_vision_encoder=false`, `train_expert_only=false`). Option if

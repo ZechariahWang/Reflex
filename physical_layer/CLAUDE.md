@@ -14,7 +14,8 @@ ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0
 
 Launch args: `gui:=true` (Gazebo window, sim only), `teleop:=false` (no control
 window), `foxglove:=false`, `rosbridge:=false`, `camera:=none`, `color_profile:=640x480x15`,
-`depth_profile:=480x270x15`, `params_file:=<yaml>`. Foxglove connects to
+`depth_profile:=480x270x15`, `params_file:=<yaml>`, `require_all_servos:=false`
+(hardware only: bench test with fewer than 5 servos). Foxglove connects to
 `ws://localhost:8765`, rosbridge (JSON websocket for `application/`) listens on
 `ws://localhost:9090`; import `foxglove/htn_hand.json` (Layouts -> Import from
 file) for hand model + color + depth.
@@ -54,10 +55,12 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
     repeated character; needs its own TTY so it is never launched).
   - `poses.py`: pre-written movements - `POSES` (name -> 5 normalized values)
     and `SEQUENCES` (list of (pose, seconds)). The control window builds one
-    toggle button per entry; reuse these from `htn_auto` rather than redefining.
+    toggle button per entry.
   - `hand_config.py`: `FINGERS` order and the YAML loader.
-- `htn_auto` - stub for autonomous control. Must only talk to `/hand/command` /
-  `/hand/state`; policy/VLA code lives outside this workspace.
+
+The learned policy is not in this workspace. It lives in `policy/` at the repo
+root and reaches `/hand/command`, `/hand/state` and the camera topics through
+rosbridge, see `docs/specs/policy-link-design.md`.
 
 ## Gotchas
 
@@ -94,8 +97,8 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
 - Joint names are `<finger>_joint`, links `<finger>_finger`, root `base_link`
   (`world` exists only in sim).
 - Only the HAL's sim backend may publish to `/hand_position_controller/commands`.
-- `/hand/command` is **shared** (control window, web app via rosbridge, later
-  `htn_auto`). Publish only when you have something new to say - never stream
+- `/hand/command` is **shared** (control window, web app and the policy adapter
+  in `policy/`, both via rosbridge). Publish only when you have something new to say - never stream
   your current target on a timer, or you silently override everyone else. The
   control window adopts other publishers' commands into its sliders.
 - A ROS package must never be called `launch` (shadows the `launch` Python

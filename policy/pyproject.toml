@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# lerobot discovers third-party robots by this "lerobot_robot_" prefix
+name = "lerobot_robot_exo_hand"
+version = "0.1.0"
+description = "LeRobot Robot for the htn-2026 exoskeleton hand, through rosbridge"
+requires-python = ">=3.12"
+# opencv and numpy come with lerobot
+dependencies = ["lerobot==0.6.1", "roslibpy>=2.0"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["lerobot_robot_exo_hand"]
+
+[tool.ruff]
+# first-party detection must not depend on the directory ruff runs from
+src = ["."]

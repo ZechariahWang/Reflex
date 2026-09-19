@@ -1,7 +1,7 @@
 # Policy link: LeRobot to ROS through rosbridge
 
 How the learned policy reads the hand and the camera and moves the fingers.
-Status: design, not implemented. Date: 2026-09-19. This closes open question 1
+Status: adapter implemented, not yet run against rosbridge. Date: 2026-09-19. This closes open question 1
 of `../system-design.md`.
 
 ## Decisions
@@ -60,8 +60,23 @@ wearable ROS machine                          GPU laptop
 
 ### `policy/` - the adapter package
 
-Plain Python, outside the colcon build. Dependencies: `lerobot` (pinned),
-`roslibpy`, `opencv-python`, `numpy`.
+Plain Python (>= 3.12, a requirement of `lerobot`), outside the colcon build.
+Dependencies: `lerobot` 0.6.1, `roslibpy`, `opencv-python`, `numpy`.
+
+`lerobot` finds a third-party robot only as an installed distribution with a
+name that starts with `lerobot_robot_`, and it looks for the class with the
+name of the config class without `Config`. Thus:
+
+```
+policy/
+  pyproject.toml                  distribution lerobot_robot_exo_hand
+  lerobot_robot_exo_hand/
+    __init__.py                   imports the two classes (registration)
+    config_exo_hand.py            ExoHandConfig, registered as "exo_hand"
+    exo_hand.py                   ExoHand
+    convert.py                    pure functions, no lerobot import
+  tests/
+```
 
 `ExoHandConfig` (a LeRobot `RobotConfig`):
 
@@ -77,9 +92,9 @@ Plain Python, outside the colcon build. Dependencies: `lerobot` (pinned),
 
 - Features: `thumb.pos`, `index.pos`, `middle.pos`, `ring.pos`, `pinky.pos`
   (float, `0` = open .. `1` = closed, the values of the topics with no
-  conversion) for observation and action, and one camera, `wrist`
-  (`H x W x 3`, uint8, RGB). `rename_map` maps `wrist` to the `camera2` slot
-  of SmolVLA.
+  conversion) for observation and action, and one camera, `camera2`
+  (`H x W x 3`, uint8, RGB). This is the wrist slot of `smolvla_base`, so no
+  `rename_map` is necessary in recording, training or inference.
 - `connect()`: opens `roslibpy.Ros`, subscribes to `/hand/state`, the color
   topic and `/hand/command` with `queue_length=1` and no throttle, advertises
   `/hand/command` on a second `Topic` object (a `Topic` replays only one of
@@ -158,25 +173,41 @@ import where possible:
   first.
 - `to_observation` has exactly the keys of `observation_features`.
 
-Smoke check: `python -m policy.exo_hand --host <ip>` against `sim.launch.py`.
+Smoke check: `python -m lerobot_robot_exo_hand.exo_hand --host <ip>` against
+`sim.launch.py`, after `pip install -e policy`.
 It prints the observation keys, shapes and ages, closes and opens the hand one
 time, and fails if `/hand/state` does not follow.
 
 ## Implementation order
 
-1. Pin the `lerobot` version. Check against it: the `Robot` and `RobotConfig`
-   interface (names of the properties and methods), how a third-party robot
-   type is registered for `lerobot-record` and `RobotClient` (recent versions
-   find installed packages with the prefix `lerobot_robot_`; this decides the
-   package layout in `policy/`), and the `RobotClient` parameters. This spec
-   has them from memory of the docs.
-2. Pure functions and their tests.
-3. `ExoHand` and the smoke check in sim, from a second device if possible
-   (firewall, TCP 9090).
+1. Done: `lerobot` 0.6.1, checked against its source. `Robot` needs
+   `observation_features`, `action_features`, `is_connected`,
+   `connect(calibrate=True)`, `is_calibrated`, `calibrate`, `configure`,
+   `get_observation`, `send_action`, `disconnect`. `RobotClient` has
+   `actions_per_chunk`, `chunk_size_threshold` (default 0.5) and
+   `aggregate_fn_name`.
+2. Done: pure functions and their tests (`convert.py`).
+3. `ExoHand` is done, with tests that feed its callbacks directly (no
+   rosbridge). Not done: the smoke check,
+   `python -m lerobot_robot_exo_hand.exo_hand --host <ip>`, from a second
+   device if possible (firewall, TCP 9090). It needs the camera: the sim has no
+   simulated camera, so `connect()` fails with a RealSense unplugged.
 4. Full loop: `policy_server` and `RobotClient` with `smolvla_base` (the
    actions have no meaning, the loop and the timing are the test). Measure the
-   frame age and the command rate.
-5. Remove `htn_auto`, update the CLAUDE.md files.
+   frame age and the command rate. The commands are in
+   `policy/README.md`, checked against the 0.6.1 source, not run.
+5. Done: `htn_auto` removed, the CLAUDE.md files and the README updated.
+
+## The camera key
+
+In lerobot 0.6.1, `RobotClient` does not pass a `rename_map`, and
+`policy_server` overrides the map of the checkpoint with that empty map. It
+then looks up `observation.images.<camera key of the robot>` in the image
+features of the policy; a key that the policy does not have is a `KeyError`.
+A `rename_map` works in training and in `lerobot-record`, but not in async
+inference. The adapter thus uses the policy key directly (`CAMERA` in
+`convert.py`). The key is in the dataset: a change after the first recording
+needs a dataset conversion.
 
 ## Not verified
 

@@ -26,6 +26,8 @@ def generate_launch_description():
             description='Physical parameters of the hand'),
         DeclareLaunchArgument('serial_port', default_value='/dev/ttyACM0'),
         DeclareLaunchArgument('baud_rate', default_value='1000000'),
+        DeclareLaunchArgument('require_all_servos', default_value='true',
+                              description='false = bench test with part of the servos'),
         DeclareLaunchArgument('teleop', default_value='true',
                               description='Open the finger control window'),
         DeclareLaunchArgument('foxglove', default_value='true',
@@ -46,7 +48,9 @@ def generate_launch_description():
             executable='hal',
             parameters=[{'backend': 'feetech', 'params_file': params_file,
                          'serial_port': LaunchConfiguration('serial_port'),
-                         'baud_rate': ParameterValue(LaunchConfiguration('baud_rate'), value_type=int)}],
+                         'baud_rate': ParameterValue(LaunchConfiguration('baud_rate'), value_type=int),
+                         'require_all_servos': ParameterValue(
+                             LaunchConfiguration('require_all_servos'), value_type=bool)}],
             output='screen',
         ),
 

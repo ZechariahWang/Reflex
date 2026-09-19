@@ -46,7 +46,7 @@ class HandHal(Node):
 
     def on_command(self, msg):
         if len(msg.data) != len(FINGERS):
-            self.get_logger().warn(
+            self.get_logger().warning(
                 f'Ignoring command with {len(msg.data)} values, expected {len(FINGERS)}',
                 throttle_duration_sec=2.0)
             return

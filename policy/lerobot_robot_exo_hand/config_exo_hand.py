@@ -19,3 +19,5 @@ class ExoHandConfig(RobotConfig):
     # send_action() publishes only a command that differs by more than this
     command_tolerance: float = 0.01
     connect_timeout_s: float = 10.0
+    # Data collection with the torque off: send_action() publishes nothing
+    passive: bool = False

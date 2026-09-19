@@ -138,6 +138,8 @@ class ExoHand(Robot):
         if not self.is_connected or self._command_out is None:
             raise ConnectionError(f"{self} is not connected")
         command = to_command(action)
+        if self.config.passive:
+            return dict(zip(KEYS, command))
         with self._lock:
             last = self._last_command
             publish = last is None or differs(command, last, self.config.command_tolerance)

@@ -112,3 +112,10 @@ def test_send_action_needs_a_connection(tmp_path):
     robot = ExoHand(ExoHandConfig(host="unused", calibration_dir=tmp_path))
     with pytest.raises(ConnectionError):
         robot.send_action(action(0.5))
+
+
+def test_passive_send_action_publishes_nothing(robot):
+    robot.config.passive = True
+
+    assert robot.send_action(action(0.7)) == action(0.7)
+    assert robot._command_out.sent == []

@@ -18,6 +18,7 @@ everything else goes in a top-level subfolder per concern.
   of the contracts below; interfaces are in `application/CONTRACT.md`.
 - `docs/` - design documents. Read `docs/system-design.md` (devices, ROS
   layout, policy, safety, open questions) before design work. Specs for single features go in `docs/specs/`.
+  `docs/notes/next-work.md` says where the work stopped: read it at the start of a session.
 - `policy/` - the learned policy side, plain Python (>= 3.12) outside ROS so
   torch & co. never enter the colcon build. `lerobot_robot_exo_hand` is the
   LeRobot `Robot` for the hand; it runs on the GPU laptop and reaches the

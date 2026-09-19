@@ -68,9 +68,10 @@ sim_mount:
 # Steps are 0..4095 (4096 per turn = 651.9 per rad). <finger>_joint is the servo
 # horn, so:   closed_step = open_step +- max_angle * 651.9
 # (836 steps for thumb/index/pinky, 816 for middle/ring; + or - depends on how the
-# servo is mounted). `ros2 run htn_control servo_tool calibrate` finds open_step
-# and the sign and prints these lines. NEVER widen the span: the linkage binds
-# 10 .. 25 deg of horn past closed, and ~30 deg past open.
+# servo is mounted). `ros2 run htn_control servo_tool calibrate` is a window: set
+# OPEN and CLOSED of each finger by eye, Save writes these lines. Mind the span:
+# by the CAD the linkage binds 10 .. 25 deg of horn past closed (at 958 steps for
+# middle/ring), and ~30 deg past open. The window warns, it does not stop you.
 #
 # UNCALIBRATED: open_step 2048 is a guess for every finger. Keep the hand off the
 # wearer and start with `passive:=true` until `servo_tool calibrate` has run.

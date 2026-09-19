@@ -198,20 +198,6 @@ def test_backend_runs_with_absent_servos_when_allowed(servos):
     assert servos.registers[1][40] == 0
 
 
-def test_closed_step_is_the_horn_travel_from_open_in_either_direction():
-    from htn_control.calibrate_gui import closed_step
-    assert closed_step(2048, True, 1.2828) == 2048 + 836
-    assert closed_step(2048, False, 1.2523) == 2048 - 816
-
-
-def test_travel_too_close_to_the_encoder_wrap_is_refused():
-    from htn_control.calibrate_gui import check_travel
-    assert check_travel('index', 2048, 2884, 0.4939) is None
-    assert 'encoder wrap' in check_travel('index', 3500, 4336, 0.4939)      # closed beyond 4095
-    assert 'encoder wrap' in check_travel('index', 200, 1036, 0.4939)       # no room to come back from too far open
-    assert check_travel('index', 3000, 2164, 0.4939) is None                # mirrored servo
-
-
 def test_calibration_lines_replace_only_their_own_lines():
     from htn_control.servo_tool import rewrite_yaml, yaml_line
     text = ('servos:\n  torque_limit: 300    # keep me\n'

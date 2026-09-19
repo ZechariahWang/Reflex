@@ -28,6 +28,12 @@ position (window must be focused). Several keys can be held at once.
 | close | `A` | `S` | `D` | `F` | `G` |
 
 Sliders do the same with the mouse, the bars show the measured position.
+
+Below the sliders are buttons for pre-written movements: **poses** (open, fist,
+point, peace, thumbs up, pinch, ...) and **sequences** (wave, grab + release,
+count). Click one to run it, click it again to go back to open; touching a
+finger key takes manual control back. They are plain lists in
+`htn_control/htn_control/poses.py` - add an entry there and a button appears.
 `teleop:=false` skips the window; `ros2 run htn_control teleop` is a terminal
 version with the same keys.
 

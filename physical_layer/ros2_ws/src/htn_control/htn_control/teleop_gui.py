@@ -6,6 +6,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
 
 from htn_control.hand_config import FINGERS
+from htn_control.poses import POSES, SEQUENCES, resolve
 
 COMMAND_TOPIC = '/hand/command'  # normalized: 0 = open, 1 = closed
 STATE_TOPIC = '/hand/state'
@@ -16,6 +17,7 @@ TICK_MS = 20
 # Keyboard auto-repeat shows up as release+press pairs a few ms apart; a release
 # only counts once no press has followed it within this time
 RELEASE_DEBOUNCE_MS = 40
+POSE_BUTTONS_PER_ROW = 5
 
 
 class TeleopGui(Node):
@@ -23,6 +25,8 @@ class TeleopGui(Node):
 
     While a finger's close/open key is held the finger travels at `speed`;
     letting go holds it where it is. Sliders do the same job with the mouse.
+    Pose / sequence buttons run the pre-written movements from poses.py; clicking
+    the active one again goes back to open.
     """
 
     def __init__(self, root):
@@ -40,6 +44,8 @@ class TeleopGui(Node):
             self.bindings[open_key] = (i, -1.0)
         self.held = set()
         self.pending_release = {}
+        self.active = None          # name of the pose / sequence in effect
+        self.sequence_timer = None
 
         root.title('Hand teleop')
         frame = ttk.Frame(root, padding=12)
@@ -61,12 +67,12 @@ class TeleopGui(Node):
             self.targets.append(target)
             self.measured.append(measured)
 
-        buttons = ttk.Frame(frame)
-        buttons.grid(row=len(FINGERS) + 1, column=0, columnspan=4, pady=(12, 0))
-        ttk.Button(buttons, text='Open all', command=lambda: self.set_all(0.0)).grid(row=0, column=0, padx=6)
-        ttk.Button(buttons, text='Close all', command=lambda: self.set_all(1.0)).grid(row=0, column=1, padx=6)
         ttk.Label(frame, text='hold a key to move that finger, let go to stop').grid(
-            row=len(FINGERS) + 2, column=0, columnspan=4, pady=(8, 0))
+            row=len(FINGERS) + 1, column=0, columnspan=4, pady=(8, 0))
+
+        self.buttons = {}
+        self.add_buttons(frame, len(FINGERS) + 2, 'Poses', POSES, self.toggle_pose)
+        self.add_buttons(frame, len(FINGERS) + 3, 'Sequences', SEQUENCES, self.toggle_sequence)
 
         root.bind('<KeyPress>', self.on_key_press)
         root.bind('<KeyRelease>', self.on_key_release)
@@ -74,9 +80,50 @@ class TeleopGui(Node):
         root.bind('<FocusOut>', lambda _: self.held.clear())
         root.after(TICK_MS, self.tick)
 
-    def set_all(self, value):
-        for target in self.targets:
+    def add_buttons(self, parent, row, title, names, callback):
+        box = ttk.LabelFrame(parent, text=title, padding=6)
+        box.grid(row=row, column=0, columnspan=4, sticky='ew', pady=(10, 0))
+        for n, name in enumerate(names):
+            button = tk.Button(box, text=name, width=11,
+                               command=lambda name=name: callback(name))
+            button.grid(row=n // POSE_BUTTONS_PER_ROW, column=n % POSE_BUTTONS_PER_ROW,
+                        padx=3, pady=3)
+            self.buttons[name] = button
+
+    def set_targets(self, values):
+        for target, value in zip(self.targets, values):
             target.set(value)
+
+    def set_active(self, name):
+        if self.sequence_timer is not None:
+            self.root.after_cancel(self.sequence_timer)
+            self.sequence_timer = None
+        self.active = name
+        for button_name, button in self.buttons.items():
+            button.config(relief='sunken' if button_name == name else 'raised')
+
+    def toggle_pose(self, name):
+        if self.active == name:
+            name = 'open'
+        self.set_active(name)
+        self.set_targets(POSES[name])
+
+    def toggle_sequence(self, name):
+        if self.active == name:
+            self.toggle_pose('open')
+            return
+        self.set_active(name)
+        self.run_sequence(name, 0)
+
+    def run_sequence(self, name, step):
+        self.sequence_timer = None
+        pose, seconds = SEQUENCES[name][step]
+        self.set_targets(resolve(pose))
+        if step + 1 < len(SEQUENCES[name]):
+            self.sequence_timer = self.root.after(
+                int(seconds * 1000), lambda: self.run_sequence(name, step + 1))
+        else:
+            self.set_active(None)
 
     def on_key_press(self, event):
         key = event.keysym.lower()
@@ -86,6 +133,7 @@ class TeleopGui(Node):
         if pending is not None:
             self.root.after_cancel(pending)
         self.held.add(key)
+        self.set_active(None)  # manual control takes over from poses / sequences
 
     def on_key_release(self, event):
         key = event.keysym.lower()
@@ -106,6 +154,10 @@ class TeleopGui(Node):
         for key in self.held:
             i, direction = self.bindings[key]
             self.targets[i].set(min(max(self.targets[i].get() + direction * step, 0.0), 1.0))
+
+        # A slider dragged away from the active pose: it no longer applies
+        if self.active in POSES and [t.get() for t in self.targets] != POSES[self.active]:
+            self.set_active(None)
 
         # Published continuously, so a HAL that (re)starts later still picks up
         # the current targets

@@ -30,6 +30,8 @@ def generate_launch_description():
                               description='Open the finger control window'),
         DeclareLaunchArgument('foxglove', default_value='true',
                               description='Start foxglove_bridge on ws://localhost:8765'),
+        DeclareLaunchArgument('rosbridge', default_value='true',
+                              description='Start rosbridge on ws://localhost:9090 (application/ backend)'),
 
         Node(
             package='robot_state_publisher',
@@ -65,5 +67,13 @@ def generate_launch_description():
             executable='foxglove_bridge',
             parameters=[{'port': 8765}],
             condition=IfCondition(foxglove),
+        ),
+
+        # Websocket JSON bridge for the web simulator in application/
+        Node(
+            package='rosbridge_server',
+            executable='rosbridge_websocket',
+            parameters=[{'port': 9090}],
+            condition=IfCondition(LaunchConfiguration('rosbridge')),
         ),
     ])

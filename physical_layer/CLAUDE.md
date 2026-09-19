@@ -50,6 +50,9 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
     position. Key auto-repeat arrives as release+press pairs, hence the
     release debounce. `teleop.py` is the terminal version (same keys, steps per
     repeated character; needs its own TTY so it is never launched).
+  - `poses.py`: pre-written movements - `POSES` (name -> 5 normalized values)
+    and `SEQUENCES` (list of (pose, seconds)). The control window builds one
+    toggle button per entry; reuse these from `htn_auto` rather than redefining.
   - `hand_config.py`: `FINGERS` order and the YAML loader.
 - `htn_auto` - stub for autonomous control. Must only talk to `/hand/command` /
   `/hand/state`; policy/VLA code lives outside this workspace.

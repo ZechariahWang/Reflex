@@ -28,7 +28,12 @@ Not on Ubuntu 22.04: `docker/run.sh` (Humble + Fortress in Docker Desktop, repo
 bind-mounted, `build/ install/ log/` and the app's `node_modules` / `.venv` in named
 volumes). `run.sh -d` keeps a container up for `docker exec -it htn-sim bash`. The sim
 then runs with `camera:=none teleop:=false`; the web console is the control surface, with
-`MOCK_OBJECTS=1` for a table of synthetic objects around the hand. Shell scripts must
+`MOCK_OBJECTS=1` for a table of synthetic objects around the hand. A RealSense plugged into
+the host cannot reach the container (no USB in Docker Desktop's VM): run
+`camera_bridge/realsense_bridge.py` on the host instead. It reads the camera with
+`pyrealsense2` and publishes the contract's `/camera/...` topics through rosbridge in the
+driver's own encodings (JPEG, `compressedDepth` PNG in mm, `camera_info`), so the console,
+the detector and the policy adapter see a normal camera. Not a ROS node, no rclpy. Shell scripts must
 stay LF: the repo sets `core.autocrlf false` for that (a CRLF `build.sh` dies with
 `bash\r: No such file`).
 

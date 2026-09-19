@@ -49,7 +49,9 @@ same control window.
 No Ubuntu 22.04 at hand (Windows, mac, 24.04)? `physical_layer/docker/run.sh` drops you
 into a container with Humble + Gazebo and this repo mounted; the same commands work in it,
 and the console ports come through to the host. Its `-d` mode keeps one running in the
-background for `docker exec`.
+background for `docker exec`. A RealSense on that host reaches the sim through
+`physical_layer/camera_bridge/realsense_bridge.py` (Python, no ROS): it publishes the camera
+topics over rosbridge.
 
 ## How it fits together
 

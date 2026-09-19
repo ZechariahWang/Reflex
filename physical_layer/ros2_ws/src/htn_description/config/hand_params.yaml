@@ -22,11 +22,11 @@ base:
 #              deg for the others) - linkage_publisher refuses to start otherwise.
 #   mass     : inertia of the horn in the simulation only
 fingers:
-  thumb:  {min_angle: 0.0, max_angle: 1.0692, mass: 0.020}   # 697 steps, as calibrated on the hand
-  index:  {min_angle: 0.0, max_angle: 1.2828, mass: 0.020}
-  middle: {min_angle: 0.0, max_angle: 1.2523, mass: 0.020}
-  ring:   {min_angle: 0.0, max_angle: 1.2523, mass: 0.020}
-  pinky:  {min_angle: 0.0, max_angle: 1.2828, mass: 0.020}
+  thumb:  {min_angle: 0.0, max_angle: 1.0140, mass: 0.020}
+  index:  {min_angle: 0.0, max_angle: 1.2502, mass: 0.020}
+  middle: {min_angle: 0.0, max_angle: 1.2747, mass: 0.020}
+  ring:   {min_angle: 0.0, max_angle: 1.7717, mass: 0.020}
+  pinky:  {min_angle: 0.0, max_angle: 1.6690, mass: 0.020}
 
 # Looks only (RGB 0..1). No effect on collisions, masses or control.
 appearance:
@@ -79,19 +79,23 @@ sim_mount:
 # sets its max_angle above to the travel that was set, so the 3D views show the real
 # horn angle. Fingers still on open_step 2048 are guesses.
 servos:
-  torque_limit: 300    # 0..1000, drive duty cap in free motion (speed AND stall torque)
+  torque_limit: 600    # 0..1000, drive duty cap in free motion (speed AND stall torque)
   hold_torque: 120     # the same while a finger is blocked: the force it keeps pushing with
-  thumb:  {id: 1, open_step: 1511, closed_step: 2208}
-  index:  {id: 2, open_step: 2048, closed_step: 2884, enabled: false}
-  middle: {id: 3, open_step: 2048, closed_step: 2864, enabled: false}
-  ring:   {id: 4, open_step: 2048, closed_step: 2864, enabled: false}
-  pinky:  {id: 5, open_step: 2048, closed_step: 2884, enabled: false}
+  thumb:  {id: 1, open_step: 1496, closed_step: 2157}
+  index:  {id: 2, open_step: 2028, closed_step: 1213}
+  middle: {id: 3, open_step: 1760, closed_step: 929}
+  ring:   {id: 4, open_step: 1936, closed_step: 3091}
+  pinky:  {id: 5, open_step: 2146, closed_step: 3234}
 
 # Contact stop (hal/contact.py, design in docs/specs/hal-safety-design.md): a finger
-# that has to move and does not gets hold_torque and a frozen setpoint. In finger
-# travel (0..1) and HAL cycles (50 Hz). NOT tuned on the hand yet.
+# that meets resistance gets hold_torque and a frozen setpoint. Resistance = the motor
+# current stays above blocked_current, or (encoder rule, the fallback) it has to move and
+# does not. In finger travel (0..1) and HAL cycles (50 Hz). blocked_current was found on the
+# hand with `servo_tool probe`; the encoder values are NOT tuned on the hand yet.
 contact_stop:
   enabled: true
+  blocked_current: 100   # mA; remove the line to use the encoder rule alone
+  current_cycles: 5      # 0.1 s above it in a row: the peak of a start is shorter
   blocked_error: 0.06    # further than this from the setpoint = it has to move
   blocked_motion: 0.004  # less travel than this over blocked_cycles = it does not
   blocked_cycles: 10     # 0.2 s

@@ -66,7 +66,8 @@ class HandHal(Node):
         self.contacts = []
         if self.backend.has_torque_limit and stop.get('enabled', True):
             self.contacts = [ContactDetector(stop.get('blocked_error', 0.06), stop.get('blocked_motion', 0.004),
-                                             stop.get('blocked_cycles', 10), stop.get('hold_lead', 0.03))
+                                             stop.get('blocked_cycles', 10), stop.get('hold_lead', 0.03),
+                                             stop.get('blocked_current'), stop.get('current_cycles', 5))
                              for _ in FINGERS]
 
         self.create_subscription(Float64MultiArray, COMMAND_TOPIC, self.on_command, 10)
@@ -164,9 +165,10 @@ class HandHal(Node):
         self.backend.write(self.setpoint)
         state = self.backend.read()
         if state is not None:
+            currents = self.backend.read_current() or [None] * len(FINGERS)
             for i, contact in enumerate(self.contacts):
                 before = contact.state
-                after = contact.update(self.setpoint[i], state[i], self.target[i])
+                after = contact.update(self.setpoint[i], state[i], self.target[i], currents[i])
                 if after == before:
                     continue
                 self.backend.set_torque_limit(i, after == BLOCKED)

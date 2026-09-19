@@ -51,6 +51,19 @@ def test_released_by_a_command_the_other_way_or_by_the_obstacle_going_away(direc
     assert contact.update(contact.hold_setpoint(), blocked_at + 0.02 * direction, target) == FREE  # it moves again
 
 
+def test_current_above_the_threshold_blocks_where_the_encoder_rule_is_blind():
+    contact = ContactDetector(0.06, 0.004, 10, 0.03, blocked_current=100, current_cycles=5)
+    # 0.03 from the setpoint (< blocked_error) and still creeping: the encoder rule never fires
+    states = [contact.update(0.53 + 0.003 * n, 0.50 + 0.003 * n, 0.6, current=150) for n in range(5)]
+    assert states == [FREE] * 4 + [BLOCKED] and contact.direction == 1.0
+
+
+def test_a_short_current_peak_or_no_current_reading_does_not_block():
+    contact = ContactDetector(0.06, 0.004, 10, 0.03, blocked_current=100, current_cycles=5)
+    for current in [300, 300, 300, 300, 20] * 4 + [None] * 10:
+        assert contact.update(0.52, 0.50, 0.6, current=current) == FREE
+
+
 class MovingServos(FakeServos):
     """Fake servos that go to their goal while they have torque, up to a mechanical stop."""
 
@@ -75,6 +88,8 @@ class MovingServos(FakeServos):
                 step = max(-self.speed, min(self.speed, goal - present))
                 low, high = self.stops.get(i, (0, 4095))
                 registers[56:58] = u16(max(low, min(high, present + step)))
+                pushing = not low <= present + step <= high  # into its stop: 260 mA, else 26 mA
+                registers[69:71] = u16(40 if pushing else 4)
         super().handle(servo_id, instruction, params)
 
 
@@ -152,6 +167,18 @@ def test_a_blocked_finger_gets_the_low_torque_and_a_frozen_setpoint_and_comes_ba
         node.update()
     assert node.contacts[2].state == FREE and servos.limits[3][-1] == high
     assert position(servos, 3) == pytest.approx(0.1, abs=0.02)
+
+
+def test_a_finger_stopped_just_before_its_target_is_blocked_by_the_current(hal):
+    node, servos = hal
+    assert node.contacts[1].blocked_current == 100
+    for _ in range(3):
+        node.update()
+    servos.stops[2] = (0, OPEN + 500)  # the index meets something at ~0.49 ...
+    node.on_command(type('Msg', (), {'data': [0.3, 0.52, 0.3, 0.3, 0.3]})())  # ... 0.03 before its target
+    for _ in range(80):
+        node.update()
+    assert node.contacts[1].state == BLOCKED and servos.limits[2][-1] == node.backend.hold_torque
 
 
 def test_the_obstacle_going_away_frees_the_finger_too(hal):

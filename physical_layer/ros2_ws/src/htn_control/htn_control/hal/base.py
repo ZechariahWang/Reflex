@@ -27,6 +27,11 @@ class HandBackend(ABC):
     def read(self):
         """Return measured finger positions (normalized), or None if unknown."""
 
+    def read_current(self):
+        """Motor current of each finger at the last read(), in mA (absolute), or None if the
+        backend cannot measure it: the contact stop then has the encoder rule only."""
+        return None
+
     def set_torque(self, enabled, hold=None):
         """Power the motors, or release them so the fingers can be moved by hand.
 

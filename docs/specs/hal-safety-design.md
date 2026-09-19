@@ -61,11 +61,16 @@ it sets the grip force on an object.
   the hold state on purpose.
 - Each finger alone. `/hand/state` stays the measured position.
 - Force before the detection is still `torque_limit` for ~0.1 to 0.2 s.
-- Current (register 69, unit 6.5 mA) as a better contact signal: not proven. A
-  hard push by hand against a holding motor gave only 6.5 to 13 mA, because
-  the gear friction carries the load. The case that matters (the MOTOR drives
-  into a block) is not measured. Encoder rule first; current as a second input
-  of the same detector if it turns out to work.
+- Current (register 69, unit 6.5 mA) is the first contact signal since 2026-09-19: blocked
+  when it stays at or above `blocked_current` (100 mA, found on the hand with
+  `servo_tool probe`) for `current_cycles` (5) cycles in a row. The encoder rule missed a
+  finger stopped closer than `blocked_error` to its target and one that creeps into
+  something soft; it stays as the fallback, and it is the only rule on a backend without
+  a current reading. Free motion at torque limit 600 draws 60 to 110 mA in short peaks
+  (the start of a move), so the margin is small: the row of cycles is what keeps a start
+  from tripping it. An earlier measurement (a push by hand against a HOLDING motor: only
+  6.5 to 13 mA, the gear friction carries the load) still stands - the current shows what
+  the motor drives into, not what pushes on a finger at rest.
 - Not chosen: the overload protection inside the servo (EEPROM: overload
   torque, protection time, protective torque; protection current). It is a
   trip, the finger goes limp, recovery is unclear, and the values would live in

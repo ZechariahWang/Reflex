@@ -247,3 +247,14 @@ def test_probe_logs_signed_current_and_leaves_the_torque_off(servos, bus, capsys
     assert out.splitlines()[1].endswith(',-650')
     assert 'median  650 mA' in err
     assert servos.registers[1][40] == 0
+
+
+def test_probe_with_a_stop_current_stops_the_finger_where_it_is(servos, bus, capsys, monkeypatch):
+    monkeypatch.setattr(time, 'sleep', lambda seconds: None)
+    servos.registers[1][56:58] = u16(1500)
+    servos.registers[1][69:71] = u16(20)  # 130 mA all the time
+    probe(bus, 1, 300, 0.2, '', rate=20.0, stop_current=100)
+    out, err = capsys.readouterr()
+    assert 'close: stopped at step 1500' in err
+    hold_goals = {line.split(',')[2] for line in out.splitlines() if ',hold,' in line}
+    assert hold_goals == {'1500'}, 'the goal stays on the finger, not on closed'

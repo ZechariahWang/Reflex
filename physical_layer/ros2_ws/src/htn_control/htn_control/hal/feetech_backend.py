@@ -1,6 +1,6 @@
 from htn_control.hal import feetech
 from htn_control.hal.base import HandBackend
-from htn_control.hal.feetech import FeetechBus, from_u16, u16
+from htn_control.hal.feetech import FeetechBus, from_sign_magnitude, from_u16, u16
 from htn_control.hand_config import FINGERS
 
 
@@ -63,6 +63,7 @@ class FeetechBackend(HandBackend):
         # it must not stay None, or the HAL (which drives nothing before it has a whole measured
         # pose) would wait for ever and the fingers that ARE there would never get torque.
         self.measured = [None if present else 0.0 for present in self.present]
+        self.current = [0.0] * len(FINGERS)  # mA, absolute
         # The torque limit is RAM: set it before the servos get torque. The torque itself stays
         # OFF here: the HAL turns it on through set_torque() once it knows the measured pose, with
         # that pose as the goal. Enabling it here drove every finger to whatever goal the servo
@@ -90,7 +91,8 @@ class FeetechBackend(HandBackend):
                                            self.closed_step, self.present) if present})
 
     def read(self):
-        replies = self.bus.sync_read(feetech.ADDR_PRESENT_POSITION, 2, self.active_ids)
+        # position .. current is one block (15 bytes), like the vendor SDK reads it
+        replies = self.bus.sync_read(feetech.ADDR_PRESENT_POSITION, 15, self.active_ids)
         log = self.node.get_logger()
         for n, (finger, servo_id) in enumerate(zip(FINGERS, self.ids)):
             if not self.present[n]:
@@ -100,11 +102,15 @@ class FeetechBackend(HandBackend):
                             throttle_duration_sec=2.0)
                 continue
             self.measured[n] = to_norm(
-                from_u16(replies[servo_id]), self.open_step[n], self.closed_step[n])
+                from_u16(replies[servo_id][:2]), self.open_step[n], self.closed_step[n])
+            self.current[n] = abs(from_sign_magnitude(replies[servo_id][13:15], 15)) * feetech.CURRENT_MA
             if self.bus.errors.get(servo_id):
                 log.warning(f'{finger} servo (id {servo_id}) reports error '
                             f'0x{self.bus.errors[servo_id]:02x}', throttle_duration_sec=2.0)
         return None if None in self.measured else list(self.measured)
+
+    def read_current(self):
+        return list(self.current)
 
     def set_torque(self, enabled, hold=None):
         if enabled and hold is not None:

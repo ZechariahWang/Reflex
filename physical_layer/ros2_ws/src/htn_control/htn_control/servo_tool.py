@@ -4,16 +4,19 @@
     servo_tool set-id 1 3        (one servo on the bus at a time)
     servo_tool jog 3             (j/k = 10 steps, J/K = 100 steps, q = quit)
     servo_tool calibrate         (a window: set each finger's open pose -> hand_params.yaml)
+    servo_tool probe 3           (close and open one finger, log position / load / current)
 """
 import argparse
 import math
 import re
 import sys
+import statistics
 import termios
+import time
 import tty
 
 from htn_control.hal import feetech
-from htn_control.hal.feetech import FeetechBus, FeetechError, from_u16, u16
+from htn_control.hal.feetech import FeetechBus, FeetechError, from_sign_magnitude, from_u16, u16
 from htn_control.hand_config import default_params_file, load_hand_params, load_linkage
 
 JOG_KEYS = {'j': -10, 'k': 10, 'J': -100, 'K': 100}
@@ -63,6 +66,41 @@ def jog(bus, servo_id, torque):
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
         bus.write(servo_id, feetech.ADDR_TORQUE_ENABLE, [0])
         print()
+
+
+def probe(bus, servo_id, torque, speed, params_file, rate=50.0):
+    """Close, hold, open one finger the way the HAL does (a swept goal, `speed` in finger travel
+    per second) and log what the servo reports, to choose the contact stop's current threshold:
+    run it once with the finger free and once blocked by hand. The HAL must not be running."""
+    servos = load_hand_params(params_file)['servos']
+    finger, servo = next((name, s) for name, s in servos.items() if isinstance(s, dict) and s['id'] == servo_id)
+    open_step, closed_step = servo['open_step'], servo['closed_step']
+    step = speed * abs(closed_step - open_step) / rate
+    phases = [('close', closed_step, 3.0), ('hold', closed_step, 1.0), ('open', open_step, 3.0)]
+    currents = {name: [] for name, _, _ in phases}
+    goal = from_u16(bus.read(servo_id, feetech.ADDR_PRESENT_POSITION, 2))
+    bus.write(servo_id, feetech.ADDR_TORQUE_LIMIT, u16(torque))
+    bus.write(servo_id, feetech.ADDR_GOAL_POSITION, u16(goal))
+    bus.write(servo_id, feetech.ADDR_TORQUE_ENABLE, [1])
+    print('t,phase,goal,position,load,current_mA')
+    start = time.monotonic()
+    try:
+        for phase, target, seconds in phases:
+            for _ in range(int(seconds * rate)):
+                goal += min(max(target - goal, -step), step)
+                bus.write(servo_id, feetech.ADDR_GOAL_POSITION, u16(round(goal)))
+                # position .. current is one block, like the vendor SDK reads it
+                data = bus.read(servo_id, feetech.ADDR_PRESENT_POSITION, 15)
+                load = from_sign_magnitude(data[4:6], 10)
+                current = from_sign_magnitude(data[13:15], 15) * feetech.CURRENT_MA
+                currents[phase].append(abs(current))
+                print(f'{time.monotonic() - start:.2f},{phase},{round(goal)},{from_u16(data[:2])},{load},{current:.0f}')
+                time.sleep(1.0 / rate)
+    finally:
+        bus.write(servo_id, feetech.ADDR_TORQUE_ENABLE, [0])
+    for phase, values in currents.items():
+        print(f'# {finger} {phase:5s}: median {statistics.median(values):4.0f} mA, peak {max(values):4.0f} mA',
+              file=sys.stderr)
 
 
 def yaml_line(finger, servo_id, open_step, closed):
@@ -126,6 +164,11 @@ def main():
     calibrate_parser = commands.add_parser('calibrate')
     calibrate_parser.add_argument('--torque', type=int, default=150, help='torque limit, 0..1000')
     calibrate_parser.add_argument('--params-file', default='')
+    probe_parser = commands.add_parser('probe')
+    probe_parser.add_argument('id', type=int)
+    probe_parser.add_argument('--torque', type=int, default=300, help='torque limit, 0..1000')
+    probe_parser.add_argument('--speed', type=float, default=2.0, help='finger travel per second, as the HAL max_speed')
+    probe_parser.add_argument('--params-file', default='')
     args = parser.parse_args()
 
     bus = FeetechBus(args.port, args.baud)
@@ -137,6 +180,8 @@ def main():
             print(f'id {args.old} -> {args.new}')
         elif args.command == 'calibrate':
             calibrate(bus, args.torque, args.params_file)
+        elif args.command == 'probe':
+            probe(bus, args.id, args.torque, args.speed, args.params_file)
         else:
             jog(bus, args.id, args.torque)
     finally:

@@ -16,6 +16,9 @@ ADDR_GOAL_POSITION = 42
 ADDR_TORQUE_LIMIT = 48
 ADDR_LOCK = 55
 ADDR_PRESENT_POSITION = 56
+ADDR_PRESENT_LOAD = 60      # drive duty in 0.1 %, bit 10 = direction: the loop's output, not a measurement
+ADDR_PRESENT_CURRENT = 69   # measured motor current, bit 15 = direction
+CURRENT_MA = 6.5            # mA per count of ADDR_PRESENT_CURRENT
 
 
 class FeetechError(Exception):
@@ -28,6 +31,12 @@ def u16(value):
 
 def from_u16(data):
     return int.from_bytes(data, 'little')
+
+
+def from_sign_magnitude(data, sign_bit):
+    """Load and current: magnitude with a direction bit, not two's complement."""
+    value = from_u16(data)
+    return -(value & ~(1 << sign_bit)) if value >> sign_bit & 1 else value
 
 
 class FeetechBus:

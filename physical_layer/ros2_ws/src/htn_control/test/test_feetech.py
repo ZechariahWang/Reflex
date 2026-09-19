@@ -7,7 +7,7 @@ import rclpy.logging
 
 from htn_control.hal.feetech import FeetechBus, FeetechError, from_u16, u16
 from htn_control.hal.feetech_backend import FeetechBackend, to_norm, to_step
-from htn_control.servo_tool import set_id
+from htn_control.servo_tool import probe, set_id
 
 
 class FakeServos:
@@ -236,3 +236,14 @@ def test_scan_reports_a_servo_that_pings_but_cannot_be_read(servos, bus, capsys)
     scan(bus, ids=range(1, 5))
     out = capsys.readouterr().out
     assert 'id 1: position' in out and 'id 3: position' in out and 'several servos on this id' in out
+
+
+def test_probe_logs_signed_current_and_leaves_the_torque_off(servos, bus, capsys, monkeypatch):
+    monkeypatch.setattr(time, 'sleep', lambda seconds: None)
+    servos.registers[1][56:58] = u16(1500)
+    servos.registers[1][69:71] = u16(1 << 15 | 100)  # 100 counts, direction bit set
+    probe(bus, 1, 300, 2.0, '', rate=5.0)
+    out, err = capsys.readouterr()
+    assert out.splitlines()[1].endswith(',-650')
+    assert 'median  650 mA' in err
+    assert servos.registers[1][40] == 0

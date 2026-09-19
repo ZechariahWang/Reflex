@@ -173,7 +173,8 @@ class HandHal(Node):
                     continue
                 self.backend.set_torque_limit(i, after == BLOCKED)
                 if after == BLOCKED:
-                    self.get_logger().info(f'{FINGERS[i]}: blocked at {state[i]:.2f}, holding with low torque')
+                    self.get_logger().info(f'{FINGERS[i]}: blocked at {state[i]:.2f} (setpoint {self.setpoint[i]:.2f}, '
+                                           f'{currents[i] or 0:.0f} mA), holding with low torque')
                 else:
                     self.get_logger().info(f'{FINGERS[i]}: free again')
                     # pick the sweep up from where the finger is, not from the frozen setpoint

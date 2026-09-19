@@ -6,9 +6,8 @@ ROS 2 **Humble** workspace (`ros2_ws/`) for the exoskeleton hand. Gazebo
 ## Build / run
 
 ```bash
-cd physical_layer/ros2_ws          # always build from here
-colcon build --symlink-install
-source install/setup.bash
+physical_layer/build.sh            # works from any directory; extra args go to colcon
+source physical_layer/ros2_ws/install/setup.bash
 ros2 launch htn_launch sim.launch.py        # Gazebo headless + HAL + camera + Foxglove bridge + control window
 ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0
 ```

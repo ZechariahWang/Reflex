@@ -12,11 +12,10 @@ Monorepo for the exoskeleton hand.
 ## Run
 
 ```bash
-cd physical_layer/ros2_ws
-colcon build --symlink-install
-source install/setup.bash
+physical_layer/build.sh      # colcon build, output always lands in physical_layer/ros2_ws
+source physical_layer/ros2_ws/install/setup.bash
 
-# simulated hand (Gazebo, headless) + HAL + Foxglove bridge + finger control window
+# simulated hand (Gazebo, headless) + HAL + camera + Foxglove bridge + finger control window
 ros2 launch htn_launch sim.launch.py            # gui:=true for the Gazebo window
 ```
 
@@ -34,7 +33,9 @@ version with the same keys.
 
 Visualization: open Foxglove, *Open connection* -> `ws://localhost:8765`, add a
 **3D** panel (the hand shows up from `/robot_description` + `/tf`) and a **Plot**
-panel on `/hand/state.data[0]` ... `[4]`.
+panel on `/hand/state.data[0]` ... `[4]`. Or import `physical_layer/foxglove/htn_hand.json`
+(Layouts -> Import from file) for the hand model + RealSense color and depth.
+`camera:=none` runs without the camera.
 
 Real hand: `ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0`,
 same control window.

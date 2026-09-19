@@ -35,7 +35,7 @@ everything else goes in a top-level subfolder per concern.
 
 - Keep it bare-bones: this is a hackathon project, prefer the smallest thing
   that works over frameworks and abstraction.
-- Never run `colcon build` from the repo root - only from
-  `physical_layer/ros2_ws`.
+- Build with `physical_layer/build.sh`. Never run `colcon build` from the repo
+  root: colcon drops `build/ install/ log/` into whatever directory it runs in.
 - Safety limits for the real hand belong in the HAL and the firmware, below any
   learned policy.

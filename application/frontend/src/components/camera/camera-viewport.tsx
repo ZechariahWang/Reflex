@@ -26,13 +26,13 @@ import { cn } from "@/lib/utils"
 /** One panel per camera; each shows either of its two images. */
 const PANELS: Record<CameraSource, { index: string; title: string; tags: Record<CameraKind, string>; lost: string }> = {
   realsense: {
-    index: "02",
+    index: "03",
     title: "RealSense",
     tags: { color: "/camera/color", depth: "/camera/aligned_depth" },
     lost: "camera:=none or unplugged",
   },
   iphone: {
-    index: "03",
+    index: "04",
     title: "iPhone",
     tags: { color: "/record3d/rgb", depth: "/record3d/depth" },
     lost: "stream stalled, reconnecting",

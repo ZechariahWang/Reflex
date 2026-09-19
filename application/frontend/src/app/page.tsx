@@ -2,7 +2,8 @@ import * as motion from "motion/react-client"
 
 import { CameraViewport } from "@/components/camera/camera-viewport"
 import { TopBar } from "@/components/console/top-bar"
-import { MainViewport } from "@/components/mirror/main-viewport"
+import { HandViewport } from "@/components/hand/hand-viewport"
+import { MirrorPanel } from "@/components/mirror/mirror-panel"
 import { TelemetryStrip } from "@/components/telemetry/telemetry-strip"
 import { BACKEND_URL } from "@/lib/config"
 
@@ -15,7 +16,9 @@ const FOOTER_DELAY_S = 0.75
 
 /**
  * In the `console` variant (>= 1024 x 640) the page is exactly one screen:
- * top bar / hand 62 % + RealSense over iPhone / telemetry strip / footer line.
+ * top bar / 3D hand + mirror (the controller's webcam) + RealSense over iPhone / telemetry strip /
+ * footer line. The hand and the mirror are both always there: whoever drives the hand with their
+ * own sees the two side by side.
  * Below that it becomes a normal scrolling column.
  */
 export default function ConsolePage() {
@@ -23,9 +26,12 @@ export default function ConsolePage() {
     <main className="mx-auto flex min-h-dvh max-w-[2400px] flex-col gap-3 p-3 console:grid console:h-dvh console:grid-rows-[auto_minmax(0,1fr)_clamp(9rem,21vh,13rem)_auto] console:overflow-hidden">
       <TopBar />
 
-      <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] gap-3 console:grid-cols-[minmax(0,62fr)_minmax(0,38fr)]">
+      <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] gap-3 console:grid-cols-[minmax(0,46fr)_minmax(0,27fr)_minmax(0,27fr)]">
         <div className="h-[70vw] max-h-[75dvh] min-h-0 console:h-auto console:max-h-none">
-          <MainViewport />
+          <HandViewport />
+        </div>
+        <div className="h-[90vw] max-h-[80dvh] min-h-0 console:h-auto console:max-h-none">
+          <MirrorPanel />
         </div>
         <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 console:grid-cols-1 console:grid-rows-2">
           <div className="aspect-4/3 min-h-0 console:aspect-auto">

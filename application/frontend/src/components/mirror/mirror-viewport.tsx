@@ -52,7 +52,7 @@ const CAPTURE_ERRORS: Record<string, string> = {
   range: "a finger moved too little between fist and open: start again",
 }
 
-/** Panel 01 while Mirror is on: the controller's webcam, what the backend sees in it, and what it sends. */
+/** Panel 02 while Mirror is on (`MirrorPanel`): the controller's webcam, what the backend sees in it, and what it sends. */
 export function MirrorViewport() {
   const overlayRef = useRef<HTMLCanvasElement | null>(null)
   const barRefs = useRef<(HTMLSpanElement | null)[]>([])
@@ -112,11 +112,12 @@ export function MirrorViewport() {
 
   return (
     <Panel
-      index="01"
+      index="02"
       title="Mirror"
       tag="/ws/mirror"
       status={shown.status}
       statusLabel={shown.label}
+      keepStatusLabel
       actions={
         link === "open" && calibrated ? (
           <Button
@@ -132,10 +133,10 @@ export function MirrorViewport() {
       footer={
         <>
           <span>{shown.hint}</span>
-          <span>webcam: tracking only, never recorded</span>
+          <span className="shrink-0">never recorded</span>
         </>
       }
-      contentClassName="grid grid-rows-[minmax(0,1fr)_auto] console:grid-cols-[minmax(0,1fr)_19rem] console:grid-rows-1"
+      contentClassName="grid grid-rows-[minmax(0,1fr)_auto]"
     >
       <div className="relative min-h-0 bg-ink/5">
         {/* A selfie view: the frames go to the backend unflipped, the bends do not depend on it. */}
@@ -179,10 +180,10 @@ export function MirrorViewport() {
         )}
       </div>
 
-      <div className="flex min-h-0 gap-3 border-t px-3 py-2.5 console:border-t-0 console:border-l">
+      <div className="flex min-h-0 gap-3 border-t px-3 py-2.5">
         {FINGERS.map((finger, i) => (
           <div key={finger} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
-            <div className="flex h-24 min-h-0 w-full gap-px console:h-auto console:flex-1">
+            <div className="flex h-24 min-h-0 w-full gap-px">
               {BARS.map((bar, row) => (
                 <span key={bar} title={BAR_TITLES[bar]} className="relative flex-1 bg-ink/10">
                   <span

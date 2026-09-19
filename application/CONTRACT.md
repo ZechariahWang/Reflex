@@ -172,9 +172,9 @@ No rosbridge connection. Joints: each finger curls on its own smooth, phase-shif
 - `src/components/hand/hand-viewport.tsx` -> `export function HandViewport()`
 - `src/components/camera/camera-viewport.tsx` -> `export function CameraViewport({source}: {source: 'realsense' | 'iphone'})`; the RGB / DEPTH toggle lives in the panel header
 - `src/components/telemetry/telemetry-strip.tsx` -> `export function TelemetryStrip()`; its command block has the Arm, Backdrive and Mirror switches
-- `src/components/mirror/main-viewport.tsx` -> `export function MainViewport()`: the hand viewport, or while the Mirror switch is on `MirrorViewport` (the controller's webcam with the tracked skeleton, the guided calibration, the mode, and ctl / cmd / st bars for each finger). `src/hooks/use-mirror.ts` owns the webcam and `/ws/mirror`; the webcam needs a secure context (`localhost` or https)
+- `src/components/mirror/mirror-panel.tsx` -> `export function MirrorPanel()`: panel 02, ALWAYS on the page next to the 3D hand, so the controller sees their tracked hand and the robot hand's answer together. While the Mirror switch is on it is `MirrorViewport` (the controller's webcam with the tracked skeleton, the guided calibration, controller / command / state bars); while it is off it is an idle notice. The webcam and `/ws/mirror` exist only while the switch is on (`MirrorViewport` owns both): an always-visible panel must not become an always-on camera that commands the hand.
 - `src/components/console/top-bar.tsx` -> `export function TopBar()`
-- `src/app/page.tsx` composes them: top bar; main row = main viewport (~62 % width) + a right column with the RealSense panel over the iPhone panel; telemetry strip along the bottom.
+- `src/app/page.tsx` composes them: top bar; main row = 3D hand (~46 %) + mirror panel (~27 %) + a column with the RealSense panel over the iPhone panel (~27 %); telemetry strip along the bottom. Panels are numbered 01 hand, 02 mirror, 03 RealSense, 04 iPhone, 05 telemetry. `Panel`'s header is a container: a narrow panel drops its topic tag first, then its status word (the dot stays) unless `keepStatusLabel` is set.
 
 ## Design language
 

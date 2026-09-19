@@ -41,7 +41,7 @@ export function TelemetryStrip() {
 
   return (
     <Panel
-      index="04"
+      index="05"
       title="Telemetry"
       tag={TOPIC_NAMES.hand_state}
       status={status}

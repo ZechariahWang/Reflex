@@ -45,6 +45,8 @@ export interface PanelProps {
   status?: Status
   /** Replaces the default status wording ("Live" / "Standby" / "Offline"). */
   statusLabel?: string
+  /** Keep the status word in a narrow panel too: for panels whose state is the thing to watch. */
+  keepStatusLabel?: boolean
   /** Controls placed in the header, left of the status. */
   actions?: ReactNode
   /** Optional bottom margin row for coordinates, units and readouts. */
@@ -62,6 +64,7 @@ export function Panel({
   tag,
   status,
   statusLabel,
+  keepStatusLabel = false,
   actions,
   footer,
   children,
@@ -88,18 +91,30 @@ export function Panel({
         />
       ))}
 
-      <header className="flex h-9 shrink-0 items-center gap-3 border-b px-3">
+      {/* A container: a narrow panel (three columns on the console) drops the tag first, then the
+          status word - the dot stays - so the actions never push anything off the edge. */}
+      <header className="@container flex h-9 shrink-0 items-center gap-3 border-b px-3">
         <span className="label-micro num">{index}</span>
         <span aria-hidden className="h-3 w-px shrink-0 bg-hairline" />
         <h2 className="label-micro shrink-0 text-ink">{title}</h2>
-        {tag && <span className="label-micro min-w-0 truncate leading-4 tracking-normal normal-case">{tag}</span>}
+        {tag && (
+          <span className="label-micro hidden min-w-0 truncate leading-4 tracking-normal normal-case @min-[30rem]:inline">
+            {tag}
+          </span>
+        )}
 
         <div className="ml-auto flex shrink-0 items-center gap-3">
           {actions}
           {status && (
             <span className="flex items-center gap-2">
               <StatusDot status={status} />
-              <span className={cn("label-micro", status === "live" && "text-ink")}>
+              <span
+                className={cn(
+                  "label-micro",
+                  !keepStatusLabel && "hidden @min-[25rem]:inline",
+                  status === "live" && "text-ink",
+                )}
+              >
                 {statusLabel ?? STATUS_LABEL[status]}
               </span>
             </span>

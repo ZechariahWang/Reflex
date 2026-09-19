@@ -1,0 +1,48 @@
+{
+  "configById": {
+    "3D!hand": {
+      "topics": {
+        "/robot_description": { "visible": true }
+      },
+      "layers": {
+        "grid": {
+          "layerId": "foxglove.Grid",
+          "instanceId": "grid",
+          "visible": true,
+          "size": 1,
+          "divisions": 10
+        }
+      }
+    },
+    "Image!color": {
+      "imageMode": {
+        "imageTopic": "/camera/color/image_raw/compressed",
+        "calibrationTopic": "/camera/color/camera_info"
+      }
+    },
+    "Image!depth": {
+      "imageMode": {
+        "imageTopic": "/camera/aligned_depth_to_color/image_raw",
+        "calibrationTopic": "/camera/aligned_depth_to_color/camera_info",
+        "colorMode": "colormap",
+        "colorMap": "turbo",
+        "minValue": 0,
+        "maxValue": 2000
+      }
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": { "speed": 1 },
+  "layout": {
+    "first": "3D!hand",
+    "second": {
+      "first": "Image!color",
+      "second": "Image!depth",
+      "direction": "column",
+      "splitPercentage": 50
+    },
+    "direction": "row",
+    "splitPercentage": 50
+  }
+}

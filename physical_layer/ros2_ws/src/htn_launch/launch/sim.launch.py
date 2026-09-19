@@ -105,6 +105,12 @@ def generate_launch_description():
             condition=IfCondition(LaunchConfiguration('teleop')),
         ),
 
+        # Camera HAL: /camera/color/..., /camera/depth/... (see camera.launch.py).
+        # camera:=none turns it off; color_profile:= / depth_profile:= pass through.
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(PathJoinSubstitution(
+                [FindPackageShare('htn_launch'), 'launch', 'camera.launch.py']))),
+
         Node(
             package='foxglove_bridge',
             executable='foxglove_bridge',

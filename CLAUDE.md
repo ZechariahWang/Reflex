@@ -23,6 +23,11 @@ everything else goes in a top-level subfolder per concern.
   (`std_msgs/Float64MultiArray`, 5 values, `0` = open .. `1` = closed) and reads
   `/hand/state` (same layout, measured). Nothing outside the HAL uses radians,
   servo degrees or serial.
+- Anything that wants to see reads the camera from `/camera/color/image_raw`
+  (`sensor_msgs/Image`, rgb8, + `/compressed`), `/camera/depth/image_rect_raw`
+  and `/camera/aligned_depth_to_color/image_raw` (16UC1, millimetres), each
+  with a `camera_info` next to it. Nothing outside the camera launch file knows
+  it is a RealSense.
 - Physical numbers (sizes, masses, angle limits, servo calibration) live only in
   `physical_layer/ros2_ws/src/htn_description/config/hand_params.yaml`.
 

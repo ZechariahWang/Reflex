@@ -1,0 +1,10 @@
+# RealSense cameras on a USB 2 link stream nothing (topics exist, 0 Hz, "Frames
+# didn't arrived within 5 seconds") while USB 2 link power management is on:
+# control transfers work, bulk video data never arrives. Turn LPM and
+# autosuspend off whenever one is plugged in.
+#
+# Install:
+#   sudo cp 99-realsense-nolpm.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   then replug the camera
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="8086", ATTR{product}=="*RealSense*", ATTR{power/control}="on", ATTR{power/usb2_hardware_lpm}="n"

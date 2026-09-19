@@ -1,6 +1,7 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -52,6 +53,12 @@ def generate_launch_description():
             executable='teleop_gui',
             condition=IfCondition(LaunchConfiguration('teleop')),
         ),
+
+        # Camera HAL: /camera/color/..., /camera/depth/... (see camera.launch.py).
+        # camera:=none turns it off; color_profile:= / depth_profile:= pass through.
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(PathJoinSubstitution(
+                [FindPackageShare('htn_launch'), 'launch', 'camera.launch.py']))),
 
         Node(
             package='foxglove_bridge',

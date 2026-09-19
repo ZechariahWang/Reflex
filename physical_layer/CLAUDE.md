@@ -9,13 +9,19 @@ ROS 2 **Humble** workspace (`ros2_ws/`) for the exoskeleton hand. Gazebo
 cd physical_layer/ros2_ws          # always build from here
 colcon build --symlink-install
 source install/setup.bash
-ros2 launch htn_launch sim.launch.py        # Gazebo headless + HAL + Foxglove bridge + control window
+ros2 launch htn_launch sim.launch.py        # Gazebo headless + HAL + camera + Foxglove bridge + control window
 ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0
 ```
 
 Launch args: `gui:=true` (Gazebo window, sim only), `teleop:=false` (no control
-window), `foxglove:=false`, `params_file:=<yaml>`. Foxglove connects to
-`ws://localhost:8765`.
+window), `foxglove:=false`, `camera:=none`, `color_profile:=640x480x15`,
+`depth_profile:=480x270x15`, `params_file:=<yaml>`. Foxglove connects to
+`ws://localhost:8765`; import `foxglove/htn_hand.json` (Layouts -> Import from
+file) for hand model + color + depth.
+
+One-time camera setup on a new machine: `sudo apt install
+ros-humble-realsense2-camera`, the librealsense udev rules, and
+`udev/99-realsense-nolpm.rules` (install steps in the file).
 
 With `--symlink-install`, edits to Python, launch, YAML and xacro files need no
 rebuild - just relaunch. Rebuild after adding files, entry points or packages.
@@ -29,7 +35,10 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
   right hand; `handedness: left` (current) mirrors them in the xacro. `sim:=gazebo` pulls in `hand.gazebo.xacro`
   (world mount + ros2_control).
 - `htn_launch` - `sim.launch.py`, `hardware.launch.py`, `config/controllers.yaml`,
-  `worlds/`.
+  `worlds/`. `camera.launch.py` is the camera HAL, included by both (the camera
+  is real even when the hand is simulated): it pins the RealSense driver to the
+  `/camera/...` topics of the root CLAUDE.md contract. Another camera = another
+  node in that file publishing the same topics, selected by `camera:=`.
 - `htn_control` - the HAL and manual control:
   - `hal_node.py`: subscribes `/hand/command` (5 x 0..1), clamps, rate-limits
     (`max_speed`), writes to a backend, publishes `/hand/state`.
@@ -55,6 +64,19 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
 - **Stale Gazebo**: Ctrl-C on a launch can leave `ign gazebo` alive; the next
   launch then fails with `Failed to configure controller` / duplicate nodes.
   Fix: `pkill -9 -f "ign gazebo"`.
+- **Camera up but 0 Hz**: topics exist, nothing arrives, log repeats `Frames
+  didn't arrived within 5 seconds`. On a USB 2 link that is USB link power
+  management stalling the video transfers - not the cable, driver or firmware.
+  `udev/99-realsense-nolpm.rules` fixes it; the setting is lost on every replug
+  (and the camera re-enumerates by itself now and then), so install the rule
+  rather than echoing into sysfs. Check: `cat
+  /sys/bus/usb/devices/<port>/power/usb2_hardware_lpm` must say `disabled`.
+- **Camera profiles**: the defaults (640x480 color + 480x270 depth, 15 fps) run
+  at a full 15 Hz on USB 2. Depth and infrared share one sensor and must use
+  the same resolution, which is why `camera.launch.py` turns infrared off.
+- **Measuring camera rates**: `ros2 topic hz` on an `image_raw` topic reports
+  ~5 Hz because the Python tool cannot keep up with the images. Measure the
+  matching `camera_info` topic instead (one tiny message per frame).
 - Joint names are `<finger>_joint`, links `<finger>_finger`, root `base_link`
   (`world` exists only in sim).
 - Only the HAL's sim backend may publish to `/hand_position_controller/commands`.

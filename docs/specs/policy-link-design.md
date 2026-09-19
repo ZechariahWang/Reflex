@@ -60,8 +60,23 @@ wearable ROS machine                          GPU laptop
 
 ### `policy/` - the adapter package
 
-Plain Python, outside the colcon build. Dependencies: `lerobot` (pinned),
-`roslibpy`, `opencv-python`, `numpy`.
+Plain Python (>= 3.12, a requirement of `lerobot`), outside the colcon build.
+Dependencies: `lerobot` 0.6.1, `roslibpy`, `opencv-python`, `numpy`.
+
+`lerobot` finds a third-party robot only as an installed distribution with a
+name that starts with `lerobot_robot_`, and it looks for the class with the
+name of the config class without `Config`. Thus:
+
+```
+policy/
+  pyproject.toml                  distribution lerobot_robot_exo_hand
+  lerobot_robot_exo_hand/
+    __init__.py                   imports the two classes (registration)
+    config_exo_hand.py            ExoHandConfig, registered as "exo_hand"
+    exo_hand.py                   ExoHand
+    convert.py                    pure functions, no lerobot import
+  tests/
+```
 
 `ExoHandConfig` (a LeRobot `RobotConfig`):
 
@@ -164,13 +179,13 @@ time, and fails if `/hand/state` does not follow.
 
 ## Implementation order
 
-1. Pin the `lerobot` version. Check against it: the `Robot` and `RobotConfig`
-   interface (names of the properties and methods), how a third-party robot
-   type is registered for `lerobot-record` and `RobotClient` (recent versions
-   find installed packages with the prefix `lerobot_robot_`; this decides the
-   package layout in `policy/`), and the `RobotClient` parameters. This spec
-   has them from memory of the docs.
-2. Pure functions and their tests.
+1. Done: `lerobot` 0.6.1, checked against its source. `Robot` needs
+   `observation_features`, `action_features`, `is_connected`,
+   `connect(calibrate=True)`, `is_calibrated`, `calibrate`, `configure`,
+   `get_observation`, `send_action`, `disconnect`. `RobotClient` has
+   `actions_per_chunk`, `chunk_size_threshold` (default 0.5) and
+   `aggregate_fn_name`.
+2. Done: pure functions and their tests (`convert.py`).
 3. `ExoHand` and the smoke check in sim, from a second device if possible
    (firewall, TCP 9090).
 4. Full loop: `policy_server` and `RobotClient` with `smolvla_base` (the

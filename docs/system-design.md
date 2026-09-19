@@ -88,13 +88,13 @@ instruction.
 
 - **Task:** close when the wearer reaches for an object, hold during transport,
   release when the wearer puts the object down. The wearer cannot move their
-  fingers, and the servos cannot be backdriven.
+  fingers. In operation the servos have torque and are not backdriven; a
+  torque-off mode exists only for data collection
+  (`specs/data-collection-design.md`).
 - **Input:** wrist RGB and depth, and the 5 values of `/hand/state`.
   **Output:** 5 targets for `/hand/command`.
 - Inference needs ~2 GB of VRAM. The constant instruction makes the language
   input irrelevant; the reason to use a VLA is the pretrained vision.
-- **Baseline:** an ACT policy on the same dataset (~$5 to train). It shows what
-  the VLA pretraining adds.
 - Fallback if SmolVLA generalizes poorly: GR00T N1.6. π0 and π0.5 do not fit.
 
 | Model | Inference VRAM | Fine-tune VRAM |
@@ -102,7 +102,6 @@ instruction.
 | SmolVLA | ~2 GB | 10-24 GB |
 | GR00T N1.6 | ~6 GB | 24 GB+ |
 | π0 / π0.5 | 8 GB+ | 22.5 GB+ (LoRA) |
-| ACT | <1 GB | <8 GB |
 
 ### Inputs
 
@@ -210,7 +209,8 @@ no firmware of ours, so the HAL is the lowest layer that we control:
   `lerobot` and torch go onto the wearable machine, and one process needs
   both `rclpy` (Python 3.10) and `lerobot`.
 - **One laptop for everything.** Rejected: the wearer must not carry the GPU.
-- **ACT only.** Kept as the baseline, not as the main model.
+- **ACT.** Not used, also not as a baseline: it has no pretrained vision, and
+  SmolVLA is the only model that is trained.
 
 ## Links
 

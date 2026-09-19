@@ -90,3 +90,22 @@ export interface HealthResponse {
   rosbridge_url: string
   topics: Record<TopicKey, TopicHealth>
 }
+
+export type MirrorMode = "off" | "no_hand" | "frozen" | "following"
+export type MirrorPose = "open" | "fist"
+
+/** One /ws/mirror status message: what the backend made of the last webcam frame. */
+export interface MirrorStatus {
+  mode: MirrorMode
+  calibrated: boolean
+  /** Pose being captured right now. */
+  capturing: MirrorPose | null
+  /** Why the last capture failed: "no_hand" or "range". */
+  error: string | null
+  /** The controller's curls, filtered; null without a calibration or a hand. */
+  controller: FingerValues | null
+  /** What the mirror holds or sends on /hand/command; null while off. */
+  command: FingerValues | null
+  /** 21 image points, x and y in 0..1; null without a hand. */
+  landmarks: [number, number][] | null
+}

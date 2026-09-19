@@ -7,6 +7,7 @@ import { CommandThrottle } from "@/components/telemetry/command-throttle"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
+import { setMirrorEnabled, useMirrorStore } from "@/lib/mirror-store"
 import { selectIsLive, selectPassive, selectSnapshot, useSimStore } from "@/lib/sim-store"
 import { FINGERS, TOPIC_NAMES, type FingerValues } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -39,6 +40,8 @@ export function CommandBlock() {
   const snapshot = useSimStore(selectSnapshot)
   // Backdrive: the HAL has the torque off and ignores commands while a person moves the fingers.
   const passive = useSimStore(selectPassive)
+  // Mirror teleop: the controller's webcam is the command source, so the sliders and presets lock.
+  const mirror = useMirrorStore((store) => store.enabled)
   const [armed, setArmed] = useState(false)
   /** Local target while the user is driving; null = mirror the hand. */
   const [target, setTarget] = useState<FingerValues | null>(null)
@@ -58,6 +61,7 @@ export function CommandBlock() {
     clearTimers()
     setArmed(false)
     setTarget(null)
+    setMirrorEnabled(false)
   }, [clearTimers])
 
   useEffect(() => {
@@ -108,7 +112,7 @@ export function CommandBlock() {
                   min={0}
                   max={100}
                   step={1}
-                  disabled={!armed || passive}
+                  disabled={!armed || passive || mirror}
                   value={[Math.round(shown[i] * 100)]}
                   onValueChange={([value]) => drive(shown.with(i, value / 100) as FingerValues)}
                   onValueCommit={release}
@@ -159,9 +163,27 @@ export function CommandBlock() {
           <Switch
             size="sm"
             checked={passive}
-            disabled={!armed}
+            disabled={!armed || mirror}
             onCheckedChange={(next) => useSimStore.getState().setPassive(next)}
             aria-label="Backdrive mode: torque off, move the fingers by hand"
+            className="rounded-[2px] data-checked:bg-signal [&_[data-slot=switch-thumb]]:rounded-[1px]"
+          />
+        </label>
+
+        <label className="flex items-center justify-between gap-3">
+          <span className="flex min-w-0 items-center gap-2">
+            <StatusDot status={mirror ? "live" : "offline"} />
+            <span className={cn("label-micro", mirror && "text-ink")}>Mirror</span>
+            <span className="label-micro truncate leading-4 tracking-normal normal-case">
+              {mirror ? "webcam commands" : "webcam off"}
+            </span>
+          </span>
+          <Switch
+            size="sm"
+            checked={mirror}
+            disabled={!armed || passive}
+            onCheckedChange={setMirrorEnabled}
+            aria-label="Mirror teleop: a hand in front of the webcam commands the fingers"
             className="rounded-[2px] data-checked:bg-signal [&_[data-slot=switch-thumb]]:rounded-[1px]"
           />
         </label>
@@ -172,7 +194,7 @@ export function CommandBlock() {
               key={name}
               variant="outline"
               size="xs"
-              disabled={!armed || passive}
+              disabled={!armed || passive || mirror}
               onClick={() => {
                 drive(pose)
                 release()
@@ -190,6 +212,8 @@ export function CommandBlock() {
         <p className="label-micro mt-auto leading-[1.5] tracking-normal normal-case">
           {passive
             ? `torque off: move the fingers by hand, ${TOPIC_NAMES.hand_state} records them`
+            : mirror
+            ? `the webcam hand publishes ${TOPIC_NAMES.hand_command}`
             : armed
             ? `publishing ${TOPIC_NAMES.hand_command} · 40 Hz max`
             : online

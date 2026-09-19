@@ -2,7 +2,7 @@ import * as motion from "motion/react-client"
 
 import { CameraViewport } from "@/components/camera/camera-viewport"
 import { TopBar } from "@/components/console/top-bar"
-import { HandViewport } from "@/components/hand/hand-viewport"
+import { MainViewport } from "@/components/mirror/main-viewport"
 import { TelemetryStrip } from "@/components/telemetry/telemetry-strip"
 import { BACKEND_URL } from "@/lib/config"
 
@@ -25,7 +25,7 @@ export default function ConsolePage() {
 
       <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] gap-3 console:grid-cols-[minmax(0,62fr)_minmax(0,38fr)]">
         <div className="h-[70vw] max-h-[75dvh] min-h-0 console:h-auto console:max-h-none">
-          <HandViewport />
+          <MainViewport />
         </div>
         <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 console:grid-cols-1 console:grid-rows-2">
           <div className="aspect-4/3 min-h-0 console:aspect-auto">

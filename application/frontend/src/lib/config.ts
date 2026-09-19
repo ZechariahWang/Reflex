@@ -19,5 +19,6 @@ export const API = {
 
 export const WS = {
   state: `${WS_BASE_URL}/ws/state`,
+  mirror: `${WS_BASE_URL}/ws/mirror`,
   camera: (source: CameraSource, kind: CameraKind) => `${WS_BASE_URL}/ws/camera/${source}/${kind}`,
 } as const

@@ -14,7 +14,8 @@ ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0
 
 Launch args: `gui:=true` (Gazebo window, sim only), `teleop:=false` (no control
 window), `foxglove:=false`, `rosbridge:=false`, `camera:=none`, `color_profile:=640x480x15`,
-`depth_profile:=480x270x15`, `params_file:=<yaml>`. Foxglove connects to
+`depth_profile:=480x270x15`, `params_file:=<yaml>`, `require_all_servos:=false`
+(hardware only: bench test with fewer than 5 servos). Foxglove connects to
 `ws://localhost:8765`, rosbridge (JSON websocket for `application/`) listens on
 `ws://localhost:9090`; import `foxglove/htn_hand.json` (Layouts -> Import from
 file) for hand model + color + depth.

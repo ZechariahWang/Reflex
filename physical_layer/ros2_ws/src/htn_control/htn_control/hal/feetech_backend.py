@@ -33,28 +33,41 @@ class FeetechBackend(HandBackend):
         baud = node.declare_parameter('baud_rate', 1_000_000).value
         # Unit 100 steps/s^2, 0 = no limit
         acceleration = node.declare_parameter('servo_acceleration', 50).value
+        # False is for bench tests with part of the servos; the hand needs all 5
+        require_all = node.declare_parameter('require_all_servos', True).value
         self.bus = FeetechBus(port, baud)
 
-        for finger, servo_id in zip(FINGERS, self.ids):
-            if not self.bus.ping(servo_id):
+        self.present = [self.bus.ping(i) for i in self.ids]
+        for finger, servo_id, present in zip(FINGERS, self.ids, self.present):
+            if present:
+                continue
+            if require_all:
                 self.bus.close()
                 raise RuntimeError(f'No answer from {finger} servo (id {servo_id}) on {port}')
+            node.get_logger().warn(f'No {finger} servo (id {servo_id}), running without it')
+        self.active_ids = [i for i, present in zip(self.ids, self.present) if present]
         # The torque limit is RAM: set it before the servos get torque
-        for servo_id in self.ids:
+        for servo_id in self.active_ids:
             self.bus.write(servo_id, feetech.ADDR_TORQUE_LIMIT, u16(servos['torque_limit']))
             self.bus.write(servo_id, feetech.ADDR_ACCELERATION, [acceleration])
             self.bus.write(servo_id, feetech.ADDR_TORQUE_ENABLE, [1])
-        node.get_logger().info(f'Feetech backend on {port} @ {baud}, ids {self.ids}')
+        node.get_logger().info(f'Feetech backend on {port} @ {baud}, ids {self.active_ids}')
 
     def write(self, positions):
+        for n, position in enumerate(positions):
+            if not self.present[n]:
+                self.measured[n] = position
         self.bus.sync_write(feetech.ADDR_GOAL_POSITION, {
             i: u16(to_step(p, o, c))
-            for i, p, o, c in zip(self.ids, positions, self.open_step, self.closed_step)})
+            for i, p, o, c, present in zip(self.ids, positions, self.open_step,
+                                           self.closed_step, self.present) if present})
 
     def read(self):
-        replies = self.bus.sync_read(feetech.ADDR_PRESENT_POSITION, 2, self.ids)
+        replies = self.bus.sync_read(feetech.ADDR_PRESENT_POSITION, 2, self.active_ids)
         log = self.node.get_logger()
         for n, (finger, servo_id) in enumerate(zip(FINGERS, self.ids)):
+            if not self.present[n]:
+                continue
             if servo_id not in replies:
                 log.warn(f'No position from {finger} servo (id {servo_id})',
                          throttle_duration_sec=2.0)
@@ -68,6 +81,6 @@ class FeetechBackend(HandBackend):
 
     def close(self):
         try:
-            self.bus.sync_write(feetech.ADDR_TORQUE_ENABLE, {i: [0] for i in self.ids})
+            self.bus.sync_write(feetech.ADDR_TORQUE_ENABLE, {i: [0] for i in self.active_ids})
         finally:
             self.bus.close()

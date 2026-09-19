@@ -1,7 +1,7 @@
 # Feetech servo backend for the HAL
 
 Driver for the real hand: 5 Feetech ST series serial bus servos behind a
-Waveshare Bus Servo Adapter (A). Status: implemented, not yet run on the hardware.
+Waveshare Bus Servo Adapter (A). Status: implemented; scan, jog and feedback reads verified on one ST servo.
 Date: 2026-09-19. This closes open question 6 of `../system-design.md`.
 
 ## Hardware facts
@@ -80,7 +80,9 @@ Registers used (ST series memory table):
 
 - ROS parameters: `serial_port` (default `/dev/ttyACM0`), `baud_rate`
   (default 1000000), `servo_acceleration` (default 50, unit 100 steps/s^2,
-  0 = no limit).
+  0 = no limit). `require_all_servos` (default true); false is for bench
+  tests: an absent servo gives a warning, gets no commands and reports its
+  command as its state.
 - Start: ping each of the 5 IDs. If one is absent, raise with the finger name
   and the ID. Then write the torque limit and the acceleration, and enable
   torque.

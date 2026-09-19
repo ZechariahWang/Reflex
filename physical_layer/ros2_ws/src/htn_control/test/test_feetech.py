@@ -1,10 +1,11 @@
 import os
 import threading
+import time
 
 import pytest
 
 from htn_control.hal.feetech import FeetechBus, FeetechError, from_u16, u16
-from htn_control.hal.feetech_backend import to_norm, to_step
+from htn_control.hal.feetech_backend import FeetechBackend, to_norm, to_step
 from htn_control.servo_tool import set_id
 
 
@@ -144,3 +145,47 @@ def test_step_mapping_round_trips_with_mirrored_servo():
     assert to_step(0.25, 3000, 1000) == 2500
     assert to_norm(2500, 3000, 1000) == pytest.approx(0.25)
     assert to_norm(to_step(0.6, 1000, 3000), 1000, 3000) == pytest.approx(0.6, abs=1e-3)
+
+
+class FakeNode:
+    def __init__(self, **params):
+        self.params = params
+        self.warnings = []
+
+    def declare_parameter(self, name, default):
+        return type('Parameter', (), {'value': self.params.get(name, default)})
+
+    def get_logger(self):
+        return type('Logger', (), {
+            'info': lambda *a, **k: None,
+            'warn': lambda _, message, **k: self.warnings.append(message)})()
+
+
+HAND_PARAMS = {'servos': {
+    'torque_limit': 300,
+    **{finger: {'id': n, 'open_step': 1000, 'closed_step': 3000}
+       for n, finger in enumerate(['thumb', 'index', 'middle', 'ring', 'pinky'], start=1)}}}
+
+
+def test_backend_refuses_absent_servo_by_default(servos):
+    with pytest.raises(RuntimeError):
+        FeetechBackend(FakeNode(serial_port=servos.port), HAND_PARAMS)
+
+
+def test_backend_runs_with_absent_servos_when_allowed(servos):
+    node = FakeNode(serial_port=servos.port, require_all_servos=False)
+    backend = FeetechBackend(node, HAND_PARAMS)
+    assert len(node.warnings) == 2  # ring and pinky
+    assert servos.registers[1][40] == 1 and from_u16(servos.registers[1][48:50]) == 300
+
+    servos.registers[1][56:58] = u16(2000)
+    backend.write([0.5, 0.0, 0.0, 0.0, 0.25])
+    state = backend.read()
+    assert from_u16(servos.registers[1][42:44]) == 2000
+    assert state[0] == pytest.approx(0.5)
+    assert state[4] == pytest.approx(0.25)  # absent finger reports its command
+    backend.close()
+    deadline = time.time() + 1.0  # torque-off has no reply to wait for
+    while servos.registers[1][40] and time.time() < deadline:
+        time.sleep(0.01)
+    assert servos.registers[1][40] == 0

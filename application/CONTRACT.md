@@ -67,7 +67,7 @@ Finger order everywhere: `thumb, index, middle, ring, pinky`.
 | `/camera/color/image_raw/compressed` | `sensor_msgs/CompressedImage` | JPEG, 640x480, 15 Hz, ~55 KB. `data` is base64 over rosbridge. |
 | `/camera/aligned_depth_to_color/image_raw/compressedDepth` | `sensor_msgs/CompressedImage` | format `16UC1; compressedDepth`. `data` = **12-byte header, then a 16-bit grayscale PNG** (PNG magic `89 50 4E 47` at offset 12). Pixel value = depth in millimetres, 0 = no reading. 640x480, pixel-aligned to the color image, 15 Hz, ~20 KB. |
 
-rosbridge subscribe rules: **always pass `queue_length=1` together with `throttle_rate`** (throttle without a queue length silently drops to ~1.6 Hz). Measured fine: joint states at 30-100 Hz alongside both image streams at 15 Hz, rosbridge at ~12 % CPU. Use `throttle_rate=33` for joint/hand state and `66` for images.
+rosbridge subscribe rules: **always pass `queue_length=1` together with `throttle_rate`** (throttle without a queue length silently drops to ~1.6 Hz). Measured fine: joint states at 30-100 Hz alongside both image streams at 15 Hz, rosbridge at ~12 % CPU. Use `throttle_rate=16` for joint/hand state (the viewer animates from them) and `66` for images.
 
 The camera may be absent (`camera:=none`) and ROS may be down entirely; both are normal states the UI must show gracefully, never crash on.
 
@@ -97,7 +97,7 @@ The hand's meshes and linkage geometry are files of `htn_description` (env `DESC
 `state`: `off` (no address) | `connecting` | `streaming` | `error` (`detail` says why; it keeps retrying with backoff). `POST {"host": "192.168.1.23"}` points the backend at a phone (`host[:port]`, or `"usb"` for the cable, `""` disconnects, anything else is a 422). The frontend remembers the address in localStorage and re-sends it once after a backend restart. `POST {"rotation": 0|90|180|270}` turns the image clockwise (the phone's sensor is portrait; default 90 = landscape, `RECORD3D_ROTATION`); the panel's rotate button steps it by 90. Both fields are optional in one POST. Mock mode always reports `{"host": "mock", "state": "streaming"}` with rotation 0.
 
 ### `WS /ws/state`
-Server -> client, JSON text, one message every 33 ms (30 Hz) regardless of ROS rates (latest-value sampling):
+Server -> client, JSON text, one message every 16.7 ms (60 Hz, one per display frame) regardless of ROS rates (latest-value sampling):
 ```json
 {"t": 1789796072.667,
  "ros_connected": true,

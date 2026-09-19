@@ -22,7 +22,7 @@ from .mock import MockSource
 from .record3d import ROTATIONS, Record3DClient, normalize_host
 from .ros_client import RosClient
 
-STATE_PERIOD_S = 0.033
+STATE_PERIOD_S = 1 / 60  # one /ws/state message per display frame
 META_PERIOD_S = 1.0
 
 MESH_NAME = re.compile(r"^[a-z0-9_]+\.stl$")

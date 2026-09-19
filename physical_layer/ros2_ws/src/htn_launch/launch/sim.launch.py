@@ -127,6 +127,11 @@ def generate_launch_description():
                               description='Open the finger control window'),
         DeclareLaunchArgument('foxglove', default_value='true',
                               description='Start foxglove_bridge on ws://localhost:8765'),
+        DeclareLaunchArgument('max_speed', default_value='2.0',
+                              description='HAL rate limit: fastest a finger may travel, in full ranges '
+                                          'per second (2.0 = open to closed in 0.5 s)'),
+        DeclareLaunchArgument('rosbridge_port', default_value='9090',
+                              description='Set ROSBRIDGE_PORT for application/ to match'),
         DeclareLaunchArgument('rosbridge', default_value='true',
                               description='Start rosbridge on ws://localhost:9090 (application/ backend)'),
 
@@ -173,6 +178,7 @@ def generate_launch_description():
             package='htn_control',
             executable='hal',
             parameters=[{'backend': 'sim', 'params_file': params_file,
+                         'max_speed': ParameterValue(LaunchConfiguration('max_speed'), value_type=float),
                          'use_sim_time': True}],
             output='screen',
         ),
@@ -200,7 +206,7 @@ def generate_launch_description():
         Node(
             package='rosbridge_server',
             executable='rosbridge_websocket',
-            parameters=[{'port': 9090}],
+            parameters=[{'port': ParameterValue(LaunchConfiguration('rosbridge_port'), value_type=int)}],
             condition=IfCondition(LaunchConfiguration('rosbridge')),
         ),
     ])

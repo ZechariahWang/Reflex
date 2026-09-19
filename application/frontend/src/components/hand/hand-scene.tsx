@@ -18,8 +18,8 @@ const PAGE = "#f6f6f6"
 const FOV_DEG = 28
 /** Breathing room around the hand's bounding sphere, which already spans the whole joint travel. */
 const FIT_MARGIN = 1.02
-/** 1/s. Turns 30 Hz samples into continuous motion with ~50 ms of lag. */
-const FOLLOW_RATE = 20
+/** 1/s. Smooths 60 Hz samples over ~22 ms: enough to hide a late packet, too little to feel as lag. */
+const FOLLOW_RATE = 45
 const GHOST_FADE_RATE = 9
 /** Share of the ghost that stays drawn once the measured finger sits on its command. */
 const GHOST_SETTLED = 0.15

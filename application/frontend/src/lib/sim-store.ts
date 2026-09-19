@@ -7,7 +7,7 @@ import { backoffDelay, closeQuietly } from "@/lib/socket"
 import { FINGERS, type CommandMessage, type FingerValues, type StateMessage } from "@/lib/types"
 
 /** Rate of /ws/state. */
-export const STATE_HZ = 30
+export const STATE_HZ = 60
 /** Span of the per-finger history. */
 export const HISTORY_SECONDS = 10
 /** Samples held per finger. */

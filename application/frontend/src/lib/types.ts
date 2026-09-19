@@ -26,7 +26,7 @@ export const TOPIC_NAMES: Record<TopicKey, string> = {
 /** Messages per second received from ROS, per topic. */
 export type TopicRates = Record<TopicKey, number>
 
-/** Server -> client on /ws/state, 30 Hz. */
+/** Server -> client on /ws/state, 60 Hz. */
 export interface StateMessage {
   /** Unix time in seconds. */
   t: number

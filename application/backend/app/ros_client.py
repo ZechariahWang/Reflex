@@ -18,7 +18,7 @@ from .hub import Hub
 
 LOGGER = logging.getLogger(__name__)
 
-STATE_THROTTLE_MS = 33
+STATE_THROTTLE_MS = 16  # joint / hand state at up to 60 Hz: the viewer animates from these
 IMAGE_THROTTLE_MS = 66
 RECONNECT_INITIAL_S = 1.0
 RECONNECT_MAX_S = 5.0

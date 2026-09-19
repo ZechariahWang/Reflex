@@ -11,8 +11,8 @@ import { selectIsLive, selectPassive, selectSnapshot, useSimStore } from "@/lib/
 import { FINGERS, TOPIC_NAMES, type FingerValues } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-/** Commands leave at most this often (~20 Hz), always as the full five-vector. */
-const SEND_INTERVAL_MS = 50
+/** Commands leave at most this often (~40 Hz), always as the full five-vector. */
+const SEND_INTERVAL_MS = 25 // a slider drag reaches the HAL (50 Hz) on its very next tick
 /** After the last input the sliders keep the local target this long, until /hand/command echoes back. */
 const HOLD_MS = 600
 const POSE_TOLERANCE = 0.02
@@ -191,7 +191,7 @@ export function CommandBlock() {
           {passive
             ? `torque off: move the fingers by hand, ${TOPIC_NAMES.hand_state} records them`
             : armed
-            ? `publishing ${TOPIC_NAMES.hand_command} · 20 Hz max`
+            ? `publishing ${TOPIC_NAMES.hand_command} · 40 Hz max`
             : online
               ? `arm to publish ${TOPIC_NAMES.hand_command}`
               : "arming needs a live hand"}

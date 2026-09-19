@@ -13,7 +13,9 @@ ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0
 ```
 
 Launch args: `gui:=true` (Gazebo window, sim only), `teleop:=false` (no control
-window), `foxglove:=false`, `rosbridge:=false`, `passive:=true` (hardware only:
+window), `foxglove:=false`, `rosbridge:=false`, `rosbridge_port:=9090`,
+`max_speed:=2.0` (HAL rate limit in full ranges per second; in sim the joint's
+`max_velocity` of 3 rad/s caps it at ~2.3), `passive:=true` (hardware only:
 start with the torque off for a recording session), `camera:=none`, `color_profile:=640x480x15`,
 `depth_profile:=480x270x15`, `params_file:=<yaml>`, `require_all_servos:=false`
 (hardware only: bench test with fewer than 5 servos). Foxglove connects to
@@ -108,6 +110,17 @@ rosbridge, see `docs/specs/policy-link-design.md`.
   (`htn_auto` went this way), `install/<pkg>` and `build/<pkg>` stay behind and
   `ros2 launch` dies with `package '<pkg>' not found`. Delete both folders (and
   the leftover `src/<pkg>/__pycache__`), then rebuild.
+- **Where the delay between a command and the hand comes from** (measured, full
+  close): the HAL ramp is 500 ms by design (`max_speed`). Gazebo added ~100 ms
+  on top: gz_ros2_control 0.7.x makes every position-controlled joint a
+  first-order lag (velocity = 0.1 * error * 100 Hz), and the gain cannot be set -
+  the plugin creates its node before it loads the parameter file. `SimBackend`
+  therefore commands ahead of the setpoint by lag * velocity. The web path adds
+  ~30 ms (60 Hz state, 16 ms rosbridge throttle). To test anything on rosbridge
+  without touching a running sim, give yours its own port:
+  `rosbridge_port:=9191` + `ROSBRIDGE_PORT=9191` for the backend - 9090 is
+  shared by every ROS domain on the machine, a backend on the default port
+  talks to whoever owns it.
 - **Stale Gazebo**: Ctrl-C reaches the shell that started `ign gazebo`, not
   always the server behind it. A survivor poisons the next launch: the hand is
   spawned twice over, `spawner_joint_state_broadcaster` hangs, no `/clock`, and

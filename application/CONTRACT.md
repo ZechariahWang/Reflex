@@ -25,6 +25,14 @@ the phone serves ONE viewer at a time and the page may be open in several tabs.
 (usbmuxd). No network involved, so it is the one that works on eduroam / venue
 Wi-Fi. Frames are an RGB image plus depth as float32 metres (lower resolution,
 upscaled nearest-neighbour to the colour image; NaN = no reading).
+The library runs in a **child process** (`backend/app/usb_worker.py`), and a
+session ends by killing it. Do not "simplify" this back into a thread: the
+library's `disconnect()` never closes its socket (the phone then keeps a ghost
+client and refuses the next connection until someone presses stop on the phone),
+it can deadlock against the GIL when the stream ends at the same moment (the
+whole backend freezes and survives Ctrl-C as an orphan holding port 8000), and
+`get_connected_devices()` blocks forever on a wedged usbmuxd. Once connected the
+client holds the connection and waits for frames instead of reconnecting.
 
 **Wi-Fi** (address = the IP the app shows) - the way
 github.com/ZechariahWang/record_3d does it in the browser. Needs phone and backend

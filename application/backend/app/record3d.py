@@ -2,7 +2,8 @@
 
 USB (address "usb"): the official `record3d` library over the cable (usbmuxd). No
 network involved, so it works on isolating Wi-Fi such as eduroam, and depth
-arrives as real float32 metres.
+arrives as real float32 metres. The library runs in a child process
+(`usb_worker.py` says why); ending a session means killing that process.
 
 Wi-Fi (address = the IP the app shows): the app runs a small HTTP server on the
 phone and streams one WebRTC video track. Phone and backend must be clients of
@@ -22,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import multiprocessing
 import re
 import threading
 import urllib.error
@@ -35,8 +37,10 @@ from aiortc import RTCConfiguration, RTCPeerConnection, RTCSessionDescription
 from aiortc.mediastreams import MediaStreamError
 from av import VideoFrame
 
+from . import usb_worker
 from .depth import JPEG_QUALITY, Colorizer
 from .frames import Frame
+from .usb_worker import MAX_FPS, MAX_SIDE_PX
 
 LOGGER = logging.getLogger(__name__)
 
@@ -50,13 +54,12 @@ FIRST_FRAME_TIMEOUT_S = 10.0
 FRAME_TIMEOUT_S = 3.0
 RETRY_MIN_S, RETRY_MAX_S = 1.0, 8.0
 USB = "usb"
-USB_CALL_TIMEOUT_S = 8.0
+USB_START_TIMEOUT_S = 12.0  # spawn an interpreter, ask usbmuxd for devices, connect
 USB_STUCK = (
     "usbmuxd is not answering: replug the iPhone while it is unlocked; if that does not help, "
     "run: sudo systemctl restart usbmuxd"
 )
-MAX_SIDE_PX = 640  # the panel is ~450 px wide; bigger frames only cost the browser decode time
-MAX_FPS = 30.0  # the phone sends 60; the page cannot show more and pays for every frame
+USB_WAITING = "connected over USB, waiting for frames: press the red button in Record3D"
 ROTATIONS = {0: None, 90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
 HOST_PATTERN = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(:\d{1,5})?$")
 
@@ -146,13 +149,6 @@ def render_rgbd(
     return color, depth
 
 
-def _usb_stream():
-    """A fresh record3d stream object; imported lazily so Wi-Fi-only setups need not have it."""
-    from record3d import Record3DStream
-
-    return Record3DStream()
-
-
 def _http_json(url: str, body: dict | None = None) -> dict | None:
     data = None if body is None else json.dumps(body).encode()
     request = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
@@ -175,13 +171,12 @@ class Record3DClient:
         self,
         on_frame: Callable[[VideoFrame | RgbdFrame], None],
         host: str = "",
-        usb_stream: Callable[[], object] = _usb_stream,
+        usb_stream: Callable[[], object] = usb_worker.record3d_stream,
     ) -> None:
         self._on_frame = on_frame
-        self._usb_stream = usb_stream
+        self._usb_stream = usb_stream  # runs in the child process: must be picklable
         self._host = host
         self._task: asyncio.Task[None] | None = None
-        self._usb_stuck = False
         self.state = "off"
         self.detail = ""
 
@@ -260,82 +255,47 @@ class Record3DClient:
         finally:
             await peer.close()
 
-    async def _usb_call(self, fn: Callable, *args: object):
-        """Run a record3d call with a deadline. The library blocks for good when usbmuxd
-        wedges, so it gets a daemon thread of its own (never the shared pool, never one
-        that would hold up shutdown), and no second call is made while one is still stuck."""
-        if self._usb_stuck:
-            raise ConnectionError(USB_STUCK)
-        loop = asyncio.get_running_loop()
-        future: asyncio.Future = loop.create_future()
-
-        def settle(result: object, error: BaseException | None) -> None:
-            if future.done():
-                return
-            if error is None:
-                future.set_result(result)
-            else:
-                future.set_exception(error)
-
-        def work() -> None:
-            try:
-                result, error = fn(*args), None
-            except Exception as caught:  # handed to the awaiting coroutine
-                result, error = None, caught
-            self._usb_stuck = False  # it came back after all
-            loop.call_soon_threadsafe(settle, result, error)
-
-        threading.Thread(target=work, name="record3d-usb", daemon=True).start()
-        try:
-            return await asyncio.wait_for(future, USB_CALL_TIMEOUT_S)
-        except asyncio.TimeoutError:
-            self._usb_stuck = True
-            raise ConnectionError(USB_STUCK) from None
-
     async def _usb_session(self) -> None:
         loop = asyncio.get_running_loop()
-        stream = self._usb_stream()
-        devices = await self._usb_call(stream.get_connected_devices)
-        if not devices:
-            raise ConnectionError("no iPhone on USB: plug it in, unlock it and tap Trust")
-        stopped = asyncio.Event()
-        last_frame = [0.0]
+        context = multiprocessing.get_context("spawn")  # never fork a process that runs an event loop
+        receiver, sender = context.Pipe(duplex=False)
+        worker = context.Process(
+            target=usb_worker.run, args=(sender, self._usb_stream), name="record3d-usb", daemon=True
+        )
+        worker.start()
+        sender.close()
+        messages: asyncio.Queue[tuple] = asyncio.Queue()
 
-        def deliver(frame: RgbdFrame) -> None:
-            last_frame[0] = loop.time()
-            self.state, self.detail = "streaming", ""
-            self._on_frame(frame)
-
-        accepted = [0.0]
-
-        def on_new_frame() -> None:  # record3d's own thread; its buffers are reused, so copy
-            now = loop.time()
-            if now - accepted[0] < 0.9 / MAX_FPS:
-                return  # over the cap: dropped before the copy, which is the expensive part
-            accepted[0] = now
-            frame = RgbdFrame(np.array(stream.get_rgb_frame()), np.array(stream.get_depth_frame()))
-            loop.call_soon_threadsafe(deliver, frame)
-
-        stream.on_new_frame = on_new_frame
-        stream.on_stream_stopped = lambda: loop.call_soon_threadsafe(stopped.set)
-        try:
-            if await self._usb_call(stream.connect, devices[0]) is False:
-                raise ConnectionError(
-                    "iPhone found, but Record3D is not streaming: Settings > Live RGBD Video "
-                    "Streaming > USB, then press the red button"
-                )
-            started = loop.time()
-            while not stopped.is_set():
-                try:
-                    await asyncio.wait_for(stopped.wait(), 1.0)
-                except asyncio.TimeoutError:
-                    pass
-                quiet = loop.time() - (last_frame[0] or started)
-                if quiet > (FRAME_TIMEOUT_S if last_frame[0] else FIRST_FRAME_TIMEOUT_S):
-                    raise ConnectionError("iPhone connected over USB, but no frames: press the red button in Record3D")
-        finally:
-            stream.on_new_frame = lambda: None
+        def pump() -> None:  # blocking pipe reads stay off the event loop
             try:
-                await self._usb_call(stream.disconnect)
-            except ConnectionError:
-                pass  # already reported; nothing more to release
+                while True:
+                    loop.call_soon_threadsafe(messages.put_nowait, receiver.recv())
+            except (EOFError, OSError):
+                loop.call_soon_threadsafe(messages.put_nowait, ("stopped",))
+
+        threading.Thread(target=pump, name="record3d-usb-pump", daemon=True).start()
+        try:
+            # Frames can overtake the "connected" notice (the library starts reading before
+            # connect() returns), so every message is handled in whatever order it arrives.
+            timeout: float | None = USB_START_TIMEOUT_S
+            started = False
+            while True:
+                try:
+                    message = await asyncio.wait_for(messages.get(), timeout)
+                except asyncio.TimeoutError:
+                    raise ConnectionError("the iPhone stopped sending frames" if started else USB_STUCK) from None
+                if message[0] == "frame":
+                    self.state, self.detail, timeout, started = "streaming", "", FRAME_TIMEOUT_S, True
+                    self._on_frame(RgbdFrame(message[1], message[2]))
+                elif message[0] == "connected" and not started:
+                    # Hold the connection however long the frames take to start: giving up
+                    # and reconnecting only churns the phone's single client slot.
+                    self.detail, timeout, started = USB_WAITING, None, True
+                elif message[0] == "error":
+                    raise ConnectionError(message[1])
+                elif message[0] == "stopped":
+                    return  # stopped on the phone, unplugged, or the worker died
+        finally:
+            worker.kill()  # the one disconnect that really closes the socket to the phone
+            await asyncio.to_thread(worker.join, 3.0)
+            receiver.close()

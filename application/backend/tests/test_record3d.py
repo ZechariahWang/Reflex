@@ -1,4 +1,6 @@
 import asyncio
+import functools
+import multiprocessing
 import socket
 import threading
 import time
@@ -101,27 +103,32 @@ def test_unreachable_phone_reports_error_and_keeps_retrying():
 
 
 class FakeUsbStream:
-    """The slice of record3d.Record3DStream the client uses; frames come from a thread."""
+    """The slice of record3d.Record3DStream the worker uses; frames come from a thread.
 
-    def __init__(self, devices=("iphone",), accepts=True, frames=True):
-        self._devices, self._accepts, self._frames = list(devices), accepts, frames
+    Module level (and built with functools.partial below) because it is created
+    inside the spawned worker process, so it has to be picklable by reference.
+    """
+
+    def __init__(self, devices=("iphone",), accepts=True, wedged=False, frames_for_s=None):
+        self._devices, self._accepts, self._wedged, self._frames_for_s = list(devices), accepts, wedged, frames_for_s
         self.on_new_frame = self.on_stream_stopped = lambda: None
-        self._running = threading.Event()
-        self.disconnected = False
 
     def get_connected_devices(self):
+        if self._wedged:
+            time.sleep(60)  # usbmuxd not answering
         return self._devices
 
     def connect(self, device):
-        if self._accepts and self._frames:
-            self._running.set()
+        if self._accepts:
             threading.Thread(target=self._pump, daemon=True).start()
         return self._accepts
 
     def _pump(self):
-        while self._running.is_set():
+        started = time.monotonic()
+        while self._frames_for_s is None or time.monotonic() - started < self._frames_for_s:
             self.on_new_frame()
-            time.sleep(0.03)
+            time.sleep(1 / 60)  # the real phone sends 60 fps
+        self.on_stream_stopped()  # the user pressed stop on the phone
 
     def get_rgb_frame(self):
         rgb = np.zeros((960, 720, 3), dtype=np.uint8)
@@ -133,15 +140,15 @@ class FakeUsbStream:
         depth[:20] = np.nan  # no reading
         return depth
 
-    def disconnect(self):
-        self._running.clear()
-        self.disconnected = True
+
+def usb_workers():
+    return [p for p in multiprocessing.active_children() if p.name == "record3d-usb"]
 
 
-def run_usb(stream, seconds=0.6):
+def run_usb(factory, seconds):
     async def scenario():
         frames = []
-        client = Record3DClient(frames.append, "usb", usb_stream=lambda: stream)
+        client = Record3DClient(frames.append, "usb", usb_stream=factory)
         client.start()
         await asyncio.sleep(seconds)
         status = client.status()
@@ -151,13 +158,16 @@ def run_usb(stream, seconds=0.6):
     return asyncio.run(scenario())
 
 
-def test_usb_streams_rgb_and_metric_depth():
-    stream = FakeUsbStream()
-    status, frames = run_usb(stream)
-    assert status["state"] == "streaming" and len(frames) > 3 and stream.disconnected
-    assert len(frames) <= 0.6 * 30 + 2  # the fake pumps ~33 fps; the 30 fps cap holds
+def test_usb_streams_rgb_and_metric_depth_then_really_disconnects():
+    status, frames = run_usb(FakeUsbStream, 3.0)
+    assert status["state"] == "streaming" and len(frames) > 10
+    assert len(frames) <= 3.0 * 30 + 2  # the fake sends 60 fps; the 30 fps cap holds
+    assert frames[-1].rgb.shape == (640, 480, 3)  # shrunk in the worker, before crossing the pipe
+    # Killing the worker is the disconnect: record3d never closes its socket, so a live worker
+    # would be a ghost connection that makes the phone refuse the next one.
+    assert usb_workers() == []
     color, colorized = render_rgbd(frames[-1], Colorizer(150, 2000))
-    assert (color.width, color.height) == (480, 640) == (colorized.width, colorized.height)  # shrunk to 640
+    assert (color.width, color.height) == (480, 640) == (colorized.width, colorized.height)
     shown = cv2.imdecode(np.frombuffer(color.data, np.uint8), cv2.IMREAD_COLOR)
     assert shown[..., 2].mean() > 200 and shown[..., 0].mean() < 40  # still red after RGB -> BGR
     depth = cv2.imdecode(np.frombuffer(colorized.data, np.uint8), cv2.IMREAD_COLOR)
@@ -182,29 +192,32 @@ def test_only_the_watched_image_is_rendered():
 
 
 @pytest.mark.parametrize(
-    ("stream", "expected"),
-    [(FakeUsbStream(devices=()), "no iPhone on USB"), (FakeUsbStream(accepts=False), "not streaming")],
+    ("factory", "expected"),
+    [
+        (functools.partial(FakeUsbStream, devices=()), "no iPhone on USB"),
+        (functools.partial(FakeUsbStream, accepts=False), "not accepting the connection"),
+    ],
 )
-def test_usb_problems_are_explained(stream, expected):
-    status, frames = run_usb(stream, 0.3)
+def test_usb_problems_are_explained(factory, expected):
+    status, frames = run_usb(factory, 2.5)
     assert status["state"] == "error" and expected in status["detail"] and not frames
+    assert usb_workers() == []
+
+
+def test_stop_on_the_phone_then_start_again_reconnects_by_itself():
+    """The reported bug: after the stream ended, only pressing the button on the phone helped."""
+    status, frames = run_usb(functools.partial(FakeUsbStream, frames_for_s=1.0), 6.0)
+    # 1 s of frames, stream stops, retry after 1 s, 1 s of frames again, ... : several sessions.
+    assert len(frames) > 45, len(frames)
+    assert usb_workers() == []
+
+
+def test_a_wedged_usbmuxd_is_reported_and_the_worker_killed(monkeypatch):
+    monkeypatch.setattr("app.record3d.USB_START_TIMEOUT_S", 2.0)
+    status, frames = run_usb(functools.partial(FakeUsbStream, wedged=True), 3.0)
+    assert status["state"] == "error" and "usbmuxd is not answering" in status["detail"] and not frames
+    assert usb_workers() == []
 
 
 def test_usb_is_a_valid_address():
     assert normalize_host(" USB ") == "usb"
-
-
-def test_a_wedged_usbmuxd_is_reported_not_waited_for(monkeypatch):
-    monkeypatch.setattr("app.record3d.USB_CALL_TIMEOUT_S", 0.2)
-    release = threading.Event()
-
-    class Wedged(FakeUsbStream):
-        def get_connected_devices(self):
-            release.wait(5)
-            return []
-
-    started = time.monotonic()
-    status, frames = run_usb(Wedged(), 0.6)
-    release.set()
-    assert status["state"] == "error" and "usbmuxd is not answering" in status["detail"]
-    assert time.monotonic() - started < 3 and not frames

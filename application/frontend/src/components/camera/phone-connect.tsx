@@ -92,7 +92,7 @@ export function PhoneConnect({ phone, error, onDone }: PhoneState & { onDone?: (
         </span>
 
         <span className="label-micro leading-relaxed tracking-normal normal-case">
-          {error ?? (phone?.state === "error" ? phone.detail : null) ??
+          {error ?? (phone?.detail ? phone.detail : null) ??
             "USB: cable, works on any network."}
         </span>
       </form>

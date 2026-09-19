@@ -1,7 +1,8 @@
 # Data collection: demonstrations from backdriven fingers
 
 How the demonstrations for SmolVLA are recorded and
-labelled. Status: design, nothing implemented. Date: 2026-09-19. This closes
+labelled. Status: implemented and tested
+without hardware; not yet run against the hand. Date: 2026-09-19. This closes
 "the data collection method" of `policy-link-design.md` (Scope, Out).
 
 ## Decisions
@@ -105,8 +106,10 @@ label(states: N x 5, k, gain) -> N x 5
 - The command-line part reads a recorded dataset, applies `label` for each
   episode to the `action` column (from `observation.state`, not from the old
   action, so it can run again with other values), and writes a new dataset
-  (`<root>_k3_g20`). The raw dataset stays as it is. The videos are copied
-  or linked, not encoded again.
+  (`<root>_k3_g20`). The raw dataset stays as it is. The whole folder is
+  copied (the videos are not encoded again), the `action` column of the
+  parquet files is written again, and `recompute_stats` of lerobot makes a new
+  `meta/stats.json`, which the training uses for normalization.
 - Both values are tuning knobs. `k` and `gain` go in the name of the output
   dataset, so a checkpoint is traceable to its labels.
 
@@ -195,8 +198,5 @@ hand, then `label`, then a load of the output with `LeRobotDataset` that shows
 
 ## Not verified
 
-- The dataset edit API of lerobot 0.6.1 for the rewrite of one column without
-  a video encode. If there is none, `label.py` writes the parquet files
-  directly.
-- The exact option names of `lerobot-record` above (from the 0.6.1 docstring,
-  not run).
+- `lerobot-record` with the two plugins. The option names are checked against
+  the 0.6.1 source (`DatasetRecordConfig`), the command is not run.

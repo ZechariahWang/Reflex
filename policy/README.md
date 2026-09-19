@@ -29,6 +29,33 @@ python -m lerobot_robot_exo_hand.exo_hand --host <ros-ip>
 It prints one observation, closes the hand, opens it again, and fails if
 `/hand/state` does not follow.
 
+## Data collection
+
+Design: `../docs/specs/data-collection-design.md`. The HAL is in its torque-off
+mode, a person moves the fingers, and the encoder positions are the actions.
+`exo_hand_leader` reads them from `/hand/state`; `--robot.passive=true` stops
+the adapter from publishing them as commands. Run from the repo root:
+
+```bash
+lerobot-record \
+    --robot.type=exo_hand --robot.host=<ros-ip> --robot.id=exo --robot.passive=true \
+    --teleop.type=exo_hand_leader --teleop.host=<ros-ip> --teleop.id=exo \
+    --dataset.repo_id=<user>/exo_grasp_raw --dataset.push_to_hub=false \
+    --dataset.root=policy/datasets/exo_grasp_raw \
+    --dataset.single_task="<the constant instruction>" \
+    --dataset.fps=15 --dataset.num_episodes=50 \
+    --dataset.episode_time_s=20 --dataset.reset_time_s=5
+
+python -m lerobot_robot_exo_hand.label --root=policy/datasets/exo_grasp_raw --k=3 --gain=0.2
+```
+
+The second command writes `policy/datasets/exo_grasp_raw_k3_g20`, the dataset
+to train on: `action[t] = min(1, state[t+k] * (1 + gain))`. The raw dataset
+does not change, so `k` and `gain` can change with no new recording.
+
+`policy/datasets/` is ignored by git and is not a cache: make a copy outside
+the repo after each session.
+
 ## Inference loop
 
 Two processes on the GPU laptop. The server stays on localhost; only rosbridge

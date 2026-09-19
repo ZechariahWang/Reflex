@@ -68,6 +68,36 @@ does not change, so `k` and `gain` can change with no new recording.
 `policy/datasets/` is ignored by git and is not a cache: make a copy outside
 the repo after each session.
 
+## Training
+
+`lerobot-train` does it; there is no training code of ours. On the training
+machine (Lambda, see `../docs/system-design.md`): the Setup above, then
+
+```bash
+lerobot-train \
+    --policy.path=lerobot/smolvla_base --policy.device=cuda --policy.push_to_hub=false \
+    --dataset.repo_id=<user>/exo_grasp_raw_k3_g20 --dataset.root=<path>/exo_grasp_raw_k3_g20 \
+    --batch_size=64 --steps=20000 --save_freq=5000 \
+    --output_dir=outputs/train/exo_grasp --wandb.enable=false
+```
+
+The checkpoint for the inference loop is
+`outputs/train/exo_grasp/checkpoints/last/pretrained_model` (~1.3 GB with the
+training state). Copy it off a cloud instance before termination.
+
+Checked on 2026-09-19 with a dry run on a CPU (10 steps, batch 2, the
+150-frame test recording): the 5-value state and action need no option and no
+model change, the loss goes down, and the checkpoint gives a `(1, 5)` action
+from a 5-value state and one `camera2` image. `batch_size`, `steps` and the
+`cuda` device are not run. The checkpoint keeps the input list of
+`smolvla_base` in its `config.json` (a 6-value state, `camera1`..`camera3`);
+the model pads the state to 32 values and skips the cameras that are not
+there, so this had no effect in the dry run.
+
+If the log says that `torchcodec` cannot load `libavutil`, lerobot decodes the
+video with `pyav`. It works, and it is slower: install an FFmpeg that
+`torchcodec` supports on the training machine.
+
 ## Inference loop
 
 Two processes on the GPU laptop. The server stays on localhost; only rosbridge

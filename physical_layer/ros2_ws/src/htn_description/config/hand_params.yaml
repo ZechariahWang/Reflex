@@ -81,7 +81,7 @@ sim_mount:
 servos:
   torque_limit: 300    # 0..1000, drive duty cap in free motion (speed AND stall torque)
   hold_torque: 120     # the same while a finger is blocked: the force it keeps pushing with
-  thumb:  {id: 1, open_step: 1511, closed_step: 2208}   # set on the hand, 2026-09-19
+  thumb:  {id: 1, open_step: 1511, closed_step: 2208}
   index:  {id: 2, open_step: 2048, closed_step: 2884, enabled: false}
   middle: {id: 3, open_step: 2048, closed_step: 2864, enabled: false}
   ring:   {id: 4, open_step: 2048, closed_step: 2864, enabled: false}

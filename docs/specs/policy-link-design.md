@@ -92,9 +92,9 @@ policy/
 
 - Features: `thumb.pos`, `index.pos`, `middle.pos`, `ring.pos`, `pinky.pos`
   (float, `0` = open .. `1` = closed, the values of the topics with no
-  conversion) for observation and action, and one camera, `wrist`
-  (`H x W x 3`, uint8, RGB). `rename_map` maps `wrist` to the `camera2` slot
-  of SmolVLA.
+  conversion) for observation and action, and one camera, `camera2`
+  (`H x W x 3`, uint8, RGB). This is the wrist slot of `smolvla_base`, so no
+  `rename_map` is necessary in recording, training or inference.
 - `connect()`: opens `roslibpy.Ros`, subscribes to `/hand/state`, the color
   topic and `/hand/command` with `queue_length=1` and no throttle, advertises
   `/hand/command` on a second `Topic` object (a `Topic` replays only one of
@@ -198,17 +198,16 @@ time, and fails if `/hand/state` does not follow.
    `policy/README.md`, checked against the 0.6.1 source, not run.
 5. Done: `htn_auto` removed, the CLAUDE.md files and the README updated.
 
-## Open: the camera key
+## The camera key
 
 In lerobot 0.6.1, `RobotClient` does not pass a `rename_map`, and
 `policy_server` overrides the map of the checkpoint with that empty map. It
 then looks up `observation.images.<camera key of the robot>` in the image
-features of the policy. With the key `wrist` and a policy that expects
-`camera2` this is a `KeyError`. A `rename_map` works in training and in
-`lerobot-record`, but not in async inference. Option: name the camera
-`camera2` in the adapter (`CAMERA` in `convert.py`), so that no map is
-necessary anywhere. Decide before the first recording; the key is in the
-dataset.
+features of the policy; a key that the policy does not have is a `KeyError`.
+A `rename_map` works in training and in `lerobot-record`, but not in async
+inference. The adapter thus uses the policy key directly (`CAMERA` in
+`convert.py`). The key is in the dataset: a change after the first recording
+needs a dataset conversion.
 
 ## Not verified
 

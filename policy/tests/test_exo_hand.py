@@ -53,7 +53,7 @@ def test_lerobot_finds_the_robot_from_its_config(tmp_path):
 def test_features_are_known_before_connect(tmp_path):
     robot = ExoHand(ExoHandConfig(host="unused", calibration_dir=tmp_path, width=320, height=240))
 
-    assert robot.observation_features == {**dict.fromkeys(KEYS, float), "wrist": (240, 320, 3)}
+    assert robot.observation_features == {**dict.fromkeys(KEYS, float), "camera2": (240, 320, 3)}
     assert robot.action_features == dict.fromkeys(KEYS, float)
     assert not robot.is_connected
 
@@ -66,7 +66,7 @@ def test_get_observation_returns_latest_state_and_frame(robot):
     obs = robot.get_observation()
 
     assert obs["index.pos"] == 0.1 and obs["pinky.pos"] == 0.4
-    assert obs["wrist"].shape == (480, 640, 3)
+    assert obs["camera2"].shape == (480, 640, 3)
 
 
 def test_get_observation_fails_until_both_streams_arrived(robot):

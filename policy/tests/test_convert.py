@@ -38,9 +38,9 @@ def test_to_observation_keeps_finger_order():
 
     obs = to_observation([0.0, 0.1, 0.2, 0.3, 0.4], rgb)
 
-    assert list(obs) == [f"{f}.pos" for f in FINGERS] + ["wrist"]
+    assert list(obs) == [f"{f}.pos" for f in FINGERS] + ["camera2"]
     assert obs["thumb.pos"] == 0.0 and obs["pinky.pos"] == 0.4
-    assert obs["wrist"] is rgb
+    assert obs["camera2"] is rgb
 
 
 def test_to_observation_rejects_wrong_length():

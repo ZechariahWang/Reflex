@@ -9,7 +9,8 @@ import numpy as np
 # Contract order of /hand/command and /hand/state
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 KEYS = tuple(f"{finger}.pos" for finger in FINGERS)
-CAMERA = "wrist"
+# An image slot of smolvla_base. lerobot async inference has no rename_map, so the key must match the policy
+CAMERA = "camera2"
 
 
 def decode_color(jpeg: bytes) -> np.ndarray:

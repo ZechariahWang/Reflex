@@ -52,5 +52,5 @@ policy and take the hand back with teleop, stop the client: a running policy
 overrides every other publisher on `/hand/command`.
 
 The client of lerobot 0.6.1 has no `rename_map` option, and the server replaces
-the map of the checkpoint with an empty one. The camera key of the robot must
-therefore be an image key of the policy as it is.
+the map of the checkpoint with an empty one. The adapter therefore names its
+camera `camera2`, an image key of `smolvla_base`, and no map is used anywhere.

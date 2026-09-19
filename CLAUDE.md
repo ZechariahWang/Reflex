@@ -2,8 +2,8 @@
 
 Assistive exoskeleton hand: 5 fingers, each one servo / 1 DOF (curl only). Goal
 is a hand that detects what the wearer wants (grasp a bottle, play piano) and
-moves the fingers for them. Developed sim-first, then deployed to real servos
-through a microcontroller.
+moves the fingers for them. Developed sim-first, then deployed to real bus
+servos on a USB adapter (no microcontroller of ours).
 
 ## Layout
 
@@ -12,6 +12,8 @@ everything else goes in a top-level subfolder per concern.
 
 - `physical_layer/` - ROS 2 workspace: hand model, sim, HAL, teleop. See
   `physical_layer/CLAUDE.md` before touching anything in there.
+- `docs/` - design documents. Read `docs/system-design.md` (devices, ROS
+  layout, policy, safety, open questions) before design work. Specs for single features go in `docs/specs/`.
 - (planned) a separate top-level folder for the VLA / policy code (training,
   datasets, inference). It stays plain Python outside ROS so torch & co. never
   enter the colcon build; `htn_auto` in the ROS workspace is the thin bridge.
@@ -22,7 +24,7 @@ everything else goes in a top-level subfolder per concern.
 - Anything that wants to move the hand publishes `/hand/command`
   (`std_msgs/Float64MultiArray`, 5 values, `0` = open .. `1` = closed) and reads
   `/hand/state` (same layout, measured). Nothing outside the HAL uses radians,
-  servo degrees or serial.
+  servo steps or serial.
 - Anything that wants to see reads the camera from `/camera/color/image_raw`
   (`sensor_msgs/Image`, rgb8, + `/compressed`), `/camera/depth/image_rect_raw`
   and `/camera/aligned_depth_to_color/image_raw` (16UC1, millimetres), each
@@ -37,5 +39,5 @@ everything else goes in a top-level subfolder per concern.
   that works over frameworks and abstraction.
 - Build with `physical_layer/build.sh`. Never run `colcon build` from the repo
   root: colcon drops `build/ install/ log/` into whatever directory it runs in.
-- Safety limits for the real hand belong in the HAL and the firmware, below any
+- Safety limits for the real hand belong in the HAL and the servo registers, below any
   learned policy.

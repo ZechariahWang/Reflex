@@ -46,7 +46,7 @@ teleop_gui --/hand/command-->    HAL  --USB--> motor driver --> servos
                                   +--/hand/state, /joint_states--> foxglove_bridge
 ```
 
-- `hardware.launch.py` starts `robot_state_publisher`, the HAL (serial
+- `hardware.launch.py` starts `robot_state_publisher`, the HAL (feetech
   backend), `teleop_gui` and `foxglove_bridge`. A camera node is new.
 - The contract does not change: anything that moves the hand publishes
   `/hand/command` (5 values, `0` = open, `1` = closed) and reads `/hand/state`.
@@ -176,7 +176,9 @@ no firmware of ours, so the HAL is the lowest layer that we control:
 4. **Wearable machine.** Pi 5 or small laptop, see the table above.
 5. **Wrist IMU.** It gives the "arm stopped" cue directly and helps most with
    the release.
-6. **Motor driver protocol.** The `SerialBackend` in the HAL speaks an ASCII
+6. **Motor driver protocol.** Closed, see `specs/feetech-hal-design.md`: Feetech ST
+   servos on a USB bus adapter, position feedback, no command timeout (so the
+   watchdog must be in the HAL). Original question: The `SerialBackend` in the HAL speaks an ASCII
    protocol (`S ...` / `P ...` lines) made for our own firmware. A driver board
    has its own protocol, so the HAL needs a backend for it. Check also whether
    the driver has a command timeout and position feedback; if it has no

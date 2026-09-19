@@ -2,11 +2,11 @@ from abc import ABC, abstractmethod
 
 
 class HandBackend(ABC):
-    """One way of actually moving the fingers (simulator, serial servos, ...).
+    """One way of actually moving the fingers (simulator, bus servos, ...).
 
     Everything crossing this interface is a list of 5 floats in FINGERS order,
     normalized: 0.0 = finger fully open, 1.0 = fully closed. Turning that into
-    radians, servo degrees, PWM... is the backend's job, so nothing above the
+    radians, servo steps, PWM... is the backend's job, so nothing above the
     HAL ever needs to know what hardware it is talking to.
     """
 

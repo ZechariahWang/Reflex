@@ -16,7 +16,7 @@ class HandHal(Node):
 
     Teleop and the autonomous node only ever publish normalized finger
     positions on /hand/command; this node clamps and rate-limits them and
-    hands them to whichever backend is selected (sim | serial).
+    hands them to whichever backend is selected (sim | feetech).
     """
 
     def __init__(self):

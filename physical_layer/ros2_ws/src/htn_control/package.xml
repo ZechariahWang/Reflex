@@ -2,7 +2,7 @@
 <package format="3">
   <name>htn_control</name>
   <version>0.0.1</version>
-  <description>Hand HAL (sim / serial backends) and keyboard teleop</description>
+  <description>Hand HAL (sim / feetech backends) and keyboard teleop</description>
   <maintainer email="zechariahwang@gmail.com">zech</maintainer>
   <license>MIT</license>
 

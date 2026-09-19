@@ -83,3 +83,10 @@ def test_unknown_camera_is_refused(client):
 def test_mock_phone_status(client):
     assert client.get("/api/iphone").json()["state"] == "streaming"
     assert client.post("/api/iphone", json={"host": "192.168.1.23"}).json()["host"] == "mock"
+
+
+def test_phone_rotation_is_settable_and_validated(client):
+    assert client.get("/api/iphone").json()["rotation"] == 0  # live default is 90; the mock phone is landscape
+    assert client.post("/api/iphone", json={"rotation": 270}).json()["rotation"] == 270
+    assert client.post("/api/iphone", json={"rotation": 45}).status_code == 422
+    assert client.post("/api/iphone", json={"rotation": 0}).json()["rotation"] == 0

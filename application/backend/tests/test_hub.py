@@ -30,6 +30,7 @@ def test_depth_worker_survives_a_bad_frame():
         hub = Hub(Settings())
         hub.bind(asyncio.get_running_loop())
         worker = asyncio.create_task(hub.run_depth_worker())
+        hub.frames["realsense"]["depth"].viewers = 1
         hub.on_depth(bytes(12))
         await asyncio.sleep(0.1)
         hub.on_depth(encode_compressed_depth(synthetic()))

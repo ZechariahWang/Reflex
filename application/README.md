@@ -35,6 +35,7 @@ not matter: with ROS down the console shows OFFLINE / NO SIGNAL and recovers on 
 | env | default | |
 |---|---|---|
 | `MOCK` | `0` | `1` = synthesize everything |
+| `RECORD3D_ROTATION` | `90` | iPhone image rotation, clockwise; the panel's rotate button changes it live |
 | `RECORD3D_HOST` | empty | iPhone address, or `usb` for the cable; normally set from the iPhone panel instead |
 | `ROSBRIDGE_HOST` / `ROSBRIDGE_PORT` | `localhost` / `9090` | where rosbridge listens |
 | `BACKEND_PORT` / `FRONTEND_PORT` | `8000` / `3000` | dev.sh ports |

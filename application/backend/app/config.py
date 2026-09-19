@@ -19,6 +19,7 @@ class Settings:
     depth_min_mm: int = 150
     depth_max_mm: int = 2000
     record3d_host: str = ""
+    record3d_rotation: int = 90  # the phone's sensor is portrait; 90 / 270 show it landscape
 
     @property
     def rosbridge_url(self) -> str:
@@ -36,4 +37,5 @@ class Settings:
             depth_min_mm=int(env.get("DEPTH_MIN_MM", "150")),
             depth_max_mm=int(env.get("DEPTH_MAX_MM", "2000")),
             record3d_host=env.get("RECORD3D_HOST", "").strip(),
+            record3d_rotation=int(env.get("RECORD3D_ROTATION", "90")),
         )

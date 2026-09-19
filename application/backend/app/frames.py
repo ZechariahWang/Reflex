@@ -37,6 +37,7 @@ class LatestChannel(Generic[T]):
 
     def __init__(self) -> None:
         self.latest: T | None = None
+        self.viewers = 0  # open sockets on this stream; producers skip work nobody sees
         self._seq = 0
         self._waiters: set[asyncio.Future[None]] = set()
 

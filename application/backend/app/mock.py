@@ -104,6 +104,7 @@ class MockSource:
 
     def start(self) -> None:
         self._hub.on_urdf(MOCK_URDF_PATH.read_text())
+        self._hub.iphone_rotation = 0  # the mock phone is already landscape
         self._tasks = [asyncio.create_task(self._run_joints()), asyncio.create_task(self._run_camera())]
 
     async def stop(self) -> None:

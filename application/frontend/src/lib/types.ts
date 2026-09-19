@@ -58,6 +58,8 @@ export interface PhoneStatus {
   state: "off" | "connecting" | "streaming" | "error"
   /** Why `state` is "error". */
   detail: string
+  /** Degrees the image is turned clockwise; the sensor is portrait, 90 / 270 show it landscape. */
+  rotation: 0 | 90 | 180 | 270
 }
 
 /** JSON text frame on /ws/camera/*; binary frames on the same socket are JPEGs. */

@@ -123,6 +123,7 @@ class Hub:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._colorizer = Colorizer(settings.depth_min_mm, settings.depth_max_mm)
         self._depth_payloads: LatestChannel[bytes] = LatestChannel()
+        self.iphone_rotation = settings.record3d_rotation
         self._iphone_frames: LatestChannel[VideoFrame | np.ndarray | record3d.RgbdFrame] = LatestChannel()
         self.frames: dict[str, dict[str, LatestChannel[Frame]]] = {
             source: {kind: LatestChannel() for kind in CAMERA_KINDS} for source in CAMERA_SOURCES
@@ -193,6 +194,8 @@ class Hub:
         seen = 0
         while True:
             seen, payload = await self._depth_payloads.next(seen)
+            if self.frames["realsense"]["depth"].viewers == 0:
+                continue  # nobody is looking at RealSense depth: skip the decode + colorize + encode
             try:
                 frame = await asyncio.to_thread(self._colorizer.render, payload)
             except ValueError as error:
@@ -203,24 +206,32 @@ class Hub:
                 continue
             self.frames["realsense"]["depth"].publish(frame)
 
-    def _render_iphone(self, frame: VideoFrame | np.ndarray | record3d.RgbdFrame) -> tuple[Frame, Frame]:
+    def _render_iphone(
+        self, frame: VideoFrame | np.ndarray | record3d.RgbdFrame, want: tuple[bool, bool]
+    ) -> tuple[Frame | None, Frame | None]:
         if isinstance(frame, record3d.RgbdFrame):
-            return record3d.render_rgbd(frame, self._colorizer)
+            return record3d.render_rgbd(frame, self._colorizer, self.iphone_rotation, want)
         bgr = frame if isinstance(frame, np.ndarray) else frame.to_ndarray(format="bgr24")
-        return record3d.render(bgr, self._colorizer)
+        return record3d.render(bgr, self._colorizer, self.iphone_rotation, want)
 
     async def run_iphone_worker(self) -> None:
         """Split, decode and re-encode the newest iPhone frame in a worker thread."""
         seen = 0
         while True:
             seen, raw = await self._iphone_frames.next(seen)
+            channels = self.frames["iphone"]
+            want = (channels["color"].viewers > 0, channels["depth"].viewers > 0)
+            if not any(want):
+                continue
             try:
-                color, depth = await asyncio.to_thread(self._render_iphone, raw)
+                color, depth = await asyncio.to_thread(self._render_iphone, raw, want)
             except Exception:  # no single frame may end the loop
                 LOGGER.exception("dropping iPhone frame")
                 continue
-            self.frames["iphone"]["color"].publish(color)
-            self.frames["iphone"]["depth"].publish(depth)
+            if color is not None:
+                channels["color"].publish(color)
+            if depth is not None:
+                channels["depth"].publish(depth)
 
     @property
     def urdf(self) -> str | None:

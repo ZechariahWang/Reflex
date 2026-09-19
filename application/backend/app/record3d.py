@@ -55,7 +55,9 @@ USB_STUCK = (
     "usbmuxd is not answering: replug the iPhone while it is unlocked; if that does not help, "
     "run: sudo systemctl restart usbmuxd"
 )
-MAX_SIDE_PX = 960  # USB colour frames can be 1440 x 1920; the panel never needs that
+MAX_SIDE_PX = 640  # the panel is ~450 px wide; bigger frames only cost the browser decode time
+MAX_FPS = 30.0  # the phone sends 60; the page cannot show more and pays for every frame
+ROTATIONS = {0: None, 90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
 HOST_PATTERN = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(:\d{1,5})?$")
 
 
@@ -100,26 +102,48 @@ def _jpeg(bgr: np.ndarray) -> Frame:
     return Frame(jpeg.tobytes(), width, height)
 
 
-def render(side_by_side_bgr: np.ndarray, colorizer: Colorizer) -> tuple[Frame, Frame]:
-    """One Record3D frame -> (color JPEG, colorized depth JPEG)."""
+def _fit(image: np.ndarray, rotation: int, interpolation: int) -> np.ndarray:
+    """Shrink to MAX_SIDE_PX, then turn. The sensor is portrait; 90 / 270 make it landscape."""
+    scale = MAX_SIDE_PX / max(image.shape[:2])
+    if scale < 1.0:
+        image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=interpolation)
+    turn = ROTATIONS[rotation]
+    return image if turn is None else cv2.rotate(image, turn)
+
+
+def render(
+    side_by_side_bgr: np.ndarray, colorizer: Colorizer, rotation: int = 0, want: tuple[bool, bool] = (True, True)
+) -> tuple[Frame | None, Frame | None]:
+    """One Wi-Fi frame -> (color JPEG, colorized depth JPEG); `want` skips the one nobody watches."""
     half = side_by_side_bgr.shape[1] // 2
     if half == 0:
         raise ValueError("Record3D frame has no width")
-    depth = colorizer.colorize(hue_depth_mm(side_by_side_bgr[:, :half]))
-    return _jpeg(side_by_side_bgr[:, half : half * 2]), _jpeg(depth)
+    color = depth = None
+    if want[0]:
+        color = _jpeg(_fit(side_by_side_bgr[:, half : half * 2], rotation, cv2.INTER_AREA))
+    if want[1]:
+        mm = _fit(hue_depth_mm(side_by_side_bgr[:, :half]), rotation, cv2.INTER_NEAREST)
+        depth = _jpeg(colorizer.colorize(mm))
+    return color, depth
 
 
-def render_rgbd(frame: RgbdFrame, colorizer: Colorizer) -> tuple[Frame, Frame]:
-    """One USB frame -> (color JPEG, colorized depth JPEG), both at the colour image's shape."""
-    bgr = cv2.cvtColor(frame.rgb, cv2.COLOR_RGB2BGR)
-    scale = MAX_SIDE_PX / max(bgr.shape[:2])
-    if scale < 1.0:
-        bgr = cv2.resize(bgr, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
-    mm = np.nan_to_num(frame.depth_m.astype(np.float32) * 1000.0, nan=0.0, posinf=0.0, neginf=0.0)
-    depth = np.clip(mm, 0.0, 65535.0).round().astype(np.uint16)
-    # Nearest keeps holes as holes instead of smearing 0 into the neighbouring depths.
-    depth = cv2.resize(depth, (bgr.shape[1], bgr.shape[0]), interpolation=cv2.INTER_NEAREST)
-    return _jpeg(bgr), _jpeg(colorizer.colorize(depth))
+def render_rgbd(
+    frame: RgbdFrame, colorizer: Colorizer, rotation: int = 0, want: tuple[bool, bool] = (True, True)
+) -> tuple[Frame | None, Frame | None]:
+    """One USB frame -> (color JPEG, colorized depth JPEG), both at the (shrunk) colour image's shape."""
+    bgr = _fit(frame.rgb, rotation, cv2.INTER_AREA)  # still RGB order; shrink before converting
+    color = depth = None
+    if want[0]:
+        color = _jpeg(cv2.cvtColor(bgr, cv2.COLOR_RGB2BGR))
+    if want[1]:
+        mm = np.nan_to_num(frame.depth_m.astype(np.float32) * 1000.0, nan=0.0, posinf=0.0, neginf=0.0)
+        mm = np.clip(mm, 0.0, 65535.0).round().astype(np.uint16)
+        turn = ROTATIONS[rotation]
+        mm = mm if turn is None else cv2.rotate(mm, turn)
+        # Nearest keeps holes as holes instead of smearing 0 into the neighbouring depths.
+        mm = cv2.resize(mm, (bgr.shape[1], bgr.shape[0]), interpolation=cv2.INTER_NEAREST)
+        depth = _jpeg(colorizer.colorize(mm))
+    return color, depth
 
 
 def _usb_stream():
@@ -223,10 +247,14 @@ class Record3DClient:
             )
             track = await asyncio.wait_for(tracks.get(), FIRST_FRAME_TIMEOUT_S)
             timeout = FIRST_FRAME_TIMEOUT_S
+            accepted = 0.0
             while True:
                 frame = await asyncio.wait_for(track.recv(), timeout)
                 self.state, self.detail, timeout = "streaming", "", FRAME_TIMEOUT_S
-                self._on_frame(frame)
+                now = asyncio.get_running_loop().time()
+                if now - accepted >= 0.9 / MAX_FPS:
+                    accepted = now
+                    self._on_frame(frame)
         except MediaStreamError:
             return
         finally:
@@ -278,7 +306,13 @@ class Record3DClient:
             self.state, self.detail = "streaming", ""
             self._on_frame(frame)
 
+        accepted = [0.0]
+
         def on_new_frame() -> None:  # record3d's own thread; its buffers are reused, so copy
+            now = loop.time()
+            if now - accepted[0] < 0.9 / MAX_FPS:
+                return  # over the cap: dropped before the copy, which is the expensive part
+            accepted[0] = now
             frame = RgbdFrame(np.array(stream.get_rgb_frame()), np.array(stream.get_depth_frame()))
             loop.call_soon_threadsafe(deliver, frame)
 

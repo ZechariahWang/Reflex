@@ -29,13 +29,23 @@ function remembered(): string {
   }
 }
 
+/** Turn the phone's image a quarter clockwise (portrait sensor -> landscape, or the other way up). */
+export async function rotatePhone(): Promise<void> {
+  const current = usePhoneStore.getState().phone?.rotation ?? 0
+  await post({ rotation: (current + 90) % 360 }, null)
+}
+
 /** Point the backend's Record3D client at `host` ("" disconnects) and remember it for next time. */
 export async function connectPhone(host: string): Promise<void> {
+  await post({ host }, host.trim())
+}
+
+async function post(body: { host: string } | { rotation: number }, remember: string | null): Promise<void> {
   try {
     const response = await fetch(API.iphone, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ host }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(TIMEOUT_MS * 4),
     })
     if (!response.ok) {
@@ -44,7 +54,7 @@ export async function connectPhone(host: string): Promise<void> {
       return
     }
     try {
-      window.localStorage.setItem(STORAGE_KEY, host.trim())
+      if (remember !== null) window.localStorage.setItem(STORAGE_KEY, remember)
     } catch {
       // Storage blocked: the address just is not remembered.
     }

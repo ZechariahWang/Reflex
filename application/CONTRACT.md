@@ -72,9 +72,9 @@ The backend reconnects to rosbridge forever with backoff and never exits because
 
 ### `GET /api/iphone`, `POST /api/iphone`
 ```json
-{"host": "192.168.1.23", "state": "streaming", "detail": ""}
+{"host": "192.168.1.23", "state": "streaming", "detail": "", "rotation": 90}
 ```
-`state`: `off` (no address) | `connecting` | `streaming` | `error` (`detail` says why; it keeps retrying with backoff). `POST {"host": "192.168.1.23"}` points the backend at a phone (`host[:port]`, or `"usb"` for the cable, `""` disconnects, anything else is a 422). The frontend remembers the address in localStorage and re-sends it once after a backend restart. Mock mode always reports `{"host": "mock", "state": "streaming"}`.
+`state`: `off` (no address) | `connecting` | `streaming` | `error` (`detail` says why; it keeps retrying with backoff). `POST {"host": "192.168.1.23"}` points the backend at a phone (`host[:port]`, or `"usb"` for the cable, `""` disconnects, anything else is a 422). The frontend remembers the address in localStorage and re-sends it once after a backend restart. `POST {"rotation": 0|90|180|270}` turns the image clockwise (the phone's sensor is portrait; default 90 = landscape, `RECORD3D_ROTATION`); the panel's rotate button steps it by 90. Both fields are optional in one POST. Mock mode always reports `{"host": "mock", "state": "streaming"}` with rotation 0.
 
 ### `WS /ws/state`
 Server -> client, JSON text, one message every 33 ms (30 Hz) regardless of ROS rates (latest-value sampling):
@@ -96,7 +96,7 @@ Client -> server, JSON text:
 -> published to `/hand/command` (values clamped to 0..1, must be exactly 5; anything else is ignored).
 
 ### `WS /ws/camera/{realsense|iphone}/{color|depth}`
-Four streams, same protocol. The page opens only the one each panel is showing. Server -> client, **binary** messages, each one complete JPEG. Latest-frame only: if the client is slow, drop frames, never queue.
+Four streams, same protocol. The page opens only the one each panel is showing, and the backend only renders streams that have a viewer (`LatestChannel.viewers`). iPhone frames are capped at 30 fps (the phone sends 60; dropped before they are copied) and shrunk to 640 px on the long side: the browser decodes every frame on its main thread, next to the 3D hand. Server -> client, **binary** messages, each one complete JPEG. Latest-frame only: if the client is slow, drop frames, never queue.
 - `color`: RealSense - the ROS JPEG bytes passed through untouched; iPhone - the right half of the Record3D frame, JPEG-encoded.
 - `depth`: decoded (RealSense: the 16-bit PNG; iPhone: hue -> mm), colorized server-side and re-encoded as JPEG (quality ~80). Colormap: near = warm, far = cool (a desaturated two-hue ramp, far `#2f4a63` `#7f9bb3` `#d9dde0` `#e9c9a8` `#c2410c` near, mirrored in `frontend/src/lib/depth-ramp.ts`), over `DEPTH_MIN_MM=150 .. DEPTH_MAX_MM=2000` (env-overridable); pixels with value 0 (no reading) are rendered as the light UI background `#f6f6f6` so holes look intentional on a white page rather than black.
 
@@ -119,6 +119,7 @@ No rosbridge connection. Joints: each finger curls on its own smooth, phase-shif
 - `src/lib/types.ts` - TypeScript types for every message above.
 - `src/lib/sim-store.ts` - zustand store: latest `/ws/state` message, connection status, a rolling history (last ~10 s) of `state` per finger for sparklines, and `sendCommand(data: number[])`. Owns the `/ws/state` socket with auto-reconnect. three.js code must read it with `useSimStore.getState()` inside `useFrame` (transient), never via React state at 30 Hz.
 - `src/hooks/use-phone.ts` - `usePhone()` polls `/api/iphone`; `connectPhone(host)`.
+- Per-frame rules for camera code: never put anything that changes every frame into React state (the hook hands React the same state object unless a value changed), and paint decoded frames from `requestAnimationFrame`, newest only.
 - `src/hooks/use-camera-stream.ts` - `useCameraStream(source: 'realsense' | 'iphone', kind: 'color' | 'depth')` -> `{canvasRef, meta, status, fps}`; owns the socket, decodes with `createImageBitmap`, draws to the canvas, auto-reconnects.
 - `src/components/ui/*` - shadcn components.
 - `src/components/console/panel.tsx` - `<Panel index="01" title="Hand" tag="/joint_states" status=... actions=...>`: the framed viewport chrome every panel uses.

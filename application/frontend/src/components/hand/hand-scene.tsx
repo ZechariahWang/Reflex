@@ -432,7 +432,7 @@ export default function HandScene(props: HandSceneProps) {
   return (
     <Canvas
       shadows="percentage"
-      dpr={[1, 2]}
+      dpr={[1, 1.5]}
       camera={{ fov: FOV_DEG, near: 0.01, far: 20, position: [0.3, 0.3, 0.3] }}
       gl={{ antialias: true, powerPreference: "high-performance" }}
       onCreated={({ gl, camera }) => {

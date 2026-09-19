@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from .config import Settings
 from .hub import CAMERA_KINDS, CAMERA_SOURCES, Hub, Source, parse_command, ticks
 from .mock import MockSource
-from .record3d import Record3DClient, normalize_host
+from .record3d import ROTATIONS, Record3DClient, normalize_host
 from .ros_client import RosClient
 
 STATE_PERIOD_S = 0.033
@@ -29,8 +29,11 @@ LOGGER = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 
-class PhoneAddress(BaseModel):
-    host: str
+class PhoneSettings(BaseModel):
+    """Either field may be left out: the address form sends `host`, the rotate button `rotation`."""
+
+    host: str | None = None
+    rotation: int | None = None
 
 
 async def serve_socket(
@@ -110,21 +113,27 @@ def create_app(settings: Settings) -> FastAPI:
             return Response("robot_description has not arrived yet", status_code=503, media_type="text/plain")
         return Response(xml, media_type="text/xml")
 
+    def phone_status() -> dict:
+        return {**(MOCK_PHONE if settings.mock else phone.status()), "rotation": hub.iphone_rotation}
+
     @app.get("/api/iphone")
     def iphone() -> dict:
-        return MOCK_PHONE if settings.mock else phone.status()
+        return phone_status()
 
     @app.post("/api/iphone")
-    async def set_iphone(address: PhoneAddress) -> dict:
-        """Point the Record3D client at a phone; an empty host disconnects."""
-        if settings.mock:
-            return MOCK_PHONE
-        host = normalize_host(address.host) if address.host.strip() else ""
-        if host is None:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "expected an address like 192.168.1.23")
-        if host != phone.host:
-            await phone.set_host(host)
-        return phone.status()
+    async def set_iphone(update: PhoneSettings) -> dict:
+        """Point the Record3D client at a phone (an empty host disconnects) and / or turn its image."""
+        if update.rotation is not None:
+            if update.rotation not in ROTATIONS:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "rotation must be 0, 90, 180 or 270")
+            hub.iphone_rotation = update.rotation
+        if update.host is not None and not settings.mock:
+            host = normalize_host(update.host) if update.host.strip() else ""
+            if host is None:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "expected an address like 192.168.1.23")
+            if host != phone.host:
+                await phone.set_host(host)
+        return phone_status()
 
     @app.websocket("/ws/state")
     async def ws_state(ws: WebSocket) -> None:
@@ -140,6 +149,14 @@ def create_app(settings: Settings) -> FastAPI:
         await serve_socket(ws, settings.cors_origins, send_state, on_text)
 
     async def send_camera(ws: WebSocket, source: str, kind: str) -> None:
+        channel = hub.frames[source][kind]
+        channel.viewers += 1  # producers only render streams somebody has open
+        try:
+            await stream_camera(ws, source, kind)
+        finally:
+            channel.viewers -= 1
+
+    async def stream_camera(ws: WebSocket, source: str, kind: str) -> None:
         channel = hub.frames[source][kind]
         seen = 0
         sent_meta: dict | None = None

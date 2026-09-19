@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useState, type ReactNode } from "react"
-import { Grid3x3, ImageDown, Maximize2, Minimize2, Pause, Play, Smartphone } from "lucide-react"
+import { Grid3x3, ImageDown, Maximize2, Minimize2, Pause, Play, RotateCw, Smartphone } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 
 import { CameraHud } from "@/components/camera/camera-hud"
@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useCameraStream, type CameraStreamStatus } from "@/hooks/use-camera-stream"
-import { usePhone } from "@/hooks/use-phone"
+import { rotatePhone, usePhone } from "@/hooks/use-phone"
 import { selectRosConnected, useSimStore } from "@/lib/sim-store"
 import { TOPIC_NAMES, type CameraKind, type CameraSource, type PhoneStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -235,6 +235,11 @@ export function CameraViewport({ source }: { source: CameraSource }) {
               {source === "iphone" && (
                 <HeaderAction label="Phone address" pressed={configuring} onClick={() => setConfiguring(!configuring)}>
                   <Smartphone />
+                </HeaderAction>
+              )}
+              {source === "iphone" && (
+                <HeaderAction label="Rotate 90°" disabled={!showImage} onClick={() => void rotatePhone()}>
+                  <RotateCw />
                 </HeaderAction>
               )}
               {kind === "color" && (

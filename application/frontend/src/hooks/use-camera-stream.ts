@@ -43,8 +43,14 @@ export function useCameraStream(source: CameraSource, kind: CameraKind): CameraS
   const [state, setState] = useState<StreamState>({ url, meta: null, status: "connecting", fps: 0 })
 
   useEffect(() => {
+    // Called for every frame: it must hand React the SAME object unless something changed,
+    // or the whole panel re-renders at the camera's frame rate.
     const update = (patch: Partial<Omit<StreamState, "url">>) =>
-      setState((prev) => ({ ...(prev.url === url ? prev : { url, meta: null, status: "connecting", fps: 0 }), ...patch }))
+      setState((prev) => {
+        const base: StreamState = prev.url === url ? prev : { url, meta: null, status: "connecting", fps: 0 }
+        const changed = (Object.keys(patch) as (keyof typeof patch)[]).some((key) => base[key] !== patch[key])
+        return changed || base !== prev ? { ...base, ...patch } : prev
+      })
     const setMeta = (meta: CameraMeta) => update({ meta })
     const setStatus = (status: CameraStreamStatus) => update({ status })
     const setFps = (fps: number) => update({ fps })
@@ -57,18 +63,33 @@ export function useCameraStream(source: CameraSource, kind: CameraKind): CameraS
     let pending: Blob | null = null
     let drawn = 0
     let lastFrameAt = 0
+    let ready: ImageBitmap | null = null
+    let paint = 0
 
+    // Decoded frames wait here for the next animation frame; a newer one replaces an
+    // unpainted older one, so the canvas never does more work than the display can show.
     const draw = (bitmap: ImageBitmap) => {
-      const canvas = canvasRef.current
-      if (!canvas) return
-      if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
-        canvas.width = bitmap.width
-        canvas.height = bitmap.height
-      }
-      canvas.getContext("2d")?.drawImage(bitmap, 0, 0)
-      drawn++
-      lastFrameAt = performance.now()
-      setStatus("live")
+      ready?.close()
+      ready = bitmap
+      if (paint !== 0) return
+      paint = requestAnimationFrame(() => {
+        paint = 0
+        const frame = ready
+        ready = null
+        const canvas = canvasRef.current
+        if (!frame) return
+        if (canvas) {
+          if (canvas.width !== frame.width || canvas.height !== frame.height) {
+            canvas.width = frame.width
+            canvas.height = frame.height
+          }
+          canvas.getContext("2d", { alpha: false, desynchronized: true })?.drawImage(frame, 0, 0)
+          drawn++
+          lastFrameAt = performance.now()
+          setStatus("live")
+        }
+        frame.close()
+      })
     }
 
     // One decode in flight at a time. Frames that arrive meanwhile overwrite
@@ -78,8 +99,8 @@ export function useCameraStream(source: CameraSource, kind: CameraKind): CameraS
       for (let next: Blob | null = blob; next && !disposed; ) {
         try {
           const bitmap = await createImageBitmap(next)
-          if (!disposed) draw(bitmap)
-          bitmap.close()
+          if (disposed) bitmap.close()
+          else draw(bitmap) // draw() owns it from here and closes it
         } catch {
           // A truncated or corrupt JPEG: skip it, the next frame replaces it.
         }
@@ -136,6 +157,8 @@ export function useCameraStream(source: CameraSource, kind: CameraKind): CameraS
     return () => {
       disposed = true
       pending = null
+      if (paint !== 0) cancelAnimationFrame(paint)
+      ready?.close()
       clearInterval(meter)
       if (retryTimer !== null) clearTimeout(retryTimer)
       if (socket) closeQuietly(socket)

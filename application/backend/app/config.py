@@ -27,6 +27,10 @@ class Settings:
     mirror_command_tolerance: float = 0.01
     mirror_min_cutoff: float = 1.5  # Hz: lower = calmer at rest
     mirror_beta: float = 1.0  # higher = less lag in a fast move
+    # Ultralytics model for the objects around the hand; "" = no detector (objects stay empty)
+    detect_model: str = "yolov8n.pt"
+    # Live ROS, but synthetic objects: a sim has no camera, and the map view still needs something to show
+    mock_objects: bool = False
 
     @property
     def rosbridge_url(self) -> str:
@@ -49,4 +53,6 @@ class Settings:
             mirror_command_tolerance=float(env.get("MIRROR_COMMAND_TOLERANCE", "0.01")),
             mirror_min_cutoff=float(env.get("MIRROR_MIN_CUTOFF", "1.5")),
             mirror_beta=float(env.get("MIRROR_BETA", "1.0")),
+            detect_model=env.get("DETECT_MODEL", "yolov8n.pt").strip(),
+            mock_objects=env.get("MOCK_OBJECTS", "0") == "1",
         )

@@ -3,7 +3,8 @@
 ![Hand Console](docs/screenshot.png)
 
 A one-screen web console for the exoskeleton hand: a three.js viewport of the hand
-moving live, a RealSense panel and an iPhone (Record3D) panel that each switch between
+moving live with a map of the objects around it (detected in the wrist camera, placed with its
+depth, remembered when they leave the view), a RealSense panel and an iPhone (Record3D) panel that each switch between
 RGB and colorized depth, per-finger telemetry,
 and an ARM-gated command block. It only consumes ROS topics from `physical_layer/`,
 so it looks the same for the Gazebo sim and the real hardware.
@@ -29,21 +30,27 @@ ros2 launch htn_launch sim.launch.py
 MOCK=1 ./dev.sh         # no ROS at all: synthetic hand, color and depth
 ```
 
-`dev.sh` creates `backend/.venv` and `frontend/node_modules` on first run. Start order does
+`dev.sh` creates `backend/.venv` and `frontend/node_modules` on first run. The object
+detector is optional: `backend/.venv/bin/pip install -r backend/requirements-detect.txt
+--extra-index-url https://download.pytorch.org/whl/cpu` (CPU torch, ~300 MB); without it the
+map stays empty in live mode and the backend says so once. Start order does
 not matter: with ROS down the console shows OFFLINE / NO SIGNAL and recovers on its own.
 
 | env | default | |
 |---|---|---|
 | `MOCK` | `0` | `1` = synthesize everything |
+| `MOCK_OBJECTS` | `0` | `1` = live ROS, synthetic objects around the hand (a sim has no camera) |
+| `DETECT_MODEL` | `yolov8n.pt` | Ultralytics model that finds the objects around the hand in the RealSense image; needs `backend/requirements-detect.txt`, `""` turns it off |
 | `RECORD3D_ROTATION` | `90` | iPhone image rotation, clockwise; the panel's rotate button changes it live |
 | `RECORD3D_HOST` | empty | iPhone address, or `usb` for the cable; normally set from the iPhone panel instead |
 | `ROSBRIDGE_HOST` / `ROSBRIDGE_PORT` | `localhost` / `9090` | where rosbridge listens |
 | `BACKEND_PORT` / `FRONTEND_PORT` | `8000` / `3000` | dev.sh ports |
+| `BACKEND_HOST` | `127.0.0.1` | dev.sh bind address of the API; `0.0.0.0` from a container or for another machine |
 | `DEPTH_MIN_MM` / `DEPTH_MAX_MM` | `150` / `2000` | depth colormap range |
 | `CORS_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | pages allowed to call the API and open its websockets |
 
 Viewing from another machine needs `CORS_ORIGINS=http://<host>:3000`, `NEXT_PUBLIC_BACKEND_URL=http://<host>:8000`
-and uvicorn started with `--host 0.0.0.0`.
+and `BACKEND_HOST=0.0.0.0`.
 
 Commands only leave the page while the ARM switch is on; it disarms itself when ROS drops.
 

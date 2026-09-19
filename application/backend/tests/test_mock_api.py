@@ -33,11 +33,12 @@ def test_urdf(client):
 def test_state_shape_and_command_override(client):
     with client.websocket_connect("/ws/state") as ws:
         message = ws.receive_json()
-        assert list(message) == ["t", "ros_connected", "fingers", "joints", "state", "command", "passive", "rates"]
+        assert list(message) == ["t", "ros_connected", "fingers", "joints", "state", "command", "passive", "objects", "rates"]
         assert message["fingers"] == list(FINGERS)
         assert set(message["joints"]) == {f"{finger}_joint" for finger in FINGERS}
         assert len(message["state"]) == 5 and message["command"] is None
         assert set(message["rates"]) == set(TOPICS)
+        assert isinstance(message["objects"], list)
 
         ws.send_text(json.dumps({"type": "command", "data": [0, 1, 1, 0, 0]}))
         ws.send_text("garbage")
@@ -114,3 +115,13 @@ def test_meshes_and_linkage_come_from_the_description_package(client):
     linkage = client.get("/api/linkage").json()
     assert set(linkage) == set(FINGERS)
     assert set(linkage["thumb"]["pivots"]) == {"G0", "G1", "G2", "P", "A", "B", "M", "E", "T", "U"}
+
+
+def test_mock_objects_appear_in_the_state(client):
+    with client.websocket_connect("/ws/state") as ws:
+        for _ in range(30):
+            objects = ws.receive_json()["objects"]
+            if objects:
+                break
+        assert objects and {"bottle", "apple"} <= {o["label"] for o in objects}
+        assert all(len(o["xyz"]) == 3 and len(o["size"]) == 3 and o["age"] >= 0 for o in objects)

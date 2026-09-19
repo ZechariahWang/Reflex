@@ -12,11 +12,13 @@ import numpy as np
 from .config import MOCK_URDF_PATH
 from .depth import HEADER_BYTES
 from .hub import FINGERS, Hub, ticks
+from .objects import MockObjects
 from .record3d import encode_hue_depth
 
 JOINT_MAX_RAD = 1.25  # within every finger's max_angle in hand_params.yaml
 JOINT_RATE_HZ = 100
 CAMERA_RATE_HZ = 15
+OBJECTS_RATE_HZ = 10
 CURL_PERIOD_S = 4.0
 FINGER_PHASE_RAD = 0.9
 SLEW_PER_S = 2.5
@@ -98,6 +100,13 @@ class Scene:
         return np.hstack((encode_hue_depth(self.depth_mm(t)), self.color_bgr(t)))
 
 
+async def run_mock_objects(hub: Hub) -> None:
+    """Synthetic surroundings through the real tracker (MOCK=1, or MOCK_OBJECTS=1 next to a camera-less sim)."""
+    scene = MockObjects()
+    async for _ in ticks(1 / OBJECTS_RATE_HZ):
+        hub.on_located(scene.located(time.monotonic()))
+
+
 class MockSource:
     connected = True
 
@@ -111,7 +120,11 @@ class MockSource:
     def start(self) -> None:
         self._hub.on_urdf(MOCK_URDF_PATH.read_text())
         self._hub.iphone_rotation = 0  # the mock phone is already landscape
-        self._tasks = [asyncio.create_task(self._run_joints()), asyncio.create_task(self._run_camera())]
+        self._tasks = [
+            asyncio.create_task(self._run_joints()),
+            asyncio.create_task(self._run_camera()),
+            asyncio.create_task(run_mock_objects(self._hub)),
+        ]
 
     async def stop(self) -> None:
         for task in self._tasks:

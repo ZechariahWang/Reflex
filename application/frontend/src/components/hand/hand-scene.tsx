@@ -13,6 +13,7 @@ import { LABEL_LAYOUT, resolveHud, type HudNodes, type HudRefs } from "./hand-hu
 import { OVERLAY_LAYER, buildHandModel, type HandModel } from "./hand-model"
 import type { HandDescription } from "./use-urdf"
 import { VIEW_ANGLES, allowsAutoOrbit, type ViewPreset } from "./views"
+import { WorldLayer } from "./world-layer"
 
 const PAGE = "#f6f6f6"
 const FOV_DEG = 28
@@ -27,6 +28,8 @@ const GHOST_SETTLED = 0.15
 const GHOST_FULL_AT = 0.06
 const VIEW_RATE = 4.5
 const VIEW_DONE = 1e-3
+/** Farthest the user may pull back, as a multiple of the hand-only fit: room for the map around it. */
+const MAX_ZOOM_OUT = 9
 const AUTO_ORBIT_RESUME_MS = 3500
 /** rad/s. One idle lap takes a little under two minutes. */
 const ORBIT_SPEED = ((Math.PI * 2) / 60) * 0.55
@@ -116,8 +119,8 @@ function Studio({ model, moving }: { model: HandModel; moving: boolean }) {
         sectionSize={0.05}
         sectionThickness={1.1}
         sectionColor="#bdbdbd"
-        fadeDistance={radius * 10}
-        fadeStrength={1.2}
+        fadeDistance={radius * 24}
+        fadeStrength={1.4}
       />
     </>
   )
@@ -289,6 +292,8 @@ function CameraRig({
 
   const rig = useRef({
     goal: null as Spherical | null,
+    /** Where the camera should look; presets aim past the fingers into the map. */
+    lookAt: target.clone(),
     placed: false,
     orbitAfter: 0,
     /** Current idle orbit speed, rad/s. */
@@ -305,9 +310,11 @@ function CameraRig({
 
   useEffect(() => {
     if (!view) return
-    const { azimuth, polar } = VIEW_ANGLES[view]
-    rig.current.goal = new Spherical(fit, polar, azimuth)
-  }, [view, fit])
+    const { azimuth, polar, distance = 1, ahead = 0 } = VIEW_ANGLES[view]
+    rig.current.goal = new Spherical(fit * distance, polar, azimuth)
+    // The fingers point at +Z, so "ahead" is along it.
+    rig.current.lookAt.set(target.x, target.y, target.z + ahead)
+  }, [view, fit, target])
 
   useFrame(({ camera }, rawDt) => {
     const dt = Math.min(rawDt, MAX_FRAME_DT)
@@ -328,15 +335,18 @@ function CameraRig({
 
     const goal = state.goal
     if (goal) {
-      current.setFromVector3(offset.copy(camera.position).sub(target))
+      const k = reducedMotion ? 1 : damp(VIEW_RATE, dt)
+      // The look-at point glides with the camera, so a preset pans and dollies as one move.
+      const dLook = orbit.target.distanceTo(state.lookAt)
+      orbit.target.lerp(state.lookAt, k)
+      current.setFromVector3(offset.copy(camera.position).sub(orbit.target))
       const dTheta = MathUtils.euclideanModulo(goal.theta - current.theta + Math.PI, Math.PI * 2) - Math.PI
       const dPhi = goal.phi - current.phi
       const dRadius = goal.radius - current.radius
-      const k = reducedMotion ? 1 : damp(VIEW_RATE, dt)
       current.set(current.radius + dRadius * k, current.phi + dPhi * k, current.theta + dTheta * k)
-      camera.position.setFromSpherical(current).add(target)
+      camera.position.setFromSpherical(current).add(orbit.target)
       orbit.update()
-      if (Math.abs(dTheta) + Math.abs(dPhi) + Math.abs(dRadius) / goal.radius < VIEW_DONE) state.goal = null
+      if (Math.abs(dTheta) + Math.abs(dPhi) + (Math.abs(dRadius) + dLook) / goal.radius < VIEW_DONE) state.goal = null
     }
 
     // Idle orbit, advanced by elapsed time. OrbitControls' own autoRotate turns a fixed angle per
@@ -344,9 +354,9 @@ function CameraRig({
     const idle = !goal && !reducedMotion && allowsAutoOrbit(view) && performance.now() > state.orbitAfter
     state.spin += ((idle ? ORBIT_SPEED : 0) - state.spin) * damp(ORBIT_EASE_RATE, dt)
     if (state.spin > ORBIT_SPEED * 1e-3) {
-      current.setFromVector3(offset.copy(camera.position).sub(target))
+      current.setFromVector3(offset.copy(camera.position).sub(orbit.target))
       current.theta -= state.spin * dt
-      camera.position.setFromSpherical(current).add(target)
+      camera.position.setFromSpherical(current).add(orbit.target)
       orbit.update()
     } else {
       state.spin = 0
@@ -368,7 +378,7 @@ function CameraRig({
       group.setAttribute("opacity", (0.3 + 0.7 * (seen.z * 0.5 + 0.5)).toFixed(2))
     }
 
-    current.setFromVector3(offset.copy(camera.position).sub(target))
+    current.setFromVector3(offset.copy(camera.position).sub(orbit.target))
     const azimuth = Math.round(MathUtils.euclideanModulo(MathUtils.radToDeg(current.theta), 360)) % 360
     const elevation = 90 - MathUtils.radToDeg(current.phi)
     const pad = (value: number) => String(Math.round(value)).padStart(3, "0")
@@ -390,7 +400,7 @@ function CameraRig({
       rotateSpeed={0.7}
       zoomSpeed={0.6}
       minDistance={fit * 0.55}
-      maxDistance={fit * 2}
+      maxDistance={fit * MAX_ZOOM_OUT}
       minPolarAngle={VIEW_ANGLES.top.polar}
       maxPolarAngle={Math.PI / 2}
       onStart={() => {
@@ -428,6 +438,8 @@ function Stage({ description, view, ghost, reducedMotion, hud, onFreeLook }: Han
       {/* The rig moves the camera first, so the labels project through this frame's view. */}
       <CameraRig model={models.solid} view={view} reducedMotion={reducedMotion} hud={hud} onFreeLook={onFreeLook} />
       <Hand solid={models.solid} ghost={models.ghost} ghostEnabled={ghost} hud={hud} onMovingChange={setMoving} />
+      {/* After the hand: its camera_link must be in the scene before objects are portalled into it. */}
+      <WorldLayer model={models.solid} hud={hud} />
     </>
   )
 }

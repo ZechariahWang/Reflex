@@ -4,10 +4,11 @@ import { createRef, useState, type RefObject } from "react"
 
 import { Toggle } from "@/components/ui/toggle"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { FINGERS, TOPIC_NAMES, type Finger } from "@/lib/types"
+import { FINGERS, TOPIC_NAMES, type Finger, type TrackedObject } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 import { VIEW_PRESETS, type ViewPreset } from "./views"
+import { RADAR_RADIUS, RADAR_RANGE_M, RANGE_RINGS_M, shortLabel } from "./world-layer"
 
 /**
  * DOM nodes the three.js scene writes to every frame (positions, numbers),
@@ -17,6 +18,10 @@ export interface HudRefs {
   labels: RefObject<HTMLDivElement | null>
   gizmo: RefObject<SVGSVGElement | null>
   readout: RefObject<HTMLSpanElement | null>
+  /** Object callouts; the world layer positions every `[data-object]`. */
+  objects: RefObject<HTMLDivElement | null>
+  /** Top-down radar; the world layer moves every `[data-object]` group. */
+  radar: RefObject<SVGSVGElement | null>
 }
 
 /** One stable set of refs for the lifetime of the viewport. */
@@ -25,6 +30,8 @@ export function useHudRefs(): HudRefs {
     labels: createRef<HTMLDivElement>(),
     gizmo: createRef<SVGSVGElement>(),
     readout: createRef<HTMLSpanElement>(),
+    objects: createRef<HTMLDivElement>(),
+    radar: createRef<SVGSVGElement>(),
   }))
   return refs
 }
@@ -245,4 +252,93 @@ export function AxisGizmo({ gizmoRef }: { gizmoRef: HudRefs["gizmo"] }) {
 /** Camera azimuth / elevation / distance, written by the scene. */
 export function CameraReadout({ readoutRef }: { readoutRef: HudRefs["readout"] }) {
   return <span ref={readoutRef} className="label-micro num" />
+}
+
+/**
+ * Callouts for the objects around the hand: a dot on each one and a chip with its label,
+ * distance and how long ago it was seen. The world layer moves them and fills the numbers;
+ * an object in view has the accent, a remembered one is drawn in ink and fades with age.
+ */
+export function ObjectLabels({ objectsRef, objects, stale }: { objectsRef: HudRefs["objects"]; objects: TrackedObject[]; stale: boolean }) {
+  return (
+    <div
+      ref={objectsRef}
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute inset-0 overflow-hidden transition-opacity duration-700",
+        stale && "opacity-40",
+      )}
+    >
+      {objects.map((object) => (
+        <span
+          key={object.id}
+          data-object={object.id}
+          data-part="dot"
+          className="absolute -top-[3px] -left-[3px] size-1.5 rounded-full border border-ink bg-surface opacity-0 will-change-transform data-[seen=1]:border-signal data-[seen=1]:bg-signal"
+        />
+      ))}
+      {objects.map((object) => (
+        <div
+          key={object.id}
+          data-object={object.id}
+          data-part="chip"
+          className="group absolute top-0 left-0 flex w-[8.5rem] flex-col gap-1 border border-hairline bg-surface px-1.5 py-1 whitespace-nowrap opacity-0 will-change-transform data-[seen=1]:border-ink/40"
+        >
+          <span className="flex items-baseline justify-between gap-2">
+            <span className="label-micro truncate text-ink">{shortLabel(object)}</span>
+            <span data-distance className="num text-[11px] leading-none text-ink" />
+          </span>
+          <span className="flex items-center justify-between gap-2">
+            <span data-age className="label-micro tracking-normal normal-case group-data-[seen=1]:text-signal" />
+            <span className="label-micro num tracking-normal">{Math.round(object.confidence * 100)}%</span>
+          </span>
+          <span className="relative h-px w-full bg-hairline">
+            <span data-bar className="absolute inset-0 origin-left bg-ink transition-none group-data-[seen=1]:bg-signal" />
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Top-down map: the hand at the centre pointing up, the same range rings as the ground, and a
+ * dot per object that the world layer moves (the accent while in view). Objects beyond the outer
+ * ring sit on its edge.
+ */
+export function Radar({ radarRef, objects }: { radarRef: HudRefs["radar"]; objects: TrackedObject[] }) {
+  const scale = RADAR_RADIUS / RADAR_RANGE_M
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <svg
+        ref={radarRef}
+        aria-label="Objects around the hand, top-down"
+        viewBox="-50 -50 100 100"
+        className="size-[6.5rem] overflow-visible font-mono text-[7px] text-ink-soft"
+      >
+        <circle r={RADAR_RADIUS} className="fill-surface/70 stroke-hairline" strokeWidth="1" />
+        {RANGE_RINGS_M.map((radius) => (
+          <g key={radius}>
+            <circle r={radius * scale} fill="none" className="stroke-ink/15" strokeWidth="0.75" />
+            <text x={radius * scale + 1.5} y="-1.5" fill="currentColor" className="text-[6px]">
+              {radius < 1 ? `${Math.round(radius * 100)}` : "1m"}
+            </text>
+          </g>
+        ))}
+        <line x1="0" y1={-RADAR_RADIUS} x2="0" y2={RADAR_RADIUS} className="stroke-ink/10" strokeWidth="0.75" />
+        <line x1={-RADAR_RADIUS} y1="0" x2={RADAR_RADIUS} y2="0" className="stroke-ink/10" strokeWidth="0.75" />
+        {/* The hand: a small wedge, fingers up. */}
+        <path d="M0,-4.5 L3,3 L0,1.2 L-3,3 Z" className="fill-ink" />
+        {objects.map((object) => (
+          // Dots only: the chips in the scene carry the names, and clustered labels would pile up here.
+          <g key={object.id} data-object={object.id} opacity="0" className="[&[data-seen='1']_circle]:fill-signal [&[data-seen='1']_circle]:stroke-signal">
+            <circle r="2" className="fill-surface stroke-ink" strokeWidth="1" />
+          </g>
+        ))}
+      </svg>
+      <span className="label-micro pl-1">
+        {objects.length === 0 ? "no objects" : `${objects.length} object${objects.length === 1 ? "" : "s"}`}
+      </span>
+    </div>
+  )
 }

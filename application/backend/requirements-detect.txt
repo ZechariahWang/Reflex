@@ -1,0 +1,4 @@
+# Optional: the object detector behind the map view (DETECT_MODEL, default yolov8n.pt).
+# CPU torch is enough for yolov8n at a few Hz:
+#   .venv/bin/pip install -r requirements-detect.txt --extra-index-url https://download.pytorch.org/whl/cpu
+ultralytics==8.3.63

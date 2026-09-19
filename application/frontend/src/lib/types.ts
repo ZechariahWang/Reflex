@@ -11,7 +11,7 @@ export const JOINT_MAX_RAD = 1.57
 /** Five values in finger order, each 0 (open) .. 1 (closed). */
 export type FingerValues = [number, number, number, number, number]
 
-export type TopicKey = "joint_states" | "hand_state" | "hand_command" | "color" | "depth" | "iphone"
+export type TopicKey = "joint_states" | "hand_state" | "hand_command" | "color" | "depth" | "iphone" | "objects"
 
 /** ROS topic behind each key, for labels and tags. */
 export const TOPIC_NAMES: Record<TopicKey, string> = {
@@ -21,6 +21,24 @@ export const TOPIC_NAMES: Record<TopicKey, string> = {
   color: "/camera/color/image_raw/compressed",
   depth: "/camera/aligned_depth_to_color/image_raw/compressedDepth",
   iphone: "record3d wi-fi stream",
+  objects: "detector",
+}
+
+/**
+ * One object tracked around the hand, in the wrist camera's frame (`camera_link`: x forward,
+ * y left, z up), metres. The camera is fixed to the hand, so this is a position relative to it.
+ */
+export interface TrackedObject {
+  id: number
+  label: string
+  xyz: [number, number, number]
+  /** Extent on the same axes. */
+  size: [number, number, number]
+  confidence: number
+  /** Seconds since the last detection; grows while the object is remembered out of view. */
+  age: number
+  /** Detections so far. */
+  hits: number
 }
 
 /** Messages per second received from ROS, per topic. */
@@ -40,6 +58,8 @@ export interface StateMessage {
   command: FingerValues | null
   /** Backdrive mode: the HAL has the torque off, a person moves the fingers, commands are ignored. */
   passive: boolean
+  /** The surroundings: objects the backend currently tracks (empty without a detector). */
+  objects: TrackedObject[]
   rates: TopicRates
 }
 

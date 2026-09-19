@@ -7,11 +7,11 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { Panel, PanelNotice } from "@/components/console/panel"
 import type { Status } from "@/components/console/status-dot"
 import { useHealth } from "@/hooks/use-health"
-import { selectIsLive, selectStatus, useSimStore, type SimStore } from "@/lib/sim-store"
+import { selectIsLive, selectObjects, selectStatus, useSimStore, type SimStore } from "@/lib/sim-store"
 import { TOPIC_NAMES } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-import { AxisGizmo, CameraReadout, GhostToggle, TipLabels, ViewPresets, useHudRefs } from "./hand-hud"
+import { AxisGizmo, CameraReadout, GhostToggle, ObjectLabels, Radar, TipLabels, ViewPresets, useHudRefs } from "./hand-hud"
 import { SceneBoundary } from "./scene-boundary"
 import { useUrdf } from "./use-urdf"
 import type { ViewPreset } from "./views"
@@ -62,9 +62,18 @@ export function HandViewport() {
   const [failed, setFailed] = useState(false)
   const sceneFailed = useCallback(() => setFailed(true), [])
 
+  const objects = useSimStore(selectObjects)
+
   const [view, setView] = useState<ViewPreset | null>("iso")
   const [ghost, setGhost] = useState(true)
   const freeLook = useCallback(() => setView(null), [])
+  // The first objects to appear pull the camera back into the map view, once; after that the
+  // presets are the user's. (State derived during render, as React recommends over an effect.)
+  const [mapShown, setMapShown] = useState(false)
+  if (!mapShown && objects.length > 0) {
+    setMapShown(true)
+    if (view === "iso") setView("chase")
+  }
 
   const ready = webgl && !failed && urdf !== null
   const linked = socket === "open"
@@ -102,7 +111,7 @@ export function HandViewport() {
           </span>
           <span className="flex shrink-0 items-center gap-4">
             {ready && <CameraReadout readoutRef={hud.readout} />}
-            <span>Grid 10 mm</span>
+            <span>Grid 10 mm · Rings 25 cm</span>
           </span>
         </>
       }
@@ -133,6 +142,7 @@ export function HandViewport() {
             animate={{ opacity: 1 }}
             transition={{ ...FADE, delay: 0.5 }}
           >
+            <ObjectLabels objectsRef={hud.objects} objects={objects} stale={!live} />
             <TipLabels labelsRef={hud.labels} stale={!live} />
             <div className="pointer-events-auto absolute top-3 left-3">
               <ViewPresets view={view} onChange={setView} />
@@ -140,8 +150,9 @@ export function HandViewport() {
             <div className="pointer-events-auto absolute top-3 right-3">
               <GhostToggle enabled={ghost} hasCommand={hasCommand} onChange={setGhost} />
             </div>
-            <div className="absolute bottom-2 left-3">
+            <div className="absolute bottom-2 left-3 flex items-end gap-4">
               <AxisGizmo gizmoRef={hud.gizmo} />
+              <Radar radarRef={hud.radar} objects={objects} />
             </div>
           </motion.div>
         </>

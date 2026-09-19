@@ -65,6 +65,7 @@ Finger order everywhere: `thumb, index, middle, ring, pinky`.
 | `/hand/state` | `std_msgs/Float64MultiArray` | 5 x 0..1 measured, finger order. 50 Hz. |
 | `/hand/command` | `std_msgs/Float64MultiArray` | 5 x 0..1 target, finger order. Publishing here moves the hand (the HAL clamps + rate-limits). |
 | `/camera/color/image_raw/compressed` | `sensor_msgs/CompressedImage` | JPEG, 640x480, 15 Hz, ~55 KB. `data` is base64 over rosbridge. |
+| `/camera/aligned_depth_to_color/camera_info` | `sensor_msgs/CameraInfo` | Intrinsics of the aligned depth (= the colour stream). ROS 2 spells the matrix `k`. Subscribed at 1 Hz; the object placement needs `fx fy cx cy`. |
 | `/camera/aligned_depth_to_color/image_raw/compressedDepth` | `sensor_msgs/CompressedImage` | format `16UC1; compressedDepth`. `data` = **12-byte header, then a 16-bit grayscale PNG** (PNG magic `89 50 4E 47` at offset 12). Pixel value = depth in millimetres, 0 = no reading. 640x480, pixel-aligned to the color image, 15 Hz, ~20 KB. |
 
 rosbridge subscribe rules: **always pass `queue_length=1` together with `throttle_rate`** (throttle without a queue length silently drops to ~1.6 Hz). Measured fine: joint states at 30-100 Hz alongside both image streams at 15 Hz, rosbridge at ~12 % CPU. Use `throttle_rate=16` for joint/hand state (the viewer animates from them) and `66` for images.
@@ -73,7 +74,7 @@ The camera may be absent (`camera:=none`) and ROS may be down entirely; both are
 
 ## Backend API (port 8000)
 
-Env: `ROSBRIDGE_HOST` (default `localhost`), `ROSBRIDGE_PORT` (`9090`), `RECORD3D_HOST` (an address or `usb`; default empty = wait for the UI to set one), `MOCK` (`0`; `1` = no ROS at all, synthesize everything, for UI work and tests), `CORS_ORIGINS` (default `http://localhost:3000,http://127.0.0.1:3000`; also the allow-list for websocket `Origin` headers - a browser page from anywhere else is closed with 1008, clients that send no Origin are accepted).
+Env: `ROSBRIDGE_HOST` (default `localhost`), `ROSBRIDGE_PORT` (`9090`), `RECORD3D_HOST` (an address or `usb`; default empty = wait for the UI to set one), `MOCK` (`0`; `1` = no ROS at all, synthesize everything, for UI work and tests), `DETECT_MODEL` (`yolov8n.pt`; an Ultralytics model for the objects around the hand, `""` = off; needs `requirements-detect.txt`, otherwise one warning and no objects), `MOCK_OBJECTS` (`0`; `1` = live ROS but synthetic objects, for a sim that has no camera), `CORS_ORIGINS` (default `http://localhost:3000,http://127.0.0.1:3000`; also the allow-list for websocket `Origin` headers - a browser page from anywhere else is closed with 1008, clients that send no Origin are accepted).
 
 The backend reconnects to rosbridge forever with backoff and never exits because ROS is down.
 
@@ -102,12 +103,19 @@ Server -> client, JSON text, one message every 16.7 ms (60 Hz, one per display f
 {"t": 1789796072.667,
  "ros_connected": true,
  "fingers": ["thumb","index","middle","ring","pinky"],
+ "objects": [],
  "joints":  {"thumb_joint": 1.57, "index_joint": 0.0, "middle_joint": 0.0, "ring_joint": 0.0, "pinky_joint": 0.0},
  "state":   [1.0, 0.0, 0.0, 0.0, 0.0],
  "command": [1.0, 0.0, 0.0, 0.0, 0.0],
- "rates":   {"joint_states": 99.8, "hand_state": 50.0, "hand_command": 0.0, "color": 15.0, "depth": 15.0, "iphone": 30.0}}
+ "rates":   {"joint_states": 99.8, "hand_state": 50.0, "hand_command": 0.0, "color": 15.0, "depth": 15.0, "iphone": 30.0, "objects": 8.0}}
 ```
-`passive` (bool, also in the JSON above as `"passive": false`) mirrors the HAL's latched `/hand/passive`: torque off, a person moves the fingers, `/hand/command` is ignored. `joints` are radians by joint name; `state`/`command` are 0..1 in finger order (`command` is `null` until someone has published one). When ROS is down, keep sending with `ros_connected: false` and the last known values.
+`passive` (bool, also in the JSON above as `"passive": false`) mirrors the HAL's latched `/hand/passive`: torque off, a person moves the fingers, `/hand/command` is ignored.
+
+`objects` (also in the JSON above, between `passive` and `rates`) is the surroundings: every object the backend currently tracks, oldest first.
+```json
+"objects": [{"id": 3, "label": "bottle", "xyz": [0.42, 0.11, -0.03], "size": [0.07, 0.07, 0.22], "confidence": 0.86, "age": 0.0, "hits": 41}]
+```
+`xyz` and `size` are metres in the wrist camera's frame, `camera_link` of the URDF (x forward, y left, z up). The camera is fixed to the hand, so this is a position relative to the hand, and the viewer hangs the objects under that link. `age` is seconds since the last detection: `0` = in view; a track that leaves the view is remembered where it was last seen for ~12 s and then dropped (`app/objects.py`). Nothing here knows how the hand moved meanwhile (see the ego-motion note in `docs/system-design.md`). The pipeline: `DETECT_MODEL` (Ultralytics YOLO on the CPU) on the colour JPEG -> median aligned depth under the middle of each box -> pinhole projection with the `camera_info` intrinsics (a D435 default until it arrives) -> a nearest-neighbour tracker with a 20 cm gate per label; `rates.objects` is the detector's pass rate. `MOCK=1` and `MOCK_OBJECTS=1` feed the same tracker with a synthetic table of objects, one of which leaves the view for a few seconds of every cycle. `joints` are radians by joint name; `state`/`command` are 0..1 in finger order (`command` is `null` until someone has published one). When ROS is down, keep sending with `ros_connected: false` and the last known values.
 
 Client -> server, JSON text:
 ```json
@@ -169,7 +177,7 @@ No rosbridge connection. Joints: each finger curls on its own smooth, phase-shif
 - `src/components/console/panel.tsx` - `<Panel index="01" title="Hand" tag="/joint_states" status=... actions=...>`: the framed viewport chrome every panel uses.
 
 ### Components (each owned by exactly one build agent)
-- `src/components/hand/hand-viewport.tsx` -> `export function HandViewport()`
+- `src/components/hand/hand-viewport.tsx` -> `export function HandViewport()`. The map: `world-layer.tsx` draws range rings (25 cm, 50 cm, 1 m) on the ground and, per tracked object, an outline box portalled under the model's `camera_link`, a drop line and footprint on the ground, a label chip and a dot on the radar (`hand-hud.tsx`); an object in view carries the accent, a remembered one fades with `age`. The `chase` preset sits over the wrist looking past the fingers, and the first objects to appear switch to it once.
 - `src/components/camera/camera-viewport.tsx` -> `export function CameraViewport({source}: {source: 'realsense' | 'iphone'})`; the RGB / DEPTH toggle lives in the panel header
 - `src/components/telemetry/telemetry-strip.tsx` -> `export function TelemetryStrip()`; its command block has the Arm, Backdrive and Mirror switches
 - `src/components/mirror/mirror-panel.tsx` -> `export function MirrorPanel()`: panel 02, ALWAYS on the page next to the 3D hand, so the controller sees their tracked hand and the robot hand's answer together. While the Mirror switch is on it is `MirrorViewport` (the controller's webcam with the tracked skeleton, the guided calibration, controller / command / state bars); while it is off it is an idle notice. The webcam and `/ws/mirror` exist only while the switch is on (`MirrorViewport` owns both): an always-visible panel must not become an always-on camera that commands the hand.

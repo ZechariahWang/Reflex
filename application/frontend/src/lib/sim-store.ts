@@ -4,7 +4,7 @@ import { create } from "zustand"
 import { WS } from "@/lib/config"
 import { FingerHistory } from "@/lib/finger-history"
 import { backoffDelay, closeQuietly } from "@/lib/socket"
-import { FINGERS, type CommandMessage, type FingerValues, type StateMessage } from "@/lib/types"
+import { FINGERS, type CommandMessage, type FingerValues, type StateMessage, type TrackedObject } from "@/lib/types"
 
 /** Rate of /ws/state. */
 export const STATE_HZ = 60
@@ -79,7 +79,8 @@ function isStateMessage(value: unknown): value is StateMessage {
     Array.isArray(candidate.state) &&
     candidate.state.length === FINGERS.length &&
     typeof candidate.joints === "object" &&
-    candidate.joints !== null
+    candidate.joints !== null &&
+    Array.isArray(candidate.objects)
   )
 }
 
@@ -154,6 +155,10 @@ export function useSimConnection(): void {
 export const selectStatus = (s: SimStore): ConnectionStatus => s.status
 export const selectSnapshot = (s: SimStore): StateMessage | null => s.snapshot
 export const selectPassive = (s: SimStore): boolean => s.snapshot?.passive ?? false
+const NO_OBJECTS: TrackedObject[] = []
+export const selectObjects = (s: SimStore): TrackedObject[] => s.snapshot?.objects ?? NO_OBJECTS
+/** Which objects exist, as one string: components that key children by id re-render only when the set changes. */
+export const selectObjectIds = (s: SimStore): string => (s.snapshot?.objects ?? NO_OBJECTS).map((o) => o.id).join(",")
 export const selectRosConnected = (s: SimStore): boolean => s.snapshot?.ros_connected ?? false
 /** Socket open and ROS reachable: hand data is flowing. */
 export const selectIsLive = (s: SimStore): boolean => s.status === "open" && selectRosConnected(s)

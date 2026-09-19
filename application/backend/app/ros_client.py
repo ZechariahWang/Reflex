@@ -25,6 +25,8 @@ RECONNECT_MAX_S = 5.0
 
 COLOR_TOPIC = "/camera/color/image_raw/compressed"
 DEPTH_TOPIC = "/camera/aligned_depth_to_color/image_raw/compressedDepth"
+CAMERA_INFO_TOPIC = "/camera/aligned_depth_to_color/camera_info"
+CAMERA_INFO_THROTTLE_MS = 1000  # intrinsics do not change; one a second is plenty
 MULTI_ARRAY = "std_msgs/Float64MultiArray"
 COMPRESSED_IMAGE = "sensor_msgs/CompressedImage"
 
@@ -67,6 +69,8 @@ class RosClient:
         self._subscribe(
             ros, DEPTH_TOPIC, COMPRESSED_IMAGE, IMAGE_THROTTLE_MS, lambda m: hub.on_depth(base64.b64decode(m["data"]))
         )
+
+        self._subscribe(ros, CAMERA_INFO_TOPIC, "sensor_msgs/CameraInfo", CAMERA_INFO_THROTTLE_MS, hub.on_camera_info)
 
         # Latched by the HAL: true while the torque is off and the fingers are backdriven
         self._subscribe(ros, "/hand/passive", "std_msgs/Bool", 0, lambda m: hub.on_passive(m["data"]))

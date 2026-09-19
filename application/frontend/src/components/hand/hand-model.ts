@@ -25,6 +25,8 @@ export type HandVariant = "solid" | "ghost"
 
 /** Every launch file roots the hand here; `world` and its mount exist in sim only. */
 const HAND_ROOT_LINK = "base_link"
+/** The RealSense's frame in the URDF; the backend places objects in it. */
+const CAMERA_LINK = "camera_link"
 
 /** Layer for everything that must not end up in the contact-shadow pass (lines, the ghost). */
 export const OVERLAY_LAYER = 1
@@ -75,6 +77,8 @@ export interface FingerRig {
 export interface HandModel {
   /** Y-up wrapper, positioned so the ground is y = 0 and the hand is centred over the origin. */
   root: Group
+  /** The wrist camera's frame (`camera_link`, ROS style: x forward, y left, z up); tracked objects hang here. */
+  cameraLink: Object3D | null
   fingers: FingerRig[]
   /** Bounds over the whole joint travel, in world space. */
   bounds: Sphere
@@ -263,6 +267,7 @@ export function buildHandModel(description: HandDescription, variant: HandVarian
 
   return {
     root,
+    cameraLink: robot.links[CAMERA_LINK] ?? null,
     fingers,
     bounds: box.getBoundingSphere(new Sphere()),
     top: box.max.y,

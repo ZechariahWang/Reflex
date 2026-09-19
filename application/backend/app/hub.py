@@ -15,18 +15,20 @@ import time
 from collections import deque
 from typing import AsyncIterator, Protocol, Sequence
 
+import cv2
 import numpy as np
 from av import VideoFrame
 
 from . import record3d
 from .config import Settings
-from .depth import Colorizer
+from .depth import Colorizer, decode
 from .frames import Frame, LatestChannel, jpeg_size
+from .objects import Detector, Intrinsics, Located, Tracker, locate, make_detector
 
 LOGGER = logging.getLogger(__name__)
 
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
-TOPICS = ("joint_states", "hand_state", "hand_command", "color", "depth", "iphone")
+TOPICS = ("joint_states", "hand_state", "hand_command", "color", "depth", "iphone", "objects")
 CAMERA_SOURCES = ("realsense", "iphone")
 CAMERA_KINDS = ("color", "depth")
 RATE_WINDOW_S = 2.0
@@ -135,6 +137,8 @@ class Hub:
         self._command: list[float] | None = None
         self._passive = False
         self._urdf: str | None = None
+        self._tracker = Tracker()
+        self._intrinsics: Intrinsics | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._colorizer = Colorizer(settings.depth_min_mm, settings.depth_max_mm)
         self._depth_payloads: LatestChannel[bytes] = LatestChannel()
@@ -183,6 +187,22 @@ class Hub:
     def on_urdf(self, xml: str) -> None:
         with self._lock:
             self._urdf = xml
+
+    def on_camera_info(self, message: dict) -> None:
+        """Intrinsics of the colour stream (the aligned depth shares them); a bad message keeps the old ones."""
+        try:
+            intrinsics = Intrinsics.from_camera_info(message)
+        except (KeyError, IndexError, TypeError, ValueError):
+            return
+        with self._lock:
+            self._intrinsics = intrinsics
+
+    def on_located(self, located: Sequence[Located]) -> None:
+        """One detection pass (real or synthetic) -> the tracks; counted as the `objects` rate."""
+        now = time.monotonic()
+        with self._lock:
+            self._meters["objects"].tick(now)
+            self._tracker.update(located, now)
 
     def on_color(self, jpeg: bytes) -> None:
         self._tick("color")
@@ -252,6 +272,42 @@ class Hub:
             if depth is not None:
                 channels["depth"].publish(depth)
 
+    async def run_object_worker(self, model: str) -> None:
+        """Detect in the newest colour frame, place with the newest depth, in a worker thread.
+
+        Runs at whatever rate the detector manages; frames that arrive meanwhile are skipped, never
+        queued. Without a depth image nothing can be placed, so that pass is skipped too.
+        """
+        detector = await asyncio.to_thread(make_detector, model)
+        if detector is None:
+            return
+        seen = 0
+        while True:
+            seen, frame = await self.frames["realsense"]["color"].next(seen)
+            payload = self._depth_payloads.latest
+            if payload is None:
+                continue
+            try:
+                located = await asyncio.to_thread(self._detect_and_locate, detector, frame.data, payload)
+            except ValueError as error:
+                LOGGER.warning("dropping detection pass: %s", error)
+                continue
+            except Exception:  # no single frame may end the loop
+                LOGGER.exception("dropping detection pass")
+                continue
+            self.on_located(located)
+
+    def _detect_and_locate(self, detector: Detector, jpeg: bytes, payload: bytes) -> list[Located]:
+        bgr = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
+        if bgr is None:
+            raise ValueError("colour frame is not a decodable image")
+        depth = decode(payload)
+        with self._lock:
+            intrinsics = self._intrinsics
+        intrinsics = intrinsics or Intrinsics.default(bgr.shape[1], bgr.shape[0])
+        placed = (locate(detection, depth, intrinsics) for detection in detector.detect(bgr))
+        return [item for item in placed if item is not None]
+
     @property
     def hand_state(self) -> list[float]:
         with self._lock:
@@ -273,6 +329,7 @@ class Hub:
                 "state": list(self._state),
                 "command": None if self._command is None else list(self._command),
                 "passive": self._passive,
+                "objects": self._tracker.objects(now),
                 "rates": {topic: meter.hz(now) for topic, meter in self._meters.items()},
             }
 

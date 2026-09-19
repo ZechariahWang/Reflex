@@ -21,7 +21,7 @@ from .hub import CAMERA_KINDS, CAMERA_SOURCES, Hub, Source, parse_command, parse
 from .frames import LatestChannel
 from .mirror.session import MirrorSession, Tracker, parse_calibrate
 from .mirror.synthetic import MockTracker
-from .mock import MockSource
+from .mock import MockSource, run_mock_objects
 from .record3d import ROTATIONS, Record3DClient, normalize_host
 from .ros_client import RosClient
 
@@ -114,6 +114,10 @@ def create_app(settings: Settings) -> FastAPI:
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         hub.bind(asyncio.get_running_loop())
         workers = [asyncio.create_task(hub.run_depth_worker()), asyncio.create_task(hub.run_iphone_worker())]
+        if not settings.mock:
+            workers.append(asyncio.create_task(hub.run_object_worker(settings.detect_model)))
+            if settings.mock_objects:
+                workers.append(asyncio.create_task(run_mock_objects(hub)))
         source.start()
         if not settings.mock:
             phone.start()

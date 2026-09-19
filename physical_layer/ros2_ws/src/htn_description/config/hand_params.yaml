@@ -80,7 +80,7 @@ sim_mount:
 # horn angle. Fingers still on open_step 2048 are guesses.
 servos:
   torque_limit: 600    # 0..1000, drive duty cap in free motion (speed AND stall torque)
-  hold_torque: 120     # the same while a finger is blocked: the force it keeps pushing with
+  hold_torque: 60     # the same while a finger is blocked: the force it keeps pushing with
   thumb:  {id: 1, open_step: 1496, closed_step: 2157}
   index:  {id: 2, open_step: 2028, closed_step: 1213}
   middle: {id: 3, open_step: 1760, closed_step: 929}

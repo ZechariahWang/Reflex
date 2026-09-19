@@ -88,14 +88,16 @@ servos:
   pinky:  {id: 5, open_step: 2146, closed_step: 3234}
 
 # Contact stop (hal/contact.py, design in docs/specs/hal-safety-design.md): a finger
-# that meets resistance gets hold_torque and a frozen setpoint. Resistance = the motor
-# current stays above blocked_current, or (encoder rule, the fallback) it has to move and
+# that meets resistance gets hold_torque and a frozen setpoint. Resistance = the mA above
+# blocked_current, summed over the cycles (a cycle below it takes its shortfall off again),
+# reach blocked_excess, or (encoder rule, the fallback) it has to move and
 # does not. In finger travel (0..1) and HAL cycles (50 Hz). blocked_current was found on the
 # hand with `servo_tool probe`; the encoder values are NOT tuned on the hand yet.
 contact_stop:
   enabled: true
   blocked_current: 100   # mA; remove the line to use the encoder rule alone
-  current_cycles: 5      # 0.1 s above it in a row: the peak of a start is shorter
+  blocked_excess: 150    # mA: one cycle at 250 mA, or 3 at 150. On the hand a free start of the
+                         # middle finger summed to 34, a push against it to 162 in 3 cycles
   blocked_error: 0.06    # further than this from the setpoint = it has to move
   blocked_motion: 0.004  # less travel than this over blocked_cycles = it does not
   blocked_cycles: 10     # 0.2 s

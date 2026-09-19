@@ -52,15 +52,22 @@ def test_released_by_a_command_the_other_way_or_by_the_obstacle_going_away(direc
 
 
 def test_current_above_the_threshold_blocks_where_the_encoder_rule_is_blind():
-    contact = ContactDetector(0.06, 0.004, 10, 0.03, blocked_current=100, current_cycles=5)
+    contact = ContactDetector(0.06, 0.004, 10, 0.03, blocked_current=100, blocked_excess=150)
     # 0.03 from the setpoint (< blocked_error) and still creeping: the encoder rule never fires
-    states = [contact.update(0.53 + 0.003 * n, 0.50 + 0.003 * n, 0.6, current=150) for n in range(5)]
-    assert states == [FREE] * 4 + [BLOCKED] and contact.direction == 1.0
+    states = [contact.update(0.53 + 0.003 * n, 0.50 + 0.003 * n, 0.6, current=150) for n in range(3)]
+    assert states == [FREE, FREE, BLOCKED] and contact.direction == 1.0
 
 
-def test_a_short_current_peak_or_no_current_reading_does_not_block():
-    contact = ContactDetector(0.06, 0.004, 10, 0.03, blocked_current=100, current_cycles=5)
-    for current in [300, 300, 300, 300, 20] * 4 + [None] * 10:
+def test_one_huge_cycle_blocks_at_once():
+    contact = ContactDetector(0.06, 0.004, 10, 0.03, blocked_current=100, blocked_excess=150)
+    assert contact.update(0.52, 0.50, 0.6, current=90) == FREE
+    assert contact.update(0.52, 0.50, 0.6, current=260) == BLOCKED
+
+
+def test_the_peak_of_a_free_start_drains_away_and_no_current_reading_does_not_block():
+    contact = ContactDetector(0.06, 0.004, 10, 0.03, blocked_current=100, blocked_excess=150)
+    # the middle finger on the hand, a free start, again and again: 34 mA over, then well below
+    for current in [91, 110, 104, 110, 110, 78, 65] * 10 + [None] * 10:
         assert contact.update(0.52, 0.50, 0.6, current=current) == FREE
 
 

@@ -68,12 +68,13 @@ def jog(bus, servo_id, torque):
         print()
 
 
-def probe(bus, servo_id, torque, speed, params_file, rate=50.0, stop_current=None, stop_cycles=5):
+def probe(bus, servo_id, torque, speed, params_file, rate=50.0, stop_current=None, stop_excess=150):
     """Close, hold, open one finger the way the HAL does (a swept goal, `speed` in finger travel
     per second) and log what the servo reports, to choose the contact stop's current threshold:
     run it once with the finger free and once blocked by hand. The HAL must not be running.
-    With `stop_current` (mA) it tries that threshold the way the contact stop uses it: above
-    it for `stop_cycles` samples in a row, the finger stops where it is for the rest of the phase."""
+    With `stop_current` (mA) it tries that threshold the way the contact stop uses it (hal/contact.py):
+    the mA above it, summed over the samples, reach `stop_excess` -> the finger stops where it is
+    for the rest of the phase."""
     servos = load_hand_params(params_file)['servos']
     finger, servo = next((name, s) for name, s in servos.items() if isinstance(s, dict) and s['id'] == servo_id)
     open_step, closed_step = servo['open_step'], servo['closed_step']
@@ -88,7 +89,7 @@ def probe(bus, servo_id, torque, speed, params_file, rate=50.0, stop_current=Non
     start = time.monotonic()
     try:
         for phase, target, seconds in phases:
-            over, target = 0, goal if target is None else target
+            excess, target = 0.0, goal if target is None else target
             for _ in range(int(seconds * rate)):
                 goal += min(max(target - goal, -step), step)
                 bus.write(servo_id, feetech.ADDR_GOAL_POSITION, u16(round(goal)))
@@ -97,8 +98,9 @@ def probe(bus, servo_id, torque, speed, params_file, rate=50.0, stop_current=Non
                 load = from_sign_magnitude(data[4:6], 10)
                 current = from_sign_magnitude(data[13:15], 15) * feetech.CURRENT_MA
                 currents[phase].append(abs(current))
-                over = over + 1 if stop_current is not None and abs(current) >= stop_current else 0
-                if over == stop_cycles and target != goal:
+                if stop_current is not None:
+                    excess = max(0.0, excess + abs(current) - stop_current)
+                if excess >= stop_excess and target != goal:
                     target = goal = from_u16(data[:2])
                     print(f'# {finger} {phase}: stopped at step {goal}, {abs(current):.0f} mA', file=sys.stderr)
                 print(f'{time.monotonic() - start:.2f},{phase},{round(goal)},{from_u16(data[:2])},{load},{current:.0f}')
@@ -176,6 +178,7 @@ def main():
     probe_parser.add_argument('--torque', type=int, default=300, help='torque limit, 0..1000')
     probe_parser.add_argument('--speed', type=float, default=2.0, help='finger travel per second, as the HAL max_speed')
     probe_parser.add_argument('--stop-current', type=float, help='mA: stop the finger above this, like the contact stop')
+    probe_parser.add_argument('--stop-excess', type=float, default=150, help='summed mA above --stop-current that stop it')
     probe_parser.add_argument('--params-file', default='')
     args = parser.parse_args()
 
@@ -189,7 +192,7 @@ def main():
         elif args.command == 'calibrate':
             calibrate(bus, args.torque, args.params_file)
         elif args.command == 'probe':
-            probe(bus, args.id, args.torque, args.speed, args.params_file, stop_current=args.stop_current)
+            probe(bus, args.id, args.torque, args.speed, args.params_file, stop_current=args.stop_current, stop_excess=args.stop_excess)
         else:
             jog(bus, args.id, args.torque)
     finally:

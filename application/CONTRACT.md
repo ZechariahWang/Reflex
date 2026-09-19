@@ -1,7 +1,8 @@
 # application/ - web simulator
 
 A web console for the exoskeleton hand: a three.js viewport of the hand moving
-live, plus the RealSense color view and a colorized depth view. It is a pure
+live, plus two camera panels - the RealSense and an iPhone (Record3D) - each
+switchable between its RGB image and its colorized depth image. It is a pure
 consumer of the ROS topics in `physical_layer/`; it works identically whether
 the hand is simulated (`sim.launch.py`) or real (`hardware.launch.py`).
 
@@ -9,10 +10,22 @@ the hand is simulated (`sim.launch.py`) or real (`hardware.launch.py`).
 physical_layer (ROS 2)  --rosbridge ws://localhost:9090-->  backend (FastAPI :8000)  --ws/http-->  frontend (Next.js :3000)
 ```
 
-- `backend/`  - FastAPI + `roslibpy`. The only thing that talks to ROS.
+- `backend/`  - FastAPI + `roslibpy` + `aiortc`. The only thing that talks to ROS and to the phone.
 - `frontend/` - Next.js (App Router, TypeScript), Tailwind, shadcn/ui, framer-motion (`motion`), three.js via `@react-three/fiber` + `drei`, `urdf-loader`.
 
-The browser never talks to rosbridge directly.
+The browser never talks to rosbridge or to the phone directly.
+
+## iPhone side (Record3D, not ROS)
+
+The iPhone's depth camera comes from the Record3D app in Wi-Fi streaming mode,
+the way github.com/ZechariahWang/record_3d does it in the browser - except the
+backend is the WebRTC peer (`backend/app/record3d.py`), because the phone serves
+ONE viewer at a time and the page may be open in several tabs.
+
+- `GET http://<phone>/getOffer` -> `{"type": "offer", "sdp": ...}`; answer with `POST /answer` `{"type": "answer", "data": <sdp with ICE candidates gathered>}`. LAN only: no STUN servers.
+- One video track; every frame is two images side by side: **left = depth encoded as HSV hue (`depth_m = 3 * hue`), right = RGB**. Grey / dark pixels carry no hue = no reading.
+- The backend splits the frame, turns hue into millimetres and runs it through the same colorizer as the RealSense, so both depth views share one ramp and legend. Depth beyond 3 m wraps around (a limit of the encoding).
+- `tests/fake_record3d.py` is a stand-in phone speaking the same protocol (`.venv/bin/python -m tests.fake_record3d --port 8099`, then connect to `localhost:8099`).
 
 ## ROS side (verified facts - do not re-derive)
 
@@ -34,7 +47,7 @@ The camera may be absent (`camera:=none`) and ROS may be down entirely; both are
 
 ## Backend API (port 8000)
 
-Env: `ROSBRIDGE_HOST` (default `localhost`), `ROSBRIDGE_PORT` (`9090`), `MOCK` (`0`; `1` = no ROS at all, synthesize everything, for UI work and tests), `CORS_ORIGINS` (default `http://localhost:3000,http://127.0.0.1:3000`; also the allow-list for websocket `Origin` headers - a browser page from anywhere else is closed with 1008, clients that send no Origin are accepted).
+Env: `ROSBRIDGE_HOST` (default `localhost`), `ROSBRIDGE_PORT` (`9090`), `RECORD3D_HOST` (default empty = wait for the UI to set one), `MOCK` (`0`; `1` = no ROS at all, synthesize everything, for UI work and tests), `CORS_ORIGINS` (default `http://localhost:3000,http://127.0.0.1:3000`; also the allow-list for websocket `Origin` headers - a browser page from anywhere else is closed with 1008, clients that send no Origin are accepted).
 
 The backend reconnects to rosbridge forever with backoff and never exits because ROS is down.
 
@@ -48,6 +61,12 @@ The backend reconnects to rosbridge forever with backoff and never exits because
 ### `GET /api/urdf`
 `200 text/xml` - the latest `/robot_description`. `503` until one has arrived. In mock mode serve a bundled copy (`backend/mock/hand.urdf`, generated once from the real xacro).
 
+### `GET /api/iphone`, `POST /api/iphone`
+```json
+{"host": "192.168.1.23", "state": "streaming", "detail": ""}
+```
+`state`: `off` (no address) | `connecting` | `streaming` | `error` (`detail` says why; it keeps retrying with backoff). `POST {"host": "192.168.1.23"}` points the backend at a phone (`host[:port]`, `""` disconnects, anything else is a 422). The frontend remembers the address in localStorage and re-sends it once after a backend restart. Mock mode always reports `{"host": "mock", "state": "streaming"}`.
+
 ### `WS /ws/state`
 Server -> client, JSON text, one message every 33 ms (30 Hz) regardless of ROS rates (latest-value sampling):
 ```json
@@ -57,7 +76,7 @@ Server -> client, JSON text, one message every 33 ms (30 Hz) regardless of ROS r
  "joints":  {"thumb_joint": 1.57, "index_joint": 0.0, "middle_joint": 0.0, "ring_joint": 0.0, "pinky_joint": 0.0},
  "state":   [1.0, 0.0, 0.0, 0.0, 0.0],
  "command": [1.0, 0.0, 0.0, 0.0, 0.0],
- "rates":   {"joint_states": 99.8, "hand_state": 50.0, "hand_command": 0.0, "color": 15.0, "depth": 15.0}}
+ "rates":   {"joint_states": 99.8, "hand_state": 50.0, "hand_command": 0.0, "color": 15.0, "depth": 15.0, "iphone": 30.0}}
 ```
 `joints` are radians by joint name; `state`/`command` are 0..1 in finger order (`command` is `null` until someone has published one). When ROS is down, keep sending with `ros_connected: false` and the last known values.
 
@@ -67,10 +86,10 @@ Client -> server, JSON text:
 ```
 -> published to `/hand/command` (values clamped to 0..1, must be exactly 5; anything else is ignored).
 
-### `WS /ws/camera/color` and `WS /ws/camera/depth`
-Server -> client, **binary** messages, each one complete JPEG. Latest-frame only: if the client is slow, drop frames, never queue.
-- `color`: the ROS JPEG bytes passed through untouched.
-- `depth`: decoded from the 16-bit PNG, colorized server-side and re-encoded as JPEG (quality ~80). Colormap: near = warm, far = cool (a desaturated two-hue ramp, far `#2f4a63` `#7f9bb3` `#d9dde0` `#e9c9a8` `#c2410c` near, mirrored in `frontend/src/lib/depth-ramp.ts`), over `DEPTH_MIN_MM=150 .. DEPTH_MAX_MM=2000` (env-overridable); pixels with value 0 (no reading) are rendered as the light UI background `#f6f6f6` so holes look intentional on a white page rather than black.
+### `WS /ws/camera/{realsense|iphone}/{color|depth}`
+Four streams, same protocol. The page opens only the one each panel is showing. Server -> client, **binary** messages, each one complete JPEG. Latest-frame only: if the client is slow, drop frames, never queue.
+- `color`: RealSense - the ROS JPEG bytes passed through untouched; iPhone - the right half of the Record3D frame, JPEG-encoded.
+- `depth`: decoded (RealSense: the 16-bit PNG; iPhone: hue -> mm), colorized server-side and re-encoded as JPEG (quality ~80). Colormap: near = warm, far = cool (a desaturated two-hue ramp, far `#2f4a63` `#7f9bb3` `#d9dde0` `#e9c9a8` `#c2410c` near, mirrored in `frontend/src/lib/depth-ramp.ts`), over `DEPTH_MIN_MM=150 .. DEPTH_MAX_MM=2000` (env-overridable); pixels with value 0 (no reading) are rendered as the light UI background `#f6f6f6` so holes look intentional on a white page rather than black.
 
 Right after connect, and whenever it changes, the server also sends a JSON **text** message on the same socket:
 ```json
@@ -79,7 +98,7 @@ Right after connect, and whenever it changes, the server also sends a JSON **tex
 (`min_mm`/`max_mm` only on depth.) `available: false` = no frame received in the last 2 s.
 
 ### Mock mode (`MOCK=1`)
-No rosbridge connection. Joints: each finger curls on its own smooth, phase-shifted sine so the hand looks alive. Color: a generated moving test image. Depth: a generated moving depth field run through the real colorize path. `/ws/state` commands are accepted and override the animation for 3 s. The 5-vector overrides all fingers; when the 3 s hold expires the mock sets `command` back to `null` (live mode never does). Everything above behaves identically otherwise.
+No rosbridge connection. Joints: each finger curls on its own smooth, phase-shifted sine so the hand looks alive. Color: a generated moving test image. Depth: a generated moving depth field run through the real colorize path. iPhone: the same scene a few seconds later, packed as a real Record3D side-by-side hue frame and run through the real split/decode path. `/ws/state` commands are accepted and override the animation for 3 s. The 5-vector overrides all fingers; when the 3 s hold expires the mock sets `command` back to `null` (live mode never does). Everything above behaves identically otherwise.
 
 ## Frontend
 
@@ -90,16 +109,17 @@ No rosbridge connection. Joints: each finger curls on its own smooth, phase-shif
 - `src/lib/config.ts` - backend URLs.
 - `src/lib/types.ts` - TypeScript types for every message above.
 - `src/lib/sim-store.ts` - zustand store: latest `/ws/state` message, connection status, a rolling history (last ~10 s) of `state` per finger for sparklines, and `sendCommand(data: number[])`. Owns the `/ws/state` socket with auto-reconnect. three.js code must read it with `useSimStore.getState()` inside `useFrame` (transient), never via React state at 30 Hz.
-- `src/hooks/use-camera-stream.ts` - `useCameraStream(kind: 'color' | 'depth')` -> `{canvasRef, meta, status, fps}`; owns the socket, decodes with `createImageBitmap`, draws to the canvas, auto-reconnects.
+- `src/hooks/use-phone.ts` - `usePhone()` polls `/api/iphone`; `connectPhone(host)`.
+- `src/hooks/use-camera-stream.ts` - `useCameraStream(source: 'realsense' | 'iphone', kind: 'color' | 'depth')` -> `{canvasRef, meta, status, fps}`; owns the socket, decodes with `createImageBitmap`, draws to the canvas, auto-reconnects.
 - `src/components/ui/*` - shadcn components.
 - `src/components/console/panel.tsx` - `<Panel index="01" title="Hand" tag="/joint_states" status=... actions=...>`: the framed viewport chrome every panel uses.
 
 ### Components (each owned by exactly one build agent)
 - `src/components/hand/hand-viewport.tsx` -> `export function HandViewport()`
-- `src/components/camera/camera-viewport.tsx` -> `export function CameraViewport({kind}: {kind: 'color' | 'depth'})`
+- `src/components/camera/camera-viewport.tsx` -> `export function CameraViewport({source}: {source: 'realsense' | 'iphone'})`; the RGB / DEPTH toggle lives in the panel header
 - `src/components/telemetry/telemetry-strip.tsx` -> `export function TelemetryStrip()`
 - `src/components/console/top-bar.tsx` -> `export function TopBar()`
-- `src/app/page.tsx` composes them: top bar; main row = hand viewport (~62 % width) + a right column with color over depth; telemetry strip along the bottom.
+- `src/app/page.tsx` composes them: top bar; main row = hand viewport (~62 % width) + a right column with the RealSense panel over the iPhone panel; telemetry strip along the bottom.
 
 ## Design language
 

@@ -11,7 +11,7 @@ export const JOINT_MAX_RAD = 1.57
 /** Five values in finger order, each 0 (open) .. 1 (closed). */
 export type FingerValues = [number, number, number, number, number]
 
-export type TopicKey = "joint_states" | "hand_state" | "hand_command" | "color" | "depth"
+export type TopicKey = "joint_states" | "hand_state" | "hand_command" | "color" | "depth" | "iphone"
 
 /** ROS topic behind each key, for labels and tags. */
 export const TOPIC_NAMES: Record<TopicKey, string> = {
@@ -20,6 +20,7 @@ export const TOPIC_NAMES: Record<TopicKey, string> = {
   hand_command: "/hand/command",
   color: "/camera/color/image_raw/compressed",
   depth: "/camera/aligned_depth_to_color/image_raw/compressedDepth",
+  iphone: "record3d wi-fi stream",
 }
 
 /** Messages per second received from ROS, per topic. */
@@ -46,7 +47,18 @@ export interface CommandMessage {
   data: FingerValues
 }
 
+/** realsense comes through ROS; iphone is the Record3D app's Wi-Fi stream, read by the backend. */
+export type CameraSource = "realsense" | "iphone"
 export type CameraKind = "color" | "depth"
+
+/** GET / POST /api/iphone. */
+export interface PhoneStatus {
+  /** Address the backend is pointed at; "" = none. */
+  host: string
+  state: "off" | "connecting" | "streaming" | "error"
+  /** Why `state` is "error". */
+  detail: string
+}
 
 /** JSON text frame on /ws/camera/*; binary frames on the same socket are JPEGs. */
 export interface CameraMeta {

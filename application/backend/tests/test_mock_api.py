@@ -47,9 +47,10 @@ def test_state_shape_and_command_override(client):
         assert message["state"][1] > 0.95 and message["state"][3] < 0.05
 
 
+@pytest.mark.parametrize("camera", ["realsense", "iphone"])
 @pytest.mark.parametrize("kind", ["color", "depth"])
-def test_camera_sends_meta_then_jpeg(client, kind):
-    with client.websocket_connect(f"/ws/camera/{kind}") as ws:
+def test_camera_sends_meta_then_jpeg(client, camera, kind):
+    with client.websocket_connect(f"/ws/camera/{camera}/{kind}") as ws:
         meta = ws.receive_json()
         assert meta["type"] == "meta"
         assert ({"min_mm", "max_mm"} <= set(meta)) == (kind == "depth")
@@ -60,7 +61,7 @@ def test_camera_sends_meta_then_jpeg(client, kind):
                 break
 
 
-@pytest.mark.parametrize("path", ["/ws/state", "/ws/camera/color", "/ws/camera/depth"])
+@pytest.mark.parametrize("path", ["/ws/state", "/ws/camera/realsense/color", "/ws/camera/iphone/depth"])
 def test_foreign_origin_is_refused(client, path):
     with pytest.raises(WebSocketDisconnect) as refusal:
         with client.websocket_connect(path, headers={"origin": "http://evil.example"}):
@@ -71,3 +72,14 @@ def test_foreign_origin_is_refused(client, path):
 def test_configured_origin_is_accepted(client):
     with client.websocket_connect("/ws/state", headers={"origin": "http://localhost:3000"}) as ws:
         assert ws.receive_json()["fingers"] == list(FINGERS)
+
+
+def test_unknown_camera_is_refused(client):
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws/camera/webcam/color"):
+            pass
+
+
+def test_mock_phone_status(client):
+    assert client.get("/api/iphone").json()["state"] == "streaming"
+    assert client.post("/api/iphone", json={"host": "192.168.1.23"}).json()["host"] == "mock"

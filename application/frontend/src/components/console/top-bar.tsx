@@ -30,6 +30,7 @@ const RATE_TOPICS: readonly { key: TopicKey; tag: string; wide?: boolean }[] = [
   { key: "hand_command", tag: "/hand/command" },
   { key: "color", tag: "/camera/color", wide: true },
   { key: "depth", tag: "/camera/depth", wide: true },
+  { key: "iphone", tag: "/record3d", wide: true },
 ]
 
 const stripScheme = (url: string) => url.replace(/^\w+:\/\//, "")

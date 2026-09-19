@@ -12,6 +12,7 @@ import numpy as np
 from .config import MOCK_URDF_PATH
 from .depth import HEADER_BYTES
 from .hub import FINGERS, Hub, ticks
+from .record3d import encode_hue_depth
 
 JOINT_MAX_RAD = 1.57
 JOINT_RATE_HZ = 100
@@ -24,6 +25,8 @@ INK = (0x24, 0x24, 0x24)
 PAPER = (0xF6, 0xF6, 0xF6)
 HAIRLINE = (0xDC, 0xDC, 0xDC)
 TRACK_ALPHA = 0.25
+# The mock phone watches the same scene a few seconds later, so the two panels differ.
+PHONE_TIME_OFFSET_S = 3.0
 
 
 def encode_compressed_depth(depth_mm: np.ndarray) -> bytes:
@@ -53,7 +56,7 @@ class Scene:
             70.0 + 22.0 * math.sin(t * 0.5),
         )
 
-    def color_jpeg(self, t: float) -> bytes:
+    def color_bgr(self, t: float) -> np.ndarray:
         cx, cy, radius = self._ball(t)
         centre = (round(cx), round(cy))
         tracked = self._backdrop.copy()
@@ -61,12 +64,15 @@ class Scene:
         cv2.line(tracked, (0, centre[1]), (WIDTH, centre[1]), INK, 1)
         image = cv2.addWeighted(tracked, TRACK_ALPHA, self._backdrop, 1.0 - TRACK_ALPHA, 0.0)
         cv2.circle(image, centre, round(radius), INK, -1, cv2.LINE_AA)
-        ok, jpeg = cv2.imencode(".jpg", image, (cv2.IMWRITE_JPEG_QUALITY, 85))
+        return image
+
+    def color_jpeg(self, t: float) -> bytes:
+        ok, jpeg = cv2.imencode(".jpg", self.color_bgr(t), (cv2.IMWRITE_JPEG_QUALITY, 85))
         if not ok:
             raise ValueError("JPEG encode failed")
         return jpeg.tobytes()
 
-    def depth_payload(self, t: float) -> bytes:
+    def depth_mm(self, t: float) -> np.ndarray:
         cx, cy, radius = self._ball(t)
         dx, dy = self._x - cx, self._y - cy
         inside = dx * dx + dy * dy
@@ -76,7 +82,14 @@ class Scene:
         # Stereo occlusion shadow: a sliver with no reading along the ball's left edge.
         shadow = (np.abs(dy) < radius) & (dx < 0) & (inside >= radius * radius) & (inside < (radius + 14.0) ** 2)
         depth[shadow] = 0.0
-        return encode_compressed_depth(depth.astype(np.uint16))
+        return depth.astype(np.uint16)
+
+    def depth_payload(self, t: float) -> bytes:
+        return encode_compressed_depth(self.depth_mm(t))
+
+    def record3d_frame(self, t: float) -> np.ndarray:
+        """What the Record3D app streams: hue-encoded depth on the left, RGB on the right."""
+        return np.hstack((encode_hue_depth(self.depth_mm(t)), self.color_bgr(t)))
 
 
 class MockSource:
@@ -127,8 +140,11 @@ class MockSource:
     async def _run_camera(self) -> None:
         async for _ in ticks(1 / CAMERA_RATE_HZ):
             t = time.monotonic()
-            color, depth = await asyncio.gather(
-                asyncio.to_thread(self._scene.color_jpeg, t), asyncio.to_thread(self._scene.depth_payload, t)
+            color, depth, phone = await asyncio.gather(
+                asyncio.to_thread(self._scene.color_jpeg, t),
+                asyncio.to_thread(self._scene.depth_payload, t),
+                asyncio.to_thread(self._scene.record3d_frame, t + PHONE_TIME_OFFSET_S),
             )
             self._hub.on_color(color)
             self._hub.on_depth(depth)
+            self._hub.on_iphone_frame(phone)

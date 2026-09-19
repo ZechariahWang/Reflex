@@ -15,7 +15,7 @@ const FOOTER_DELAY_S = 0.75
 
 /**
  * In the `console` variant (>= 1024 x 640) the page is exactly one screen:
- * top bar / hand 62 % + color over depth / telemetry strip / footer line.
+ * top bar / hand 62 % + RealSense over iPhone / telemetry strip / footer line.
  * Below that it becomes a normal scrolling column.
  */
 export default function ConsolePage() {
@@ -29,10 +29,10 @@ export default function ConsolePage() {
         </div>
         <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 console:grid-cols-1 console:grid-rows-2">
           <div className="aspect-4/3 min-h-0 console:aspect-auto">
-            <CameraViewport kind="color" />
+            <CameraViewport source="realsense" />
           </div>
           <div className="aspect-4/3 min-h-0 console:aspect-auto">
-            <CameraViewport kind="depth" />
+            <CameraViewport source="iphone" />
           </div>
         </div>
       </div>

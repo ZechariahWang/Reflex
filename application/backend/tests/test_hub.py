@@ -37,6 +37,6 @@ def test_depth_worker_survives_a_bad_frame():
         alive = not worker.done()
         worker.cancel()
         await asyncio.gather(worker, return_exceptions=True)
-        return alive and hub.frames["depth"].latest is not None
+        return alive and hub.frames["realsense"]["depth"].latest is not None
 
     assert asyncio.run(scenario())

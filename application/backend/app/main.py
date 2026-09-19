@@ -9,20 +9,28 @@ import time
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Callable, Coroutine, Sequence
 
-from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect, status
+from fastapi import FastAPI, HTTPException, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from .config import Settings
-from .hub import Hub, Source, parse_command, ticks
+from .hub import CAMERA_KINDS, CAMERA_SOURCES, Hub, Source, parse_command, ticks
 from .mock import MockSource
+from .record3d import Record3DClient, normalize_host
 from .ros_client import RosClient
 
 STATE_PERIOD_S = 0.033
 META_PERIOD_S = 1.0
 
+MOCK_PHONE = {"host": "mock", "state": "streaming", "detail": ""}
+
 LOGGER = logging.getLogger(__name__)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
+
+class PhoneAddress(BaseModel):
+    host: str
 
 
 async def serve_socket(
@@ -70,16 +78,21 @@ async def serve_socket(
 def create_app(settings: Settings) -> FastAPI:
     hub = Hub(settings)
     source: Source = MockSource(hub) if settings.mock else RosClient(settings, hub)
+    phone = Record3DClient(hub.on_iphone_frame, normalize_host(settings.record3d_host) or "")
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         hub.bind(asyncio.get_running_loop())
-        depth_worker = asyncio.create_task(hub.run_depth_worker())
+        workers = [asyncio.create_task(hub.run_depth_worker()), asyncio.create_task(hub.run_iphone_worker())]
         source.start()
+        if not settings.mock:
+            phone.start()
         yield
+        await phone.stop()
         await source.stop()
-        depth_worker.cancel()
-        await asyncio.gather(depth_worker, return_exceptions=True)
+        for worker in workers:
+            worker.cancel()
+        await asyncio.gather(*workers, return_exceptions=True)
 
     app = FastAPI(title="htn simulator backend", lifespan=lifespan)
     app.add_middleware(
@@ -97,6 +110,22 @@ def create_app(settings: Settings) -> FastAPI:
             return Response("robot_description has not arrived yet", status_code=503, media_type="text/plain")
         return Response(xml, media_type="text/xml")
 
+    @app.get("/api/iphone")
+    def iphone() -> dict:
+        return MOCK_PHONE if settings.mock else phone.status()
+
+    @app.post("/api/iphone")
+    async def set_iphone(address: PhoneAddress) -> dict:
+        """Point the Record3D client at a phone; an empty host disconnects."""
+        if settings.mock:
+            return MOCK_PHONE
+        host = normalize_host(address.host) if address.host.strip() else ""
+        if host is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "expected an address like 192.168.1.23")
+        if host != phone.host:
+            await phone.set_host(host)
+        return phone.status()
+
     @app.websocket("/ws/state")
     async def ws_state(ws: WebSocket) -> None:
         async def send_state() -> None:
@@ -110,13 +139,13 @@ def create_app(settings: Settings) -> FastAPI:
 
         await serve_socket(ws, settings.cors_origins, send_state, on_text)
 
-    async def send_camera(ws: WebSocket, kind: str) -> None:
-        channel = hub.frames[kind]
+    async def send_camera(ws: WebSocket, source: str, kind: str) -> None:
+        channel = hub.frames[source][kind]
         seen = 0
         sent_meta: dict | None = None
         sent_at = 0.0
         while True:
-            meta = hub.camera_meta(kind)
+            meta = hub.camera_meta(source, kind)
             # Shape changes go out at once; a merely drifting hz at most once per period.
             reshaped = sent_meta is None or {**meta, "hz": sent_meta["hz"]} != sent_meta
             if reshaped or (meta != sent_meta and time.monotonic() - sent_at >= META_PERIOD_S):
@@ -128,13 +157,12 @@ def create_app(settings: Settings) -> FastAPI:
                 continue
             await ws.send_bytes(frame.data)
 
-    @app.websocket("/ws/camera/color")
-    async def ws_color(ws: WebSocket) -> None:
-        await serve_socket(ws, settings.cors_origins, lambda: send_camera(ws, "color"))
-
-    @app.websocket("/ws/camera/depth")
-    async def ws_depth(ws: WebSocket) -> None:
-        await serve_socket(ws, settings.cors_origins, lambda: send_camera(ws, "depth"))
+    @app.websocket("/ws/camera/{camera}/{kind}")
+    async def ws_camera(ws: WebSocket, camera: str, kind: str) -> None:
+        if camera not in CAMERA_SOURCES or kind not in CAMERA_KINDS:
+            await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        await serve_socket(ws, settings.cors_origins, lambda: send_camera(ws, camera, kind))
 
     return app
 

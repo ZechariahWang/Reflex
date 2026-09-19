@@ -1,4 +1,4 @@
-import type { CameraKind } from "@/lib/types"
+import type { CameraKind, CameraSource } from "@/lib/types"
 
 const DEFAULT_BACKEND_URL = "http://localhost:8000"
 
@@ -11,9 +11,10 @@ const WS_BASE_URL = BACKEND_URL.replace(/^http/, "ws")
 export const API = {
   health: `${BACKEND_URL}/api/health`,
   urdf: `${BACKEND_URL}/api/urdf`,
+  iphone: `${BACKEND_URL}/api/iphone`,
 } as const
 
 export const WS = {
   state: `${WS_BASE_URL}/ws/state`,
-  camera: (kind: CameraKind) => `${WS_BASE_URL}/ws/camera/${kind}`,
+  camera: (source: CameraSource, kind: CameraKind) => `${WS_BASE_URL}/ws/camera/${source}/${kind}`,
 } as const

@@ -3,7 +3,8 @@
 ![Hand Console](docs/screenshot.png)
 
 A one-screen web console for the exoskeleton hand: a three.js viewport of the hand
-moving live, the RealSense RGB view, a colorized depth view, per-finger telemetry,
+moving live, a RealSense panel and an iPhone (Record3D) panel that each switch between
+RGB and colorized depth, per-finger telemetry,
 and an ARM-gated command block. It only consumes ROS topics from `physical_layer/`,
 so it looks the same for the Gazebo sim and the real hardware.
 ```
@@ -12,7 +13,8 @@ physical_layer (ROS 2) --rosbridge ws :9090--> backend (FastAPI :8000) --ws/http
 
 - `backend/`  - FastAPI + roslibpy. The only thing that talks to ROS. Caches the latest
   value of every topic, colorizes depth, serves `/api/health`, `/api/urdf`, `/ws/state`,
-  `/ws/camera/{color,depth}`. Reconnects to rosbridge forever.
+  `/ws/camera/{realsense,iphone}/{color,depth}`. Reconnects to rosbridge forever. It is also
+  the WebRTC peer of the iPhone (Record3D Wi-Fi streaming), since the phone allows one viewer.
 - `frontend/` - Next.js, Tailwind, shadcn/ui, motion, three.js (@react-three/fiber, urdf-loader).
 - `CONTRACT.md` - every API shape, topic and design rule. Read it before changing either side.
 
@@ -33,6 +35,7 @@ not matter: with ROS down the console shows OFFLINE / NO SIGNAL and recovers on 
 | env | default | |
 |---|---|---|
 | `MOCK` | `0` | `1` = synthesize everything |
+| `RECORD3D_HOST` | empty | iPhone address; normally typed into the iPhone panel instead |
 | `ROSBRIDGE_HOST` / `ROSBRIDGE_PORT` | `localhost` / `9090` | where rosbridge listens |
 | `BACKEND_PORT` / `FRONTEND_PORT` | `8000` / `3000` | dev.sh ports |
 | `DEPTH_MIN_MM` / `DEPTH_MAX_MM` | `150` / `2000` | depth colormap range |

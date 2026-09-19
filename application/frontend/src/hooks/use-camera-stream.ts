@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from "react"
 
 import { WS } from "@/lib/config"
 import { backoffDelay, closeQuietly } from "@/lib/socket"
-import type { CameraKind, CameraMeta } from "@/lib/types"
+import type { CameraKind, CameraMeta, CameraSource } from "@/lib/types"
 
 /**
  * connecting - socket not open yet
@@ -29,13 +29,26 @@ function isCameraMeta(value: unknown): value is CameraMeta {
   return typeof value === "object" && value !== null && (value as Partial<CameraMeta>).type === "meta"
 }
 
-export function useCameraStream(kind: CameraKind): CameraStream {
+interface StreamState {
+  /** Which stream these values belong to; anything else is a leftover from before a switch. */
+  url: string
+  meta: CameraMeta | null
+  status: CameraStreamStatus
+  fps: number
+}
+
+export function useCameraStream(source: CameraSource, kind: CameraKind): CameraStream {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const [meta, setMeta] = useState<CameraMeta | null>(null)
-  const [status, setStatus] = useState<CameraStreamStatus>("connecting")
-  const [fps, setFps] = useState(0)
+  const url = WS.camera(source, kind)
+  const [state, setState] = useState<StreamState>({ url, meta: null, status: "connecting", fps: 0 })
 
   useEffect(() => {
+    const update = (patch: Partial<Omit<StreamState, "url">>) =>
+      setState((prev) => ({ ...(prev.url === url ? prev : { url, meta: null, status: "connecting", fps: 0 }), ...patch }))
+    const setMeta = (meta: CameraMeta) => update({ meta })
+    const setStatus = (status: CameraStreamStatus) => update({ status })
+    const setFps = (fps: number) => update({ fps })
+
     let disposed = false
     let socket: WebSocket | null = null
     let retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -91,7 +104,7 @@ export function useCameraStream(kind: CameraKind): CameraStream {
     }
 
     const open = () => {
-      const ws = new WebSocket(WS.camera(kind))
+      const ws = new WebSocket(url)
       ws.binaryType = "blob"
       socket = ws
       ws.onopen = () => {
@@ -127,7 +140,8 @@ export function useCameraStream(kind: CameraKind): CameraStream {
       if (retryTimer !== null) clearTimeout(retryTimer)
       if (socket) closeQuietly(socket)
     }
-  }, [kind])
+  }, [url])
 
-  return { canvasRef, meta, status, fps }
+  const current = state.url === url ? state : { meta: null, status: "connecting" as const, fps: 0 }
+  return { canvasRef, meta: current.meta, status: current.status, fps: current.fps }
 }

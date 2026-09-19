@@ -18,10 +18,16 @@ for port in "$BACKEND_PORT" "$FRONTEND_PORT"; do
   fi
 done
 
-if [[ ! -x "$ROOT/backend/.venv/bin/uvicorn" ]]; then
+if [[ ! -x "$ROOT/backend/.venv/bin/python" ]]; then
   echo "dev.sh: creating backend/.venv"
   python3 -m venv "$ROOT/backend/.venv"
+fi
+# Reinstall whenever requirements.txt is newer than the last install (e.g. after a git pull).
+stamp="$ROOT/backend/.venv/.requirements-installed"
+if [[ ! -f "$stamp" || "$ROOT/backend/requirements.txt" -nt "$stamp" ]]; then
+  echo "dev.sh: installing backend requirements"
   "$ROOT/backend/.venv/bin/pip" install --quiet -r "$ROOT/backend/requirements.txt"
+  touch "$stamp"
 fi
 if [[ ! -d "$ROOT/frontend/node_modules" ]]; then
   echo "dev.sh: installing frontend/node_modules"

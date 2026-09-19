@@ -35,10 +35,12 @@ whole backend freezes and survives Ctrl-C as an orphan holding port 8000), and
 client holds the connection and waits for frames instead of reconnecting.
 **What the phone does** (measured by probing usbmux port 1337 on a real
 iPhone; the library README's "connect, then press record" is not how it behaves):
-the port is closed while the app is idle and opens when the red record button
-is pressed; the app streams to its NEWEST connection and silently abandons the
-older one without closing it. So: refused = app idle (retry every 2 s, tell the
-user to press record); connected but silent for 5 s = abandoned, reconnect.
+the app serves USB only while it is NOT recording - the red record button
+pauses the USB stream, stopping the recording resumes it (confirmed by the user
+on the device; easy to get backwards). It streams to its NEWEST connection and
+silently abandons the older one without closing it. So: refused = recording or
+app closed (retry every 2 s, tell the user to stop recording); connected but
+silent for 5 s = abandoned or recording, reconnect.
 Never probe port 1337 while debugging - every probe steals the stream.
 
 **Wi-Fi** (address = the IP the app shows) - the way

@@ -196,7 +196,7 @@ def test_only_the_watched_image_is_rendered():
     ("factory", "expected"),
     [
         (functools.partial(FakeUsbStream, devices=()), "no iPhone on USB"),
-        (functools.partial(FakeUsbStream, accepts=False), "not streaming yet"),
+        (functools.partial(FakeUsbStream, accepts=False), "not serving USB"),
         (functools.partial(FakeUsbStream, frames_for_s=0.0, silent=True), "sends no frames"),
     ],
 )

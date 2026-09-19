@@ -93,7 +93,7 @@ export function PhoneConnect({ phone, error, onDone }: PhoneState & { onDone?: (
 
         <span className="label-micro leading-relaxed tracking-normal normal-case">
           {error ?? (phone?.detail ? phone.detail : null) ??
-            "USB: cable, works on any network. Record3D open with USB Streaming mode on: press the red record button, press USB here (either order)."}
+            "USB: cable, works on any network. Record3D open, USB Streaming mode on, NOT recording (the red button pauses the stream), then press USB here."}
         </span>
       </form>
     </motion.div>

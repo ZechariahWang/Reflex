@@ -65,8 +65,8 @@ USB_WAITING = "connected over USB, waiting for the first frame"
 # closes the socket - and the app resumes at once, so do not sit on a silent one.
 USB_FIRST_FRAME_TIMEOUT_S = 5.0
 USB_SILENT = (
-    "connected over USB but Record3D sends no frames: press the red record button on the "
-    "phone (twice if it already looks active). Reconnecting."
+    "connected over USB but Record3D sends no frames: it only streams while NOT recording - "
+    "if the red button is active on the phone, press it to stop. Reconnecting."
 )
 USB_RETRY_MAX_S = 2.0  # the app refuses while it is busy; be quick once the user has stopped it
 ROTATIONS = {0: None, 90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}

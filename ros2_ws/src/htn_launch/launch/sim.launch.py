@@ -65,6 +65,8 @@ def generate_launch_description():
             description='Physical parameters of the hand'),
         DeclareLaunchArgument('gui', default_value='false',
                               description='Open the Gazebo window (Foxglove is the default viewer)'),
+        DeclareLaunchArgument('teleop', default_value='true',
+                              description='Open the finger control window'),
         DeclareLaunchArgument('foxglove', default_value='true',
                               description='Start foxglove_bridge on ws://localhost:8765'),
 
@@ -95,6 +97,12 @@ def generate_launch_description():
             parameters=[{'backend': 'sim', 'params_file': params_file,
                          'use_sim_time': True}],
             output='screen',
+        ),
+
+        Node(
+            package='htn_control',
+            executable='teleop_gui',
+            condition=IfCondition(LaunchConfiguration('teleop')),
         ),
 
         Node(

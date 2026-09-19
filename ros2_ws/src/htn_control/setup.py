@@ -20,6 +20,7 @@ setup(
         'console_scripts': [
             'teleop = htn_control.teleop:main',
             'hal = htn_control.hal_node:main',
+            'teleop_gui = htn_control.teleop_gui:main',
         ],
     },
 )

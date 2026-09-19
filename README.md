@@ -15,22 +15,22 @@ cd ros2_ws
 colcon build --symlink-install
 source install/setup.bash
 
-# terminal 1: simulated hand (Gazebo, headless) + HAL + Foxglove bridge
+# simulated hand (Gazebo, headless) + HAL + Foxglove bridge + finger control window
 ros2 launch htn_launch sim.launch.py            # gui:=true for the Gazebo window
-
-# terminal 2: keyboard teleop
-ros2 run htn_control teleop
 ```
 
-Teleop keys: `1 2 3 4 5` toggle thumb / index / middle / ring / pinky, `-` / `=`
-nudge the last selected finger, `o` / `c` open / close all, `q` quit.
+Finger control window: one slider per finger plus a bar showing the measured
+position. With the window focused, `1 2 3 4 5` toggle thumb / index / middle /
+ring / pinky, `-` / `=` nudge the last selected finger, `o` / `c` open / close
+all. `teleop:=false` skips the window; `ros2 run htn_control teleop` is the same
+thing in a terminal.
 
 Visualization: open Foxglove, *Open connection* -> `ws://localhost:8765`, add a
 **3D** panel (the hand shows up from `/robot_description` + `/tf`) and a **Plot**
 panel on `/hand/state.data[0]` ... `[4]`.
 
 Real hand: `ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0`,
-same teleop command.
+same control window.
 
 ## How it fits together
 

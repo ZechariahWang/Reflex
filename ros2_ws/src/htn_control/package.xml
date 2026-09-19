@@ -12,6 +12,7 @@
   <exec_depend>htn_description</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
   <exec_depend>python3-serial</exec_depend>
+  <exec_depend>python3-tk</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>

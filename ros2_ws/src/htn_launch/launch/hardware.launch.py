@@ -25,6 +25,8 @@ def generate_launch_description():
             description='Physical parameters of the hand'),
         DeclareLaunchArgument('serial_port', default_value='/dev/ttyACM0'),
         DeclareLaunchArgument('baud_rate', default_value='115200'),
+        DeclareLaunchArgument('teleop', default_value='true',
+                              description='Open the finger control window'),
         DeclareLaunchArgument('foxglove', default_value='true',
                               description='Start foxglove_bridge on ws://localhost:8765'),
 
@@ -43,6 +45,12 @@ def generate_launch_description():
                          'serial_port': LaunchConfiguration('serial_port'),
                          'baud_rate': ParameterValue(LaunchConfiguration('baud_rate'), value_type=int)}],
             output='screen',
+        ),
+
+        Node(
+            package='htn_control',
+            executable='teleop_gui',
+            condition=IfCondition(LaunchConfiguration('teleop')),
         ),
 
         Node(

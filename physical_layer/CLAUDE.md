@@ -51,6 +51,18 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
     are published by `htn_control`'s `linkage_publisher` from the horn angles
     (`htn_control/linkage.py`, pure maths; `test_linkage.py` checks on the
     generated URDF that every loop closes to < 0.05 mm).
+  - Static add-ons come from a second kind of export. Fusion's "links only, no
+    joints" exporter writes every body under a generic name (`old_component_23
+    _Body11`), duplicates included, so `tools/cad_static_parts.py <export>`
+    goes by position instead: same frame, same pose, so a body lying on a mesh
+    the package already has is known, and what lies on none is new. It writes
+    `meshes/{camera,camera_mount,electronics}.stl` and
+    `config/static_parts.yaml`. It refuses an export whose frame or pose differs.
+  - `camera_link` hangs on `base_link` (fixed) at the RealSense's front glass,
+    x along +Y (towards the fingertips). The driver publishes `camera_link ->`
+    optical frames, so images and point cloud land in the hand's frame. How the
+    camera is turned about its view axis is `camera.rpy` in `hand_params.yaml`:
+    a box does not say which end is up, the current value is an assumption.
   - `sim:=gazebo` pulls in `hand.gazebo.xacro` (world mount + ros2_control).
     Gazebo cannot close loops, so `sim.launch.py` spawns `parts:=horns` (base +
     horns, marker cubes) while robot_state_publisher gets the full description.
@@ -90,12 +102,14 @@ rosbridge, see `docs/specs/policy-link-design.md`.
 ## Gotchas
 
 - **What the web viewer reads off the URDF**: material NAMES pick the look
-  (`body servo finger accent pad wearer`, see `hand-model.ts`), links called
+  (`body servo finger accent pad wearer camera pcb`, see `hand-model.ts`), links called
   `<finger>_...` belong to that finger (ghost, per-finger fade), and the `pad`
   mesh of `<finger>_finger` is where the fingertip label sits. Keep those when
   editing the xacro. `wearer` is the CAD's mannequin hand: a static reference,
   drawn faint, ignored when framing the camera.
-- **New CAD export**: rerun `tools/cad_to_linkage.py` (needs numpy, trimesh,
+- **New CAD export**: a named fusion2urdf export (mechanism changed) -> rerun
+  `tools/cad_to_linkage.py`; a geometry-only export (something bolted on) ->
+  `tools/cad_static_parts.py`. For the first: rerun `tools/cad_to_linkage.py` (needs numpy, trimesh,
   fast-simplification, scipy, networkx), then regenerate the web mock:
   `xacro urdf/hand.urdf.xacro > application/backend/mock/hand.urdf`. If the
   closed angles changed, copy `closed_rad` into `max_angle` in hand_params.yaml.

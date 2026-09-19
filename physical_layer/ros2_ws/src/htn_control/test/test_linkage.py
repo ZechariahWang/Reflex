@@ -24,7 +24,8 @@ def urdf():
     xml = subprocess.run(
         ['xacro', str(DESCRIPTION / 'urdf' / 'hand.urdf.xacro'),
          f'params_file:={DESCRIPTION / "config" / "hand_params.yaml"}',
-         f'linkage_file:={DESCRIPTION / "config" / "linkage.yaml"}'],
+         f'linkage_file:={DESCRIPTION / "config" / "linkage.yaml"}',
+         f'static_file:={DESCRIPTION / "config" / "static_parts.yaml"}'],
         check=True, capture_output=True, text=True).stdout
     return ET.fromstring(xml)
 
@@ -47,7 +48,8 @@ def link_poses(urdf, angles):
             joint = joints[link]
             R, t = pose(joint.find('parent').get('link'))
             origin = np.array([float(v) for v in joint.find('origin').get('xyz').split()])
-            axis = [float(v) for v in joint.find('axis').get('xyz').split()]
+            axis = joint.find('axis')  # fixed joints have none (and nothing hangs on them here)
+            axis = [float(v) for v in axis.get('xyz').split()] if axis is not None else (1.0, 0.0, 0.0)
             poses[link] = (R @ rotation(axis, angles.get(joint.get('name'), 0.0)), t + R @ origin)
         return poses[link]
 
@@ -94,6 +96,14 @@ def test_closed_is_a_90_degree_curl_with_margin_before_the_linkage_binds(finger)
     at_closed = min(solution, key=lambda s: abs(abs(s['horn']) - closed))
     assert abs(math.degrees(at_closed['curl'])) == pytest.approx(90.0, abs=1.0)
     assert closed < l['lock_rad'] - math.radians(10.0)
+
+
+def test_the_camera_frame_hangs_on_the_hand_and_looks_along_the_fingers(urdf):
+    joint = next(j for j in urdf.findall('joint') if j.find('child').get('link') == 'camera_link')
+    assert joint.get('type') == 'fixed' and joint.find('parent').get('link') == 'base_link'
+    roll, pitch, yaw = (float(v) for v in joint.find('origin').get('rpy').split())
+    forward = (rotation((0, 0, 1), yaw) @ rotation((0, 1, 0), pitch) @ rotation((1, 0, 0), roll))[:, 0]
+    assert forward == pytest.approx([0.0, 1.0, 0.0], abs=1e-3)  # camera x = base +Y, towards the fingertips
 
 
 def test_open_is_the_cad_pose():

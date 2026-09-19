@@ -40,6 +40,8 @@ const SURFACES: Record<string, ConstructorParameters<typeof MeshPhysicalMaterial
   finger: { color: "#f4f4f2", roughness: 0.5, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.6 },
   accent: { color: "#c4c6ca", roughness: 0.35, metalness: 0.65 },
   pad: { color: "#1c1c1e", roughness: 0.9, metalness: 0 },
+  camera: { color: "#6b6e75", roughness: 0.3, metalness: 0.8 },
+  pcb: { color: "#21483a", roughness: 0.6, metalness: 0.15 },
   // The mannequin hand of the CAD: a quiet reference behind the machine, not part of it.
   wearer: { color: "#d9d6d1", roughness: 0.95, metalness: 0, transparent: true, opacity: 0.32, depthWrite: false },
 }

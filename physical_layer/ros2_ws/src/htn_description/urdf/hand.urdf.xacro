@@ -16,6 +16,7 @@
 
   <xacro:arg name="params_file" default="$(find htn_description)/config/hand_params.yaml"/>
   <xacro:arg name="linkage_file" default="$(find htn_description)/config/linkage.yaml"/>
+  <xacro:arg name="static_file" default="$(find htn_description)/config/static_parts.yaml"/>
   <!-- none: plain URDF (visualization) | gazebo: adds world mount + ros2_control -->
   <xacro:arg name="sim" default="none"/>
   <!-- controller_manager yaml, needed for sim:=gazebo -->
@@ -26,6 +27,7 @@
 
   <xacro:property name="params" value="${xacro.load_yaml('$(arg params_file)')}"/>
   <xacro:property name="linkage" value="${xacro.load_yaml('$(arg linkage_file)')['fingers']}"/>
+  <xacro:property name="static" value="${xacro.load_yaml('$(arg static_file)')}"/>
   <xacro:property name="joint_params" value="${params['joint']}"/>
   <xacro:property name="full" value="${'$(arg parts)' == 'full'}"/>
   <xacro:property name="MESHES" value="package://htn_description/meshes"/>
@@ -52,6 +54,8 @@
   <xacro:colour name="accent"/>
   <xacro:colour name="pad"/>
   <xacro:colour name="wearer"/>
+  <xacro:colour name="camera"/>
+  <xacro:colour name="pcb"/>
 
   <!-- A CAD mesh (mm, assembly frame) on a link whose frame sits at `pivot`. The
        physics-only model gets a marker cube instead: Gazebo does not resolve
@@ -82,6 +86,10 @@
     <xacro:if value="${full}">
       <!-- the mannequin hand of the CAD, open: a reference for scale, it does not move -->
       <xacro:part mesh="wearer" material="wearer"/>
+      <!-- bolted to the frame (tools/cad_static_parts.py): RealSense, its bracket, PCB + carrier -->
+      <xacro:part mesh="camera" material="camera"/>
+      <xacro:part mesh="camera_mount" material="body"/>
+      <xacro:part mesh="electronics" material="pcb"/>
     </xacro:if>
     <xacro:cube_inertial m="${params['base']['mass']}" side="0.10"/>
   </link>
@@ -139,6 +147,19 @@
       </joint>
     </xacro:if>
   </xacro:macro>
+
+  <!-- Where the RealSense sits: its driver publishes camera_link -> the optical frames, so this
+       joint is what puts the images and the point cloud in the hand's frame. Position from the
+       CAD (centre of the front glass); the turn is a person's call, see hand_params.yaml. -->
+  <xacro:if value="${full}">
+    <link name="camera_link"/>
+    <joint name="camera_mount_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="camera_link"/>
+      <origin xyz="${' '.join(str(v) for v in static['camera']['xyz'])}"
+              rpy="${' '.join(str(v) for v in params['camera']['rpy'])}"/>
+    </joint>
+  </xacro:if>
 
   <xacro:finger name="thumb"/>
   <xacro:finger name="index"/>

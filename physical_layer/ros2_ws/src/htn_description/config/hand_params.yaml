@@ -35,6 +35,19 @@ appearance:
   accent: [0.95, 0.42, 0.12]   # triangles (bell cranks) and adapters
   pad:    [0.04, 0.04, 0.05]   # contact pads on the wearer's fingers
   wearer: [0.80, 0.78, 0.75]   # mannequin hand from the CAD (static reference)
+  camera: [0.35, 0.36, 0.39]   # RealSense body
+  pcb:    [0.10, 0.27, 0.20]   # PCB, connectors, standoffs, carrier plate
+
+# The RealSense on the hand. Where it sits comes from the CAD
+# (config/static_parts.yaml: front glass centre, looking along +Y, the two
+# imagers along Z). How it is turned about its view axis cannot be read off a
+# box, so it is set here. camera_link is ROS style: x out of the lenses, y to
+# the camera's left, z up.
+#   [1.5708, 0, 1.5708]  : camera's top towards +X (the thumb side)   <- assumed
+#   [-1.5708, 0, 1.5708] : camera's top towards -X (the pinky side)
+# If the point cloud shows up mirrored top-to-bottom next to the hand, use the other.
+camera:
+  rpy: [1.5708, 0.0, 1.5708]
 
 # Servo / hinge physics (sim only)
 joint:

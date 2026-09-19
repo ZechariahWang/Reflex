@@ -20,11 +20,17 @@ source install/setup.bash
 ros2 launch htn_launch sim.launch.py            # gui:=true for the Gazebo window
 ```
 
-Finger control window: one slider per finger plus a bar showing the measured
-position. With the window focused, `1 2 3 4 5` toggle thumb / index / middle /
-ring / pinky, `-` / `=` nudge the last selected finger, `o` / `c` open / close
-all. `teleop:=false` skips the window; `ros2 run htn_control teleop` is the same
-thing in a terminal.
+Finger control window: hold a key to move a finger, let go and it holds its
+position (window must be focused). Several keys can be held at once.
+
+| finger | thumb | index | middle | ring | pinky |
+|---|---|---|---|---|---|
+| close | `Q` | `W` | `E` | `R` | `T` |
+| open  | `A` | `S` | `D` | `F` | `G` |
+
+Sliders do the same with the mouse, the bars show the measured position.
+`teleop:=false` skips the window; `ros2 run htn_control teleop` is a terminal
+version with the same keys.
 
 Visualization: open Foxglove, *Open connection* -> `ws://localhost:8765`, add a
 **3D** panel (the hand shows up from `/robot_description` + `/tf`) and a **Plot**
@@ -45,7 +51,7 @@ teleop / auto --/hand/command--> HAL --+-- sim backend    -> ros2_control -> Gaz
   thumb, index, middle, ring, pinky order: `0` = open, `1` = closed (each finger
   is 1 DOF). The HAL clamps and rate-limits (`max_speed`) before anything moves.
 - `physical_layer/ros2_ws/src/htn_description/config/hand_params.yaml` holds the physical description:
-  palm and finger sizes, masses, angle limits, mount poses, joint physics, and
+  handedness (currently **left**), palm and finger sizes, masses, angle limits, mount poses, joint physics, and
   servo calibration. The URDF and the HAL both read it; pass
   `params_file:=/path/to/other.yaml` to either launch file to try another hand.
 - New hardware = a new `HandBackend` subclass in `htn_control/hal/`, registered

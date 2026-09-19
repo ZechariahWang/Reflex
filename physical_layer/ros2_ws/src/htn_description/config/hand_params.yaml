@@ -2,6 +2,10 @@
 # visualization) and the HAL (command scaling) are both generated from this.
 # Units: metres, kilograms, radians.
 
+# right | left. Finger mounts below are written for a RIGHT hand; "left" mirrors
+# them (y, roll and yaw flip sign) when the URDF is generated.
+handedness: left
+
 palm:
   length: 0.060      # along the fingers' curl direction (X)
   width: 0.088       # across the knuckles (Y)
@@ -11,7 +15,8 @@ palm:
 # Every finger is one rigid segment on one hinge (1 DOF).
 #   length/width : size of the segment, pivot -> tip
 #   min/max_angle: hinge travel. 0 = fully open
-#   mount_xyz/rpy: where the hinge sits on the palm (palm centre = origin) and
+#   mount_xyz/rpy: (right-hand values) where the hinge sits on the palm (palm
+#                  centre = origin) and
 #                  which way it faces. Fingers hang along -Z and curl towards -X
 #                  of their own mount frame.
 fingers:

@@ -11,6 +11,9 @@
   <xacro:property name="params" value="${xacro.load_yaml('$(arg params_file)')}"/>
   <xacro:property name="palm" value="${params['palm']}"/>
   <xacro:property name="joint_params" value="${params['joint']}"/>
+  <!-- Mount poses in the YAML describe a right hand; a left hand is its mirror
+       image across the XZ plane: y, roll and yaw change sign -->
+  <xacro:property name="mirror" value="${-1.0 if params['handedness'] == 'left' else 1.0}"/>
 
   <!-- Gazebo (DART) stops obeying velocity commands once a joint rests exactly
        on its limit, so in sim the hard stops sit slightly outside the commanded
@@ -64,8 +67,8 @@
     <joint name="${name}_joint" type="revolute">
       <parent link="base_link"/>
       <child link="${name}_finger"/>
-      <origin xyz="${' '.join(str(v) for v in f['mount_xyz'])}"
-              rpy="${' '.join(str(v) for v in f['mount_rpy'])}"/>
+      <origin xyz="${f['mount_xyz'][0]} ${mirror * f['mount_xyz'][1]} ${f['mount_xyz'][2]}"
+              rpy="${mirror * f['mount_rpy'][0]} ${f['mount_rpy'][1]} ${mirror * f['mount_rpy'][2]}"/>
       <axis xyz="0 1 0"/>
       <limit lower="${f['min_angle'] - limit_margin}" upper="${f['max_angle'] + limit_margin}"
              effort="${joint_params['max_effort']}" velocity="${joint_params['max_velocity']}"/>

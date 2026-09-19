@@ -25,7 +25,8 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
 - `htn_description` - `urdf/hand.urdf.xacro` builds the whole URDF from
   `config/hand_params.yaml` (palm/finger sizes, masses, angle limits, mount
   poses, joint physics, sim mount, servo calibration). Change the hand by
-  editing the YAML, not the xacro. `sim:=gazebo` pulls in `hand.gazebo.xacro`
+  editing the YAML, not the xacro. Mount poses in the YAML are written for a
+  right hand; `handedness: left` (current) mirrors them in the xacro. `sim:=gazebo` pulls in `hand.gazebo.xacro`
   (world mount + ros2_control).
 - `htn_launch` - `sim.launch.py`, `hardware.launch.py`, `config/controllers.yaml`,
   `worlds/`.
@@ -36,8 +37,11 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
     `/hand_position_controller/commands`), `SerialBackend` (servo degrees over
     serial; wire protocol documented in the file - firmware must match it).
     New hardware = new subclass registered in `hal/__init__.py`.
-  - `teleop_gui.py` (tkinter window, started by the launch files) and
-    `teleop.py` (terminal version, needs its own TTY so it is never launched).
+  - `teleop_gui.py` (tkinter window, started by the launch files): hold-to-move,
+    close/open key pairs `Q/A W/S E/D R/F T/G` = thumb..pinky; releasing holds
+    position. Key auto-repeat arrives as release+press pairs, hence the
+    release debounce. `teleop.py` is the terminal version (same keys, steps per
+    repeated character; needs its own TTY so it is never launched).
   - `hand_config.py`: `FINGERS` order and the YAML loader.
 - `htn_auto` - stub for autonomous control. Must only talk to `/hand/command` /
   `/hand/state`; policy/VLA code lives outside this workspace.

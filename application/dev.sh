@@ -6,6 +6,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
+# 0.0.0.0 to reach the API from another machine or from outside a container
+BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 export MOCK="${MOCK:-0}"
 export CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:$FRONTEND_PORT,http://127.0.0.1:$FRONTEND_PORT}"
@@ -54,7 +56,7 @@ stop() {
 }
 trap stop INT TERM EXIT
 
-run backend "$ROOT/backend" .venv/bin/uvicorn app.main:app --port "$BACKEND_PORT"
+run backend "$ROOT/backend" .venv/bin/uvicorn app.main:app --host "$BACKEND_HOST" --port "$BACKEND_PORT"
 run frontend "$ROOT/frontend" npx next dev --port "$FRONTEND_PORT"
 
 mode="live, rosbridge ws://${ROSBRIDGE_HOST:-localhost}:${ROSBRIDGE_PORT:-9090}"

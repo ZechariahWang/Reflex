@@ -24,6 +24,14 @@ start with the torque off for a recording session), `camera:=none`, `color_profi
 `ws://localhost:9090`; import `foxglove/htn_hand.json` (Layouts -> Import from
 file) for hand model + color + depth.
 
+Not on Ubuntu 22.04: `docker/run.sh` (Humble + Fortress in Docker Desktop, repo
+bind-mounted, `build/ install/ log/` and the app's `node_modules` / `.venv` in named
+volumes). `run.sh -d` keeps a container up for `docker exec -it htn-sim bash`. The sim
+then runs with `camera:=none teleop:=false`; the web console is the control surface, with
+`MOCK_OBJECTS=1` for a table of synthetic objects around the hand. Shell scripts must
+stay LF: the repo sets `core.autocrlf false` for that (a CRLF `build.sh` dies with
+`bash\r: No such file`).
+
 One-time camera setup on a new machine: `sudo apt install
 ros-humble-realsense2-camera`, the librealsense udev rules, and
 `udev/99-realsense-nolpm.rules` (install steps in the file).

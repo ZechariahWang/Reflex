@@ -1,0 +1,5 @@
+# Linux-targeted repo: shell scripts and launch files must be LF even on a Windows checkout
+* text=auto eol=lf
+*.png binary
+*.stl binary
+*.ico binary

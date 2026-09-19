@@ -46,6 +46,11 @@ panel on `/hand/state.data[0]` ... `[4]`. Or import `physical_layer/foxglove/htn
 Real hand: `ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0`,
 same control window.
 
+No Ubuntu 22.04 at hand (Windows, mac, 24.04)? `physical_layer/docker/run.sh` drops you
+into a container with Humble + Gazebo and this repo mounted; the same commands work in it,
+and the console ports come through to the host. Its `-d` mode keeps one running in the
+background for `docker exec`.
+
 ## How it fits together
 
 ```

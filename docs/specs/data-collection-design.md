@@ -1,8 +1,8 @@
 # Data collection: demonstrations from backdriven fingers
 
 How the demonstrations for SmolVLA are recorded and
-labelled. Status: implemented and tested
-without hardware; not yet run against the hand. Date: 2026-09-19. This closes
+labelled. Status: implemented; record and
+label run end to end without hardware, not yet against the hand. Date: 2026-09-19. This closes
 "the data collection method" of `policy-link-design.md` (Scope, Out).
 
 ## Decisions
@@ -202,5 +202,11 @@ hand, then `label`, then a load of the output with `LeRobotDataset` that shows
 
 ## Not verified
 
-- `lerobot-record` with the two plugins. The option names are checked against
-  the 0.6.1 source (`DatasetRecordConfig`), the command is not run.
+- The recording against the real hand in passive mode. On 2026-09-19 the
+  record and label commands ran end to end against the HAL node with the sim
+  backend, rosbridge and a fake camera (2 episodes, 150 frames, AV1 video):
+  `action[t] == min(1, state[t+3] * 1.2)` holds in each episode. The run found
+  that `lerobot-record` reads `robot.cameras`; `ExoHand` has it since then.
+- The raw action and the state of one frame differ by up to one sample (0.04
+  in the test), because the robot and the leader have separate connections.
+  The labels come from `observation.state`, so this has no effect on them.

@@ -38,6 +38,8 @@ class ExoHand(Robot):
     def __init__(self, config: ExoHandConfig):
         super().__init__(config)
         self.config = config
+        # lerobot-record counts these for its image writer threads; the frames come from rosbridge
+        self.cameras = {CAMERA: None}
         self._ros: roslibpy.Ros | None = None
         self._command_out: roslibpy.Topic | None = None
         self._lock = threading.Lock()

@@ -56,6 +56,7 @@ def test_features_are_known_before_connect(tmp_path):
     assert robot.observation_features == {**dict.fromkeys(KEYS, float), "camera2": (240, 320, 3)}
     assert robot.action_features == dict.fromkeys(KEYS, float)
     assert not robot.is_connected
+    assert len(robot.cameras) == 1  # lerobot-record sizes its image writer from this
 
 
 def test_get_observation_returns_latest_state_and_frame(robot):

@@ -192,9 +192,12 @@ class Detector(Protocol):
 class YoloDetector:
     """Ultralytics YOLO on the CPU (or CUDA if torch finds one). `pip install -r requirements-detect.txt`."""
 
-    def __init__(self, model: str, confidence: float = 0.35, image_size: int = 416) -> None:
+    def __init__(self, model: str, confidence: float = 0.35, image_size: int = 416, threads: int = 2) -> None:
+        import torch
         from ultralytics import YOLO  # torch: only imported when a model is configured
 
+        # Left alone, torch takes every core and the rest of the machine (sim, browser) starves
+        torch.set_num_threads(max(1, threads))
         self.name = model
         self._model = YOLO(model)
         self._confidence = confidence
@@ -213,12 +216,12 @@ class YoloDetector:
         return detections
 
 
-def make_detector(model: str) -> Detector | None:
+def make_detector(model: str, threads: int = 2) -> Detector | None:
     """None (and one log line) when no model is configured or its library is not installed."""
     if not model:
         return None
     try:
-        detector = YoloDetector(model)
+        detector = YoloDetector(model, threads=threads)
     except ImportError:
         LOGGER.warning(
             "DETECT_MODEL=%s but ultralytics is not installed (pip install -r requirements-detect.txt): "

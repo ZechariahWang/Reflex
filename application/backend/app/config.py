@@ -29,6 +29,10 @@ class Settings:
     mirror_beta: float = 1.0  # higher = less lag in a fast move
     # Ultralytics model for the objects around the hand; "" = no detector (objects stay empty)
     detect_model: str = "yolov8n.pt"
+    # Passes per second at most, and torch threads: the detector shares the machine with the sim,
+    # the sim's viewer and, on one laptop, the browser
+    detect_hz: float = 4.0
+    detect_threads: int = 2
     # Live ROS, but synthetic objects: a sim has no camera, and the map view still needs something to show
     mock_objects: bool = False
 
@@ -54,5 +58,7 @@ class Settings:
             mirror_min_cutoff=float(env.get("MIRROR_MIN_CUTOFF", "1.5")),
             mirror_beta=float(env.get("MIRROR_BETA", "1.0")),
             detect_model=env.get("DETECT_MODEL", "yolov8n.pt").strip(),
+            detect_hz=float(env.get("DETECT_HZ", "4")),
+            detect_threads=int(env.get("DETECT_THREADS", "2")),
             mock_objects=env.get("MOCK_OBJECTS", "0") == "1",
         )

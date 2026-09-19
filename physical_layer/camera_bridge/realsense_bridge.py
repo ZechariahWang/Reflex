@@ -38,6 +38,8 @@ OPTICAL_FRAME = "camera_color_optical_frame"
 # compressed_depth_image_transport's ConfigHeader: int32 format, float32 depthParam[2]; all zero for 16UC1
 DEPTH_HEADER = struct.pack("<iff", 0, 0.0, 0.0)
 STATS_EVERY_S = 5.0
+# After the camera drops off the bus (a loose cable, USB power management), try again this often
+RECONNECT_S = 2.0
 
 
 def profile(text: str) -> tuple[int, int, int]:
@@ -104,9 +106,27 @@ def main() -> int:
 
     color, depth = profile(args.color), profile(args.depth)
     try:
+        while ros.is_connected:
+            try:
+                stream(ros, topics, color, depth, args)
+            except RuntimeError as error:  # the camera went away mid-stream, or would not start
+                print(f"camera: {error}; retrying in {RECONNECT_S:.0f} s", file=sys.stderr, flush=True)
+                time.sleep(RECONNECT_S)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        for topic in topics.values():
+            topic.unadvertise()
+        ros.close()
+    return 0
+
+
+def stream(ros: roslibpy.Ros, topics: dict, color: tuple, depth: tuple, args: argparse.Namespace) -> None:
+    """One camera session: start the pipeline and publish until the camera or rosbridge goes away."""
+    try:
         pipeline = start_pipeline(color, depth)
     except RuntimeError as error:
-        print(f"{error}; retrying with the depth at the colour size", file=sys.stderr)
+        print(f"{error}; retrying with the depth at the colour size", file=sys.stderr, flush=True)
         pipeline = start_pipeline(color, color)
     active = pipeline.get_active_profile()
     device = active.get_device()
@@ -162,14 +182,11 @@ def main() -> int:
                 elapsed = now - last_stats
                 print(f"{frames_sent / elapsed:.1f} fps, {bytes_sent / elapsed / 1e6:.2f} MB/s", flush=True)
                 frames_sent, bytes_sent, last_stats = 0, 0, now
-    except KeyboardInterrupt:
-        pass
     finally:
-        pipeline.stop()
-        for topic in topics.values():
-            topic.unadvertise()
-        ros.close()
-    return 0
+        try:
+            pipeline.stop()
+        except RuntimeError:
+            pass  # a pipeline whose device vanished is already stopped
 
 
 if __name__ == "__main__":

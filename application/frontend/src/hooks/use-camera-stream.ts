@@ -110,6 +110,12 @@ export function useCameraStream(source: CameraSource, kind: CameraKind): CameraS
       decoding = false
     }
 
+    // The server holds the next frame until this arrives, so a page that paints slower than the
+    // camera runs sees the newest frame late by one frame, never a queue of old ones.
+    const sayReady = () => {
+      if (socket?.readyState === WebSocket.OPEN) socket.send("ready")
+    }
+
     const handleMessage = (event: MessageEvent) => {
       if (typeof event.data === "string") {
         try {
@@ -121,6 +127,7 @@ export function useCameraStream(source: CameraSource, kind: CameraKind): CameraS
       } else if (event.data instanceof Blob) {
         if (decoding) pending = event.data
         else void decode(event.data)
+        sayReady()
       }
     }
 
@@ -131,6 +138,7 @@ export function useCameraStream(source: CameraSource, kind: CameraKind): CameraS
       ws.onopen = () => {
         attempt = 0
         lastFrameAt = performance.now()
+        sayReady()
       }
       ws.onmessage = handleMessage
       ws.onclose = () => {

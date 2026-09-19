@@ -28,6 +28,9 @@ from .ros_client import RosClient
 STATE_PERIOD_S = 1 / 60  # one /ws/state message per display frame
 META_PERIOD_S = 1.0
 MAX_MIRROR_FRAME_BYTES = 1_000_000  # a 320x240 JPEG is ~15 kB
+# A client that has said "ready" once gets the next frame only after its next "ready"; a lost
+# one is forgiven after this long so the stream can never wedge.
+READY_TIMEOUT_S = 3.0
 
 MESH_NAME = re.compile(r"^[a-z0-9_]+\.stl$")
 MOCK_PHONE = {"host": "mock", "state": "streaming", "detail": ""}
@@ -105,6 +108,33 @@ async def run_socket(
         await asyncio.gather(task, return_exceptions=True)
 
 
+class Readiness:
+    """Backpressure for one camera socket. The socket's send buffer is unbounded, so a browser
+    that paints slower than the camera runs would otherwise watch a growing backlog of old
+    frames (minutes, on a busy laptop). Once the client has sent "ready", every frame waits
+    for the next "ready"; a client that never sends one is served as before."""
+
+    def __init__(self, timeout_s: float = READY_TIMEOUT_S) -> None:
+        self.acknowledges = False
+        self._timeout_s = timeout_s
+        self._ready = asyncio.Event()
+
+    def on_text(self, text: str) -> None:
+        if text.strip() == "ready":
+            self.acknowledges = True
+            self._ready.set()
+
+    async def wait(self) -> None:
+        """Returns at once for a client that never acknowledges; otherwise once per "ready" (or timeout)."""
+        if not self.acknowledges:
+            return
+        try:
+            await asyncio.wait_for(self._ready.wait(), self._timeout_s)
+        except asyncio.TimeoutError:
+            pass
+        self._ready.clear()
+
+
 def create_app(settings: Settings) -> FastAPI:
     hub = Hub(settings)
     source: Source = MockSource(hub) if settings.mock else RosClient(settings, hub)
@@ -115,7 +145,11 @@ def create_app(settings: Settings) -> FastAPI:
         hub.bind(asyncio.get_running_loop())
         workers = [asyncio.create_task(hub.run_depth_worker()), asyncio.create_task(hub.run_iphone_worker())]
         if not settings.mock:
-            workers.append(asyncio.create_task(hub.run_object_worker(settings.detect_model)))
+            workers.append(
+                asyncio.create_task(
+                    hub.run_object_worker(settings.detect_model, settings.detect_hz, settings.detect_threads)
+                )
+            )
             if settings.mock_objects:
                 workers.append(asyncio.create_task(run_mock_objects(hub)))
         source.start()
@@ -199,15 +233,15 @@ def create_app(settings: Settings) -> FastAPI:
 
         await serve_socket(ws, settings.cors_origins, send_state, on_text)
 
-    async def send_camera(ws: WebSocket, source: str, kind: str) -> None:
+    async def send_camera(ws: WebSocket, source: str, kind: str, readiness: Readiness) -> None:
         channel = hub.frames[source][kind]
         channel.viewers += 1  # producers only render streams somebody has open
         try:
-            await stream_camera(ws, source, kind)
+            await stream_camera(ws, source, kind, readiness)
         finally:
             channel.viewers -= 1
 
-    async def stream_camera(ws: WebSocket, source: str, kind: str) -> None:
+    async def stream_camera(ws: WebSocket, source: str, kind: str, readiness: Readiness) -> None:
         channel = hub.frames[source][kind]
         seen = 0
         sent_meta: dict | None = None
@@ -223,6 +257,10 @@ def create_app(settings: Settings) -> FastAPI:
                 seen, frame = await asyncio.wait_for(channel.next(seen), META_PERIOD_S)
             except asyncio.TimeoutError:
                 continue
+            await readiness.wait()
+            # Newest frame at the moment the client is ready, not the one that woke us
+            if channel.latest is not None:
+                frame = channel.latest
             await ws.send_bytes(frame.data)
 
     @app.websocket("/ws/camera/{camera}/{kind}")
@@ -230,7 +268,8 @@ def create_app(settings: Settings) -> FastAPI:
         if camera not in CAMERA_SOURCES or kind not in CAMERA_KINDS:
             await ws.close(code=status.WS_1008_POLICY_VIOLATION)
             return
-        await serve_socket(ws, settings.cors_origins, lambda: send_camera(ws, camera, kind))
+        readiness = Readiness()
+        await serve_socket(ws, settings.cors_origins, lambda: send_camera(ws, camera, kind, readiness), readiness.on_text)
 
     mirror_busy = False
 

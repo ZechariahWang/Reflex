@@ -125,3 +125,38 @@ def test_mock_objects_appear_in_the_state(client):
                 break
         assert objects and {"bottle", "apple"} <= {o["label"] for o in objects}
         assert all(len(o["xyz"]) == 3 and len(o["size"]) == 3 and o["age"] >= 0 for o in objects)
+
+
+def test_camera_keeps_streaming_after_the_client_says_ready(client):
+    with client.websocket_connect("/ws/camera/realsense/color") as ws:
+        def next_frame() -> bytes:
+            while True:
+                message = ws.receive()
+                if message.get("bytes"):
+                    return message["bytes"]
+
+        next_frame()  # streamed freely until the first "ready"
+        for _ in range(3):
+            ws.send_text("ready")
+            assert next_frame()[:2] == b"\xff\xd8"
+
+
+def test_readiness_gates_one_frame_per_ready_and_forgives_a_lost_one():
+    import asyncio
+    import time
+
+    from app.main import Readiness
+
+    async def scenario() -> None:
+        readiness = Readiness(timeout_s=0.2)
+        await asyncio.wait_for(readiness.wait(), 0.05)  # never acknowledged: no gate
+        readiness.on_text("ready")
+        await asyncio.wait_for(readiness.wait(), 0.05)  # one "ready" = one frame
+        started = time.monotonic()
+        await readiness.wait()  # no "ready": waits for the timeout, then serves anyway
+        assert 0.15 <= time.monotonic() - started < 1.0
+        readiness.on_text("ready")
+        readiness.on_text("noise")
+        await asyncio.wait_for(readiness.wait(), 0.05)
+
+    asyncio.run(scenario())

@@ -71,9 +71,10 @@ class RateMeter:
     def hz(self, now: float) -> float:
         """Mean rate between the first and last message inside the window."""
         self._prune(now)
-        if len(self._stamps) < 2:
-            return 0.0
-        return round((len(self._stamps) - 1) / (self._stamps[-1] - self._stamps[0]), 1)
+        span = self._stamps[-1] - self._stamps[0] if len(self._stamps) >= 2 else 0.0
+        if span <= 0.0:
+            return 0.0  # one message, or several inside one clock tick (Windows: ~15 ms)
+        return round((len(self._stamps) - 1) / span, 1)
 
     def age_ms(self, now: float) -> int | None:
         return None if self._last is None else int((now - self._last) * 1000)
@@ -272,18 +273,23 @@ class Hub:
             if depth is not None:
                 channels["depth"].publish(depth)
 
-    async def run_object_worker(self, model: str) -> None:
+    async def run_object_worker(self, model: str, max_hz: float = 4.0, threads: int = 2) -> None:
         """Detect in the newest colour frame, place with the newest depth, in a worker thread.
 
-        Runs at whatever rate the detector manages; frames that arrive meanwhile are skipped, never
-        queued. Without a depth image nothing can be placed, so that pass is skipped too.
+        At most `max_hz` passes a second, and no faster than the detector manages; frames that
+        arrive meanwhile are skipped, never queued. Without a depth image nothing can be placed,
+        so that pass is skipped too.
         """
-        detector = await asyncio.to_thread(make_detector, model)
+        detector = await asyncio.to_thread(make_detector, model, threads)
         if detector is None:
             return
+        period = 1.0 / max_hz if max_hz > 0 else 0.0
         seen = 0
+        last_pass = 0.0
         while True:
+            await asyncio.sleep(max(0.0, last_pass + period - time.monotonic()))
             seen, frame = await self.frames["realsense"]["color"].next(seen)
+            last_pass = time.monotonic()
             payload = self._depth_payloads.latest
             if payload is None:
                 continue

@@ -58,8 +58,7 @@ class ExoHandLeader(Teleoperator):
         if self.is_connected:
             raise ConnectionError(f"{self} is already connected")
         ros = roslibpy.Ros(self.config.host, self.config.port)
-        roslibpy.Topic(ros, STATE_TOPIC, MULTI_ARRAY, queue_length=1).subscribe(self._on_state)
-        roslibpy.Topic(ros, PASSIVE_TOPIC, BOOL, queue_length=1).subscribe(self._on_passive)
+        self._subscribe(ros)
         ros.run(timeout=self.config.connect_timeout_s)
         self._ros = ros
 
@@ -77,6 +76,10 @@ class ExoHandLeader(Teleoperator):
         except RuntimeError:
             self.disconnect()
             raise
+
+    def _subscribe(self, ros: roslibpy.Ros) -> None:
+        roslibpy.Topic(ros, STATE_TOPIC, MULTI_ARRAY, queue_length=1).subscribe(self._on_state)
+        roslibpy.Topic(ros, PASSIVE_TOPIC, BOOL, queue_length=1).subscribe(self._on_passive)
 
     def disconnect(self) -> None:
         if self._ros is not None:
@@ -104,13 +107,20 @@ class ExoHandLeader(Teleoperator):
             stamp = self._state_stamp
         return is_fresh((stamp,), time.monotonic(), self.config.max_age_s)
 
-    def get_action(self) -> dict[str, float]:
-        self._check_mode()
+    def _fresh_state(self) -> list[float]:
         with self._lock:
             state, stamp = self._state, self._state_stamp
         # Without this a dead link labels the rest of the episode with one frozen pose
         if state is None or not is_fresh((stamp,), time.monotonic(), self.config.max_age_s):
             raise ConnectionError(f"no {STATE_TOPIC} from rosbridge within {self.config.max_age_s} s")
-        if len(state) != len(KEYS):
-            raise ValueError(f"state has {len(state)} values, expected {len(KEYS)}")
-        return {key: float(value) for key, value in zip(KEYS, state)}
+        return state
+
+    @staticmethod
+    def _as_action(values: list[float]) -> dict[str, float]:
+        if len(values) != len(KEYS):
+            raise ValueError(f"got {len(values)} values, expected {len(KEYS)}")
+        return {key: float(value) for key, value in zip(KEYS, values)}
+
+    def get_action(self) -> dict[str, float]:
+        self._check_mode()
+        return self._as_action(self._fresh_state())

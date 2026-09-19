@@ -1,8 +1,8 @@
 # Mirror teleop: a second person's hand commands the exoskeleton
 
 How the demonstrations are made now that backdrive is not usable
-(`data-collection-design.md`, Backdrive result). Status: design agreed on
-2026-09-19, nothing implemented. It replaces the design notes of the same day
+(`data-collection-design.md`, Backdrive result). Status: built on 2026-09-19 and
+tested without hardware; the done check below has not run. It replaces the design notes of the same day
 (free hand of the wearer, standalone script, OpenCV window).
 
 Scope: data collection only. From the controller's webcam to `/hand/command`,
@@ -129,7 +129,9 @@ Server -> client, one JSON for each processed frame:
  "landmarks": [[0.41, 0.63], "... 21 image points, 0..1, or null"]}
 ```
 
-The measured state is already in `/ws/state`.
+As built there are two more fields, `capturing` and `error`, for the guided
+calibration: `application/CONTRACT.md` is the reference. The measured state is
+already in `/ws/state`.
 
 ## Frontend
 
@@ -142,7 +144,8 @@ The measured state is already in `/ws/state`.
   Nothing is saved: always right for this person, camera and distance.
 - **Mirror panel**: the local webcam video with the skeleton drawn from
   `landmarks`; a mode badge, red border when not `following`, with the hint
-  ("put your hand in view" / "match the cmd bars"); for each finger three bars:
+  ("put your hand in view" / "match the cmd bars"); it takes the place of the
+  3D hand while Mirror is on; for each finger three bars:
   **ctl** (controller), **cmd** (sent), **st** (measured). `frozen`: ctl differs
   from cmd. Contact: cmd above st.
 - Frames: a canvas at 320x240 -> JPEG -> binary message, 30 fps, skip a frame

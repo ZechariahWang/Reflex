@@ -29,7 +29,34 @@ python -m lerobot_robot_exo_hand.exo_hand --host <ros-ip>
 It prints one observation, closes the hand, opens it again, and fails if
 `/hand/state` does not follow.
 
-## Data collection
+## Data collection: mirror teleop (torque on)
+
+Design: `../docs/specs/mirror-teleop-design.md`. A second person (the controller)
+closes a hand in front of a browser webcam, the web console turns it into
+`/hand/command`, and the hand moves with the torque on. `exo_hand_command` records
+the last `/hand/command` as the action (the measured `/hand/state` until the first
+command); the observation state is `/hand/state`. It works with any command source
+(mirror, sliders, keys), and refuses a HAL in passive mode. `--robot.passive=true`
+stops the robot from publishing each command a second time. No `label.py` step.
+
+In the web console: ARM, Mirror on, calibrate (open hand, fist), match the hand
+until the mode is `following`. Nobody arms the sliders in another tab. Then:
+
+```bash
+lerobot-record \
+    --robot.type=exo_hand --robot.host=<ros-ip> --robot.id=exo --robot.passive=true \
+    --teleop.type=exo_hand_command --teleop.host=<ros-ip> --teleop.id=exo \
+    --dataset.repo_id=<user>/exo_grasp --dataset.push_to_hub=false \
+    --dataset.root=policy/datasets/exo_grasp \
+    --dataset.single_task="<the constant instruction>" \
+    --dataset.fps=30 --dataset.num_episodes=50 \
+    --dataset.episode_time_s=20 --dataset.reset_time_s=5
+```
+
+Right arrow = save the episode, left arrow = record it again, Esc = stop (the keys
+may not work on Wayland; `episode_time_s` is the upper limit then).
+
+## Data collection: backdrive (closed for these servos)
 
 Design: `../docs/specs/data-collection-design.md`. The HAL is in its torque-off
 mode, a person moves the fingers, and the encoder positions are the actions.

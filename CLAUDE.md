@@ -39,6 +39,11 @@ everything else goes in a top-level subfolder per concern.
 
 ## Conventions
 
+- **Commit automatically.** After every completed change (a fix, a feature, a
+  doc update) commit it right away without asking: `git add -A :/` from
+  anywhere in the repo, one commit per logical change, message says what and
+  why. Verify first (tests / build for the part you touched) - never commit a
+  known-broken state. Do NOT push; pushing stays a manual step.
 - Keep it bare-bones: this is a hackathon project, prefer the smallest thing
   that works over frameworks and abstraction.
 - Build with `physical_layer/build.sh`. Never run `colcon build` from the repo

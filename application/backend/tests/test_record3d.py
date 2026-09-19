@@ -9,7 +9,7 @@ import pytest
 import uvicorn
 
 from app.depth import Colorizer
-from app.record3d import Record3DClient, encode_hue_depth, hue_depth_mm, normalize_host, render
+from app.record3d import Record3DClient, encode_hue_depth, hue_depth_mm, normalize_host, render, render_rgbd
 from tests.fake_record3d import create_phone
 
 
@@ -98,3 +98,95 @@ def test_unreachable_phone_reports_error_and_keeps_retrying():
     failing, stopped = asyncio.run(scenario())
     assert failing["state"] in ("error", "connecting") and failing["host"] == "127.0.0.1:9"
     assert stopped["state"] == "off"
+
+
+class FakeUsbStream:
+    """The slice of record3d.Record3DStream the client uses; frames come from a thread."""
+
+    def __init__(self, devices=("iphone",), accepts=True, frames=True):
+        self._devices, self._accepts, self._frames = list(devices), accepts, frames
+        self.on_new_frame = self.on_stream_stopped = lambda: None
+        self._running = threading.Event()
+        self.disconnected = False
+
+    def get_connected_devices(self):
+        return self._devices
+
+    def connect(self, device):
+        if self._accepts and self._frames:
+            self._running.set()
+            threading.Thread(target=self._pump, daemon=True).start()
+        return self._accepts
+
+    def _pump(self):
+        while self._running.is_set():
+            self.on_new_frame()
+            time.sleep(0.03)
+
+    def get_rgb_frame(self):
+        rgb = np.zeros((960, 720, 3), dtype=np.uint8)
+        rgb[..., 0] = 250  # red, RGB order
+        return rgb
+
+    def get_depth_frame(self):
+        depth = np.full((256, 192), 0.4, dtype=np.float32)
+        depth[:20] = np.nan  # no reading
+        return depth
+
+    def disconnect(self):
+        self._running.clear()
+        self.disconnected = True
+
+
+def run_usb(stream, seconds=0.6):
+    async def scenario():
+        frames = []
+        client = Record3DClient(frames.append, "usb", usb_stream=lambda: stream)
+        client.start()
+        await asyncio.sleep(seconds)
+        status = client.status()
+        await client.stop()
+        return status, frames
+
+    return asyncio.run(scenario())
+
+
+def test_usb_streams_rgb_and_metric_depth():
+    stream = FakeUsbStream()
+    status, frames = run_usb(stream)
+    assert status["state"] == "streaming" and len(frames) > 3 and stream.disconnected
+    color, colorized = render_rgbd(frames[-1], Colorizer(150, 2000))
+    assert (color.width, color.height) == (720, 960) == (colorized.width, colorized.height)
+    shown = cv2.imdecode(np.frombuffer(color.data, np.uint8), cv2.IMREAD_COLOR)
+    assert shown[..., 2].mean() > 200 and shown[..., 0].mean() < 40  # still red after RGB -> BGR
+    depth = cv2.imdecode(np.frombuffer(colorized.data, np.uint8), cv2.IMREAD_COLOR)
+    assert abs(int(depth[5, 5, 0]) - 0xF6) < 6 and int(depth[500, 300, 2]) > int(depth[500, 300, 0])
+
+
+@pytest.mark.parametrize(
+    ("stream", "expected"),
+    [(FakeUsbStream(devices=()), "no iPhone on USB"), (FakeUsbStream(accepts=False), "not streaming")],
+)
+def test_usb_problems_are_explained(stream, expected):
+    status, frames = run_usb(stream, 0.3)
+    assert status["state"] == "error" and expected in status["detail"] and not frames
+
+
+def test_usb_is_a_valid_address():
+    assert normalize_host(" USB ") == "usb"
+
+
+def test_a_wedged_usbmuxd_is_reported_not_waited_for(monkeypatch):
+    monkeypatch.setattr("app.record3d.USB_CALL_TIMEOUT_S", 0.2)
+    release = threading.Event()
+
+    class Wedged(FakeUsbStream):
+        def get_connected_devices(self):
+            release.wait(5)
+            return []
+
+    started = time.monotonic()
+    status, frames = run_usb(Wedged(), 0.6)
+    release.set()
+    assert status["state"] == "error" and "usbmuxd is not answering" in status["detail"]
+    assert time.monotonic() - started < 3 and not frames

@@ -35,7 +35,7 @@ not matter: with ROS down the console shows OFFLINE / NO SIGNAL and recovers on 
 | env | default | |
 |---|---|---|
 | `MOCK` | `0` | `1` = synthesize everything |
-| `RECORD3D_HOST` | empty | iPhone address; normally typed into the iPhone panel instead |
+| `RECORD3D_HOST` | empty | iPhone address, or `usb` for the cable; normally set from the iPhone panel instead |
 | `ROSBRIDGE_HOST` / `ROSBRIDGE_PORT` | `localhost` / `9090` | where rosbridge listens |
 | `BACKEND_PORT` / `FRONTEND_PORT` | `8000` / `3000` | dev.sh ports |
 | `DEPTH_MIN_MM` / `DEPTH_MAX_MM` | `150` / `2000` | depth colormap range |

@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button"
 import { connectPhone, type PhoneState } from "@/hooks/use-phone"
 import type { PhoneStatus } from "@/lib/types"
 
+/** Address that selects the cable instead of the network. */
+const USB = "usb"
+
 const STATES: Record<PhoneStatus["state"], { status: Status; label: string }> = {
   off: { status: "offline", label: "Not connected" },
   connecting: { status: "waiting", label: "Connecting" },
@@ -25,13 +28,17 @@ export function PhoneConnect({ phone, error, onDone }: PhoneState & { onDone?: (
   const host = draft ?? phone?.host ?? ""
   const shown = STATES[phone?.state ?? "off"]
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault()
+  const connect = async (address: string) => {
     setBusy(true)
-    await connectPhone(host)
+    await connectPhone(address)
     setBusy(false)
     setDraft(null)
     onDone?.()
+  }
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    void connect(host)
   }
 
   return (
@@ -58,7 +65,7 @@ export function PhoneConnect({ phone, error, onDone }: PhoneState & { onDone?: (
           <input
             value={host}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="192.168.1.23"
+            placeholder="192.168.1.23 or usb"
             aria-label="iPhone address"
             spellCheck={false}
             autoComplete="off"
@@ -72,11 +79,21 @@ export function PhoneConnect({ phone, error, onDone }: PhoneState & { onDone?: (
           >
             {host.trim() === "" && phone?.host ? "Disconnect" : "Connect"}
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            disabled={busy || phone === null}
+            onClick={() => void connect(USB)}
+            className="h-7 rounded-[2px] px-2.5 font-mono text-[10px] tracking-[0.14em] uppercase"
+          >
+            USB
+          </Button>
         </span>
 
         <span className="label-micro leading-relaxed tracking-normal normal-case">
           {error ?? (phone?.state === "error" ? phone.detail : null) ??
-            "Record3D app › Wi-Fi streaming › start. Phone and this computer on the same network; the address is shown in the app."}
+            "Record3D › Settings › Live RGBD Video Streaming, then the red button. USB: cable, works on any network. Wi-Fi: type the address the app shows (not on eduroam, not via the phone's hotspot)."}
         </span>
       </form>
     </motion.div>

@@ -5,3 +5,4 @@ numpy==2.2.6
 opencv-python-headless==5.0.0.93
 wsaccel==0.6.7
 aiortc==1.15.0
+record3d==1.4.1

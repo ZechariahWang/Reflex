@@ -1,6 +1,13 @@
-"""iPhone depth camera through the Record3D app's Wi-Fi streaming.
+"""iPhone depth camera through the Record3D app. Two transports, one client.
 
-The app runs a small HTTP server on the phone and streams one WebRTC video track:
+USB (address "usb"): the official `record3d` library over the cable (usbmuxd). No
+network involved, so it works on isolating Wi-Fi such as eduroam, and depth
+arrives as real float32 metres.
+
+Wi-Fi (address = the IP the app shows): the app runs a small HTTP server on the
+phone and streams one WebRTC video track. Phone and backend must be clients of
+the same non-isolating network; the app does not serve while the phone is the
+hotspot.
 
     GET  http://<phone>/getOffer  -> {"type": "offer", "sdp": ...}
     POST http://<phone>/answer    <- {"type": "answer", "data": <our sdp, ICE gathered>}
@@ -16,8 +23,10 @@ import asyncio
 import json
 import logging
 import re
+import threading
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from typing import Callable
 
 import cv2
@@ -40,11 +49,28 @@ HTTP_TIMEOUT_S = 10.0  # the phone gathers its ICE candidates before it answers 
 FIRST_FRAME_TIMEOUT_S = 10.0
 FRAME_TIMEOUT_S = 3.0
 RETRY_MIN_S, RETRY_MAX_S = 1.0, 8.0
+USB = "usb"
+USB_CALL_TIMEOUT_S = 8.0
+USB_STUCK = (
+    "usbmuxd is not answering: replug the iPhone while it is unlocked; if that does not help, "
+    "run: sudo systemctl restart usbmuxd"
+)
+MAX_SIDE_PX = 960  # USB colour frames can be 1440 x 1920; the panel never needs that
 HOST_PATTERN = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(:\d{1,5})?$")
 
 
+@dataclass(frozen=True)
+class RgbdFrame:
+    """One USB frame: RGB picture and depth in metres (usually at a lower resolution)."""
+
+    rgb: np.ndarray
+    depth_m: np.ndarray
+
+
 def normalize_host(text: str) -> str | None:
-    """'http://192.168.1.7/' -> '192.168.1.7'; None if it is not a plain host[:port]."""
+    """'http://192.168.1.7/' -> '192.168.1.7', 'USB' -> 'usb'; None if it is not a plain host[:port]."""
+    if text.strip().lower() == USB:
+        return USB
     host = text.strip().removeprefix("http://").removeprefix("https://").rstrip("/")
     return host if HOST_PATTERN.fullmatch(host) else None
 
@@ -83,6 +109,26 @@ def render(side_by_side_bgr: np.ndarray, colorizer: Colorizer) -> tuple[Frame, F
     return _jpeg(side_by_side_bgr[:, half : half * 2]), _jpeg(depth)
 
 
+def render_rgbd(frame: RgbdFrame, colorizer: Colorizer) -> tuple[Frame, Frame]:
+    """One USB frame -> (color JPEG, colorized depth JPEG), both at the colour image's shape."""
+    bgr = cv2.cvtColor(frame.rgb, cv2.COLOR_RGB2BGR)
+    scale = MAX_SIDE_PX / max(bgr.shape[:2])
+    if scale < 1.0:
+        bgr = cv2.resize(bgr, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    mm = np.nan_to_num(frame.depth_m.astype(np.float32) * 1000.0, nan=0.0, posinf=0.0, neginf=0.0)
+    depth = np.clip(mm, 0.0, 65535.0).round().astype(np.uint16)
+    # Nearest keeps holes as holes instead of smearing 0 into the neighbouring depths.
+    depth = cv2.resize(depth, (bgr.shape[1], bgr.shape[0]), interpolation=cv2.INTER_NEAREST)
+    return _jpeg(bgr), _jpeg(colorizer.colorize(depth))
+
+
+def _usb_stream():
+    """A fresh record3d stream object; imported lazily so Wi-Fi-only setups need not have it."""
+    from record3d import Record3DStream
+
+    return Record3DStream()
+
+
 def _http_json(url: str, body: dict | None = None) -> dict | None:
     data = None if body is None else json.dumps(body).encode()
     request = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
@@ -101,10 +147,17 @@ class Record3DClient:
     streaming, error (with `detail`; it keeps retrying).
     """
 
-    def __init__(self, on_frame: Callable[[VideoFrame], None], host: str = "") -> None:
+    def __init__(
+        self,
+        on_frame: Callable[[VideoFrame | RgbdFrame], None],
+        host: str = "",
+        usb_stream: Callable[[], object] = _usb_stream,
+    ) -> None:
         self._on_frame = on_frame
+        self._usb_stream = usb_stream
         self._host = host
         self._task: asyncio.Task[None] | None = None
+        self._usb_stuck = False
         self.state = "off"
         self.detail = ""
 
@@ -137,8 +190,10 @@ class Record3DClient:
         while True:
             self.state, self.detail = "connecting", ""
             try:
-                await self._session()
+                await (self._usb_session() if self._host == USB else self._session())
                 problem = "stream ended"
+            except ConnectionError as error:  # raised below with a ready-made explanation
+                problem = str(error)
             except (urllib.error.URLError, OSError, asyncio.TimeoutError) as error:
                 problem = f"cannot reach {self._host}: {getattr(error, 'reason', error) or 'timed out'}"
             except Exception as error:  # a bad SDP, a codec error...: report it and retry
@@ -176,3 +231,77 @@ class Record3DClient:
             return
         finally:
             await peer.close()
+
+    async def _usb_call(self, fn: Callable, *args: object):
+        """Run a record3d call with a deadline. The library blocks for good when usbmuxd
+        wedges, so it gets a daemon thread of its own (never the shared pool, never one
+        that would hold up shutdown), and no second call is made while one is still stuck."""
+        if self._usb_stuck:
+            raise ConnectionError(USB_STUCK)
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future = loop.create_future()
+
+        def settle(result: object, error: BaseException | None) -> None:
+            if future.done():
+                return
+            if error is None:
+                future.set_result(result)
+            else:
+                future.set_exception(error)
+
+        def work() -> None:
+            try:
+                result, error = fn(*args), None
+            except Exception as caught:  # handed to the awaiting coroutine
+                result, error = None, caught
+            self._usb_stuck = False  # it came back after all
+            loop.call_soon_threadsafe(settle, result, error)
+
+        threading.Thread(target=work, name="record3d-usb", daemon=True).start()
+        try:
+            return await asyncio.wait_for(future, USB_CALL_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            self._usb_stuck = True
+            raise ConnectionError(USB_STUCK) from None
+
+    async def _usb_session(self) -> None:
+        loop = asyncio.get_running_loop()
+        stream = self._usb_stream()
+        devices = await self._usb_call(stream.get_connected_devices)
+        if not devices:
+            raise ConnectionError("no iPhone on USB: plug it in, unlock it and tap Trust")
+        stopped = asyncio.Event()
+        last_frame = [0.0]
+
+        def deliver(frame: RgbdFrame) -> None:
+            last_frame[0] = loop.time()
+            self.state, self.detail = "streaming", ""
+            self._on_frame(frame)
+
+        def on_new_frame() -> None:  # record3d's own thread; its buffers are reused, so copy
+            frame = RgbdFrame(np.array(stream.get_rgb_frame()), np.array(stream.get_depth_frame()))
+            loop.call_soon_threadsafe(deliver, frame)
+
+        stream.on_new_frame = on_new_frame
+        stream.on_stream_stopped = lambda: loop.call_soon_threadsafe(stopped.set)
+        try:
+            if await self._usb_call(stream.connect, devices[0]) is False:
+                raise ConnectionError(
+                    "iPhone found, but Record3D is not streaming: Settings > Live RGBD Video "
+                    "Streaming > USB, then press the red button"
+                )
+            started = loop.time()
+            while not stopped.is_set():
+                try:
+                    await asyncio.wait_for(stopped.wait(), 1.0)
+                except asyncio.TimeoutError:
+                    pass
+                quiet = loop.time() - (last_frame[0] or started)
+                if quiet > (FRAME_TIMEOUT_S if last_frame[0] else FIRST_FRAME_TIMEOUT_S):
+                    raise ConnectionError("iPhone connected over USB, but no frames: press the red button in Record3D")
+        finally:
+            stream.on_new_frame = lambda: None
+            try:
+                await self._usb_call(stream.disconnect)
+            except ConnectionError:
+                pass  # already reported; nothing more to release

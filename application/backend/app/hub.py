@@ -123,7 +123,7 @@ class Hub:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._colorizer = Colorizer(settings.depth_min_mm, settings.depth_max_mm)
         self._depth_payloads: LatestChannel[bytes] = LatestChannel()
-        self._iphone_frames: LatestChannel[VideoFrame | np.ndarray] = LatestChannel()
+        self._iphone_frames: LatestChannel[VideoFrame | np.ndarray | record3d.RgbdFrame] = LatestChannel()
         self.frames: dict[str, dict[str, LatestChannel[Frame]]] = {
             source: {kind: LatestChannel() for kind in CAMERA_KINDS} for source in CAMERA_SOURCES
         }
@@ -173,8 +173,8 @@ class Hub:
         self._tick("depth")
         self._to_loop(self._depth_payloads.publish, payload)
 
-    def on_iphone_frame(self, frame: VideoFrame | np.ndarray) -> None:
-        """One Record3D frame (depth | RGB side by side), still undecoded."""
+    def on_iphone_frame(self, frame: VideoFrame | np.ndarray | record3d.RgbdFrame) -> None:
+        """One Record3D frame, still undecoded: Wi-Fi (depth | RGB side by side) or USB (RGB + metres)."""
         self._tick("iphone")
         self._to_loop(self._iphone_frames.publish, frame)
 
@@ -203,7 +203,9 @@ class Hub:
                 continue
             self.frames["realsense"]["depth"].publish(frame)
 
-    def _render_iphone(self, frame: VideoFrame | np.ndarray) -> tuple[Frame, Frame]:
+    def _render_iphone(self, frame: VideoFrame | np.ndarray | record3d.RgbdFrame) -> tuple[Frame, Frame]:
+        if isinstance(frame, record3d.RgbdFrame):
+            return record3d.render_rgbd(frame, self._colorizer)
         bgr = frame if isinstance(frame, np.ndarray) else frame.to_ndarray(format="bgr24")
         return record3d.render(bgr, self._colorizer)
 

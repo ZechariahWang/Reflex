@@ -17,10 +17,19 @@ The browser never talks to rosbridge or to the phone directly.
 
 ## iPhone side (Record3D, not ROS)
 
-The iPhone's depth camera comes from the Record3D app in Wi-Fi streaming mode,
-the way github.com/ZechariahWang/record_3d does it in the browser - except the
-backend is the WebRTC peer (`backend/app/record3d.py`), because the phone serves
-ONE viewer at a time and the page may be open in several tabs.
+The iPhone's depth camera comes from the Record3D app, over either of its two
+live-streaming transports. `backend/app/record3d.py` is the only client, because
+the phone serves ONE viewer at a time and the page may be open in several tabs.
+
+**USB** (address `usb`) - the official `record3d` Python library over the cable
+(usbmuxd). No network involved, so it is the one that works on eduroam / venue
+Wi-Fi. Frames are an RGB image plus depth as float32 metres (lower resolution,
+upscaled nearest-neighbour to the colour image; NaN = no reading).
+
+**Wi-Fi** (address = the IP the app shows) - the way
+github.com/ZechariahWang/record_3d does it in the browser. Needs phone and backend
+as clients of the same non-isolating network: eduroam blocks client-to-client
+traffic, and the app does not serve at all while the phone is the hotspot.
 
 - `GET http://<phone>/getOffer` -> `{"type": "offer", "sdp": ...}`; answer with `POST /answer` `{"type": "answer", "data": <sdp with ICE candidates gathered>}`. LAN only: no STUN servers.
 - One video track; every frame is two images side by side: **left = depth encoded as HSV hue (`depth_m = 3 * hue`), right = RGB**. Grey / dark pixels carry no hue = no reading.
@@ -47,7 +56,7 @@ The camera may be absent (`camera:=none`) and ROS may be down entirely; both are
 
 ## Backend API (port 8000)
 
-Env: `ROSBRIDGE_HOST` (default `localhost`), `ROSBRIDGE_PORT` (`9090`), `RECORD3D_HOST` (default empty = wait for the UI to set one), `MOCK` (`0`; `1` = no ROS at all, synthesize everything, for UI work and tests), `CORS_ORIGINS` (default `http://localhost:3000,http://127.0.0.1:3000`; also the allow-list for websocket `Origin` headers - a browser page from anywhere else is closed with 1008, clients that send no Origin are accepted).
+Env: `ROSBRIDGE_HOST` (default `localhost`), `ROSBRIDGE_PORT` (`9090`), `RECORD3D_HOST` (an address or `usb`; default empty = wait for the UI to set one), `MOCK` (`0`; `1` = no ROS at all, synthesize everything, for UI work and tests), `CORS_ORIGINS` (default `http://localhost:3000,http://127.0.0.1:3000`; also the allow-list for websocket `Origin` headers - a browser page from anywhere else is closed with 1008, clients that send no Origin are accepted).
 
 The backend reconnects to rosbridge forever with backoff and never exits because ROS is down.
 
@@ -65,7 +74,7 @@ The backend reconnects to rosbridge forever with backoff and never exits because
 ```json
 {"host": "192.168.1.23", "state": "streaming", "detail": ""}
 ```
-`state`: `off` (no address) | `connecting` | `streaming` | `error` (`detail` says why; it keeps retrying with backoff). `POST {"host": "192.168.1.23"}` points the backend at a phone (`host[:port]`, `""` disconnects, anything else is a 422). The frontend remembers the address in localStorage and re-sends it once after a backend restart. Mock mode always reports `{"host": "mock", "state": "streaming"}`.
+`state`: `off` (no address) | `connecting` | `streaming` | `error` (`detail` says why; it keeps retrying with backoff). `POST {"host": "192.168.1.23"}` points the backend at a phone (`host[:port]`, or `"usb"` for the cable, `""` disconnects, anything else is a 422). The frontend remembers the address in localStorage and re-sends it once after a backend restart. Mock mode always reports `{"host": "mock", "state": "streaming"}`.
 
 ### `WS /ws/state`
 Server -> client, JSON text, one message every 33 ms (30 Hz) regardless of ROS rates (latest-value sampling):

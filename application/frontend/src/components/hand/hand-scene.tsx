@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { ContactShadows, Environment, Grid, Lightformer, OrbitControls } from "@react-three/drei"
 import { MathUtils, NeutralToneMapping, Quaternion, Spherical, Vector3 } from "three"
@@ -27,6 +27,16 @@ const GHOST_FULL_AT = 0.06
 const VIEW_RATE = 4.5
 const VIEW_DONE = 1e-3
 const AUTO_ORBIT_RESUME_MS = 3500
+/** rad/s. One idle lap takes a little under two minutes. */
+const ORBIT_SPEED = ((Math.PI * 2) / 60) * 0.55
+/** 1/s. The idle orbit eases in and out instead of snapping to speed. */
+const ORBIT_EASE_RATE = 1.6
+/** s. A frame longer than this (tab switch, GC pause) advances motion by this much at most. */
+const MAX_FRAME_DT = 1 / 20
+/** rad. Joint motion below this per frame counts as standing still. */
+const STILL_EPSILON = 1e-4
+/** s of stillness before the shadow passes are parked. */
+const STILL_AFTER = 0.4
 const GIZMO_AXIS_PX = 20
 const GIZMO_LABEL_PX = 28
 
@@ -56,7 +66,7 @@ function damp(rate: number, dt: number): number {
 }
 
 /** Softbox studio built from Lightformers: no HDRI download, rendered once. */
-function Studio({ model }: { model: HandModel }) {
+function Studio({ model, moving }: { model: HandModel; moving: boolean }) {
   const { radius } = model.bounds
   const extent = radius * 2.4
 
@@ -88,6 +98,9 @@ function Studio({ model }: { model: HandModel }) {
         position={[0, 0, 0]}
         scale={radius * 4}
         far={model.top}
+        // The orbit never changes this shadow, only the fingers do: while the hand is still it is
+        // drawn once and kept, rather than re-rendered and re-blurred every frame.
+        frames={moving ? Number.POSITIVE_INFINITY : 1}
         resolution={512}
         blur={1.6}
         opacity={0.55}
@@ -114,16 +127,27 @@ interface HandProps {
   ghost: HandModel
   ghostEnabled: boolean
   hud: HudRefs
+  /** Fired when the fingers start or stop moving, never per frame. */
+  onMovingChange: (moving: boolean) => void
 }
 
 /** Measured hand, commanded ghost, and the fingertip labels that follow the measured tips. */
-function Hand({ solid, ghost, ghostEnabled, hud }: HandProps) {
+function Hand({ solid, ghost, ghostEnabled, hud, onMovingChange }: HandProps) {
   const pose = useRef({
     angles: new Float32Array(FINGERS.length),
     curls: new Float32Array(FINGERS.length),
     ghostAngles: new Float32Array(FINGERS.length),
     presence: 0,
   })
+  // Starts as moving, so the first frames draw their shadows.
+  const motion = useRef({ moving: true, stillFor: 0 })
+
+  // A new model needs its shadows drawn even if no finger is moving.
+  useEffect(() => {
+    motion.current.moving = true
+    motion.current.stillFor = 0
+    onMovingChange(true)
+  }, [solid, onMovingChange])
   const nodes = useRef<HudNodes | null>(null)
   const projected = useRef(new Vector3())
   const callouts = useRef({
@@ -132,18 +156,33 @@ function Hand({ solid, ghost, ghostEnabled, hud }: HandProps) {
     rows: new Float32Array(FINGERS.length).fill(Number.NaN),
   })
 
-  useFrame(({ camera, size }, dt) => {
+  useFrame(({ camera, size, gl }, rawDt) => {
+    const dt = Math.min(rawDt, MAX_FRAME_DT)
     const message = useSimStore.getState().live.message
     const { angles, curls, ghostAngles } = pose.current
     const follow = damp(FOLLOW_RATE, dt)
 
+    let moved = 0
     for (const rig of solid.fingers) {
       const i = rig.index
       const angle = message?.joints[`${rig.finger}_joint`] ?? 0
       const curl = message?.state[i] ?? 0
-      angles[i] += (angle - angles[i]) * follow
+      const step = (angle - angles[i]) * follow
+      moved = Math.max(moved, Math.abs(step))
+      angles[i] += step
       curls[i] += (curl - curls[i]) * follow
       rig.joint.setJointValue(angles[i])
+    }
+
+    // The shadow map only depends on the pose, never on the camera: redraw it while the fingers
+    // move and keep the last one while they rest (which is all of the idle orbit).
+    const state = motion.current
+    state.stillFor = moved > STILL_EPSILON ? 0 : state.stillFor + dt
+    const moving = state.stillFor < STILL_AFTER
+    if (moving) gl.shadowMap.needsUpdate = true
+    if (moving !== state.moving) {
+      state.moving = moving
+      onMovingChange(moving)
     }
 
     const command = message?.command ?? null
@@ -251,6 +290,8 @@ function CameraRig({
     goal: null as Spherical | null,
     placed: false,
     orbitAfter: 0,
+    /** Current idle orbit speed, rad/s. */
+    spin: 0,
     current: new Spherical(),
     offset: new Vector3(),
     axis: new Vector3(),
@@ -267,7 +308,8 @@ function CameraRig({
     rig.current.goal = new Spherical(fit, polar, azimuth)
   }, [view, fit])
 
-  useFrame(({ camera }, dt) => {
+  useFrame(({ camera }, rawDt) => {
+    const dt = Math.min(rawDt, MAX_FRAME_DT)
     const orbit = controls.current
     if (!orbit) return
     const state = rig.current
@@ -296,7 +338,18 @@ function CameraRig({
       if (Math.abs(dTheta) + Math.abs(dPhi) + Math.abs(dRadius) / goal.radius < VIEW_DONE) state.goal = null
     }
 
-    orbit.autoRotate = !goal && !reducedMotion && allowsAutoOrbit(view) && performance.now() > state.orbitAfter
+    // Idle orbit, advanced by elapsed time. OrbitControls' own autoRotate turns a fixed angle per
+    // frame, so every uneven frame shows up as a change of speed (and a fast display spins faster).
+    const idle = !goal && !reducedMotion && allowsAutoOrbit(view) && performance.now() > state.orbitAfter
+    state.spin += ((idle ? ORBIT_SPEED : 0) - state.spin) * damp(ORBIT_EASE_RATE, dt)
+    if (state.spin > ORBIT_SPEED * 1e-3) {
+      current.setFromVector3(offset.copy(camera.position).sub(target))
+      current.theta -= state.spin * dt
+      camera.position.setFromSpherical(current).add(target)
+      orbit.update()
+    } else {
+      state.spin = 0
+    }
 
     state.nodes ??= resolveHud(hud)
     if (!state.nodes) return
@@ -335,13 +388,13 @@ function CameraRig({
       dampingFactor={0.08}
       rotateSpeed={0.7}
       zoomSpeed={0.6}
-      autoRotateSpeed={0.55}
       minDistance={fit * 0.55}
       maxDistance={fit * 2}
       minPolarAngle={VIEW_ANGLES.top.polar}
       maxPolarAngle={Math.PI / 2}
       onStart={() => {
         rig.current.goal = null
+        rig.current.spin = 0
         rig.current.orbitAfter = Number.POSITIVE_INFINITY
         onFreeLook()
       }}
@@ -355,6 +408,8 @@ function CameraRig({
 function Stage({ urdf, view, ghost, reducedMotion, hud, onFreeLook }: HandSceneProps) {
   const models = useMemo(() => ({ solid: buildHandModel(urdf, "solid"), ghost: buildHandModel(urdf, "ghost") }), [urdf])
 
+  const [moving, setMoving] = useState(true)
+
   useEffect(
     () => () => {
       models.solid.dispose()
@@ -365,10 +420,10 @@ function Stage({ urdf, view, ghost, reducedMotion, hud, onFreeLook }: HandSceneP
 
   return (
     <>
-      <Studio model={models.solid} />
+      <Studio model={models.solid} moving={moving} />
       {/* The rig moves the camera first, so the labels project through this frame's view. */}
       <CameraRig model={models.solid} view={view} reducedMotion={reducedMotion} hud={hud} onFreeLook={onFreeLook} />
-      <Hand solid={models.solid} ghost={models.ghost} ghostEnabled={ghost} hud={hud} />
+      <Hand solid={models.solid} ghost={models.ghost} ghostEnabled={ghost} hud={hud} onMovingChange={setMoving} />
     </>
   )
 }
@@ -382,6 +437,8 @@ export default function HandScene(props: HandSceneProps) {
       gl={{ antialias: true, powerPreference: "high-performance" }}
       onCreated={({ gl, camera }) => {
         gl.toneMapping = NeutralToneMapping
+        // The shadow map is redrawn on request (see Hand), not every frame.
+        gl.shadowMap.autoUpdate = false
         camera.layers.enable(OVERLAY_LAYER)
       }}
     >

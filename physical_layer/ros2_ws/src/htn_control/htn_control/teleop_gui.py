@@ -18,6 +18,8 @@ TICK_MS = 20
 # only counts once no press has followed it within this time
 RELEASE_DEBOUNCE_MS = 40
 POSE_BUTTONS_PER_ROW = 5
+# Targets closer than this to the last command on the topic are not republished
+COMMAND_TOLERANCE = 0.002
 
 
 class TeleopGui(Node):
@@ -27,6 +29,10 @@ class TeleopGui(Node):
     letting go holds it where it is. Sliders do the same job with the mouse.
     Pose / sequence buttons run the pre-written movements from poses.py; clicking
     the active one again goes back to open.
+
+    Only publishes when the user changes something here. /hand/command is shared
+    with other sources (web app, autonomous node): their commands are adopted
+    into the sliders instead of being overwritten.
     """
 
     def __init__(self, root):
@@ -36,6 +42,9 @@ class TeleopGui(Node):
         self.speed = self.declare_parameter('speed', 0.6).value
         self.command_pub = self.create_publisher(Float64MultiArray, COMMAND_TOPIC, 10)
         self.create_subscription(Float64MultiArray, STATE_TOPIC, self.on_state, 10)
+        self.create_subscription(Float64MultiArray, COMMAND_TOPIC, self.on_command, 10)
+        # Last command seen on the topic, ours or anyone else's
+        self.last_command = [0.0] * len(FINGERS)
 
         # key -> (finger index, direction)
         self.bindings = {}
@@ -145,6 +154,19 @@ class TeleopGui(Node):
         self.pending_release.pop(key, None)
         self.held.discard(key)
 
+    def differs(self, values):
+        return any(abs(a - b) > COMMAND_TOLERANCE for a, b in zip(values, self.last_command))
+
+    def on_command(self, msg):
+        values = list(msg.data)
+        if len(values) != len(FINGERS) or not self.differs(values):
+            return  # malformed, or our own message coming back
+        # Someone else is driving: follow them rather than fight them
+        self.last_command = values
+        if not self.held:
+            self.set_active(None)
+            self.set_targets(values)
+
     def on_state(self, msg):
         for measured, value in zip(self.measured, msg.data):
             measured.set(value)
@@ -155,14 +177,16 @@ class TeleopGui(Node):
             i, direction = self.bindings[key]
             self.targets[i].set(min(max(self.targets[i].get() + direction * step, 0.0), 1.0))
 
+        targets = [t.get() for t in self.targets]
         # A slider dragged away from the active pose: it no longer applies
-        if self.active in POSES and [t.get() for t in self.targets] != POSES[self.active]:
+        if self.active in POSES and targets != POSES[self.active]:
             self.set_active(None)
 
-        # Published continuously, so a HAL that (re)starts later still picks up
-        # the current targets
-        self.command_pub.publish(Float64MultiArray(data=[t.get() for t in self.targets]))
-        rclpy.spin_once(self, timeout_sec=0.0)
+        if self.differs(targets):
+            self.last_command = targets
+            self.command_pub.publish(Float64MultiArray(data=targets))
+        for _ in range(10):  # state + command both arrive faster than we tick
+            rclpy.spin_once(self, timeout_sec=0.0)
         if rclpy.ok():
             self.root.after(TICK_MS, self.tick)
         else:

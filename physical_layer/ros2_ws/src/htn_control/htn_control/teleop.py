@@ -66,11 +66,11 @@ def main():
         tty.setcbreak(sys.stdin.fileno())
         running = True
         while running and rclpy.ok():
-            # Republish at 10 Hz even without key presses, so a HAL that
-            # (re)starts later still picks up the current targets
+            # Publish only on key presses: /hand/command is shared with other
+            # sources (web app, autonomous node) and must not be flooded
             if select.select([sys.stdin], [], [], 0.1)[0]:
                 running = node.handle_key(sys.stdin.read(1))
-            node.publish()
+                node.publish()
             print('\r' + node.status(), end='', flush=True)
     except KeyboardInterrupt:
         pass

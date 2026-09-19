@@ -94,6 +94,10 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
 - Joint names are `<finger>_joint`, links `<finger>_finger`, root `base_link`
   (`world` exists only in sim).
 - Only the HAL's sim backend may publish to `/hand_position_controller/commands`.
+- `/hand/command` is **shared** (control window, web app via rosbridge, later
+  `htn_auto`). Publish only when you have something new to say - never stream
+  your current target on a timer, or you silently override everyone else. The
+  control window adopts other publishers' commands into its sliders.
 - A ROS package must never be called `launch` (shadows the `launch` Python
   module) - hence the `htn_` prefix everywhere.
 

@@ -93,7 +93,7 @@ export function PhoneConnect({ phone, error, onDone }: PhoneState & { onDone?: (
 
         <span className="label-micro leading-relaxed tracking-normal normal-case">
           {error ?? (phone?.state === "error" ? phone.detail : null) ??
-            "Record3D › Settings › Live RGBD Video Streaming, then the red button. USB: cable, works on any network. Wi-Fi: type the address the app shows (not on eduroam, not via the phone's hotspot)."}
+            "USB: cable, works on any network."}
         </span>
       </form>
     </motion.div>

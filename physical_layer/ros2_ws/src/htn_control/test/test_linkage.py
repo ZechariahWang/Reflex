@@ -110,3 +110,28 @@ def test_open_is_the_cad_pose():
     for finger in FINGERS:
         l = LINKAGE[finger]
         assert PassiveJoints(Linkage(l['pivots'], l['closing']), 1.0)(0.0) == pytest.approx((0.0,) * 6, abs=1e-9)
+
+
+def test_every_linkage_message_carries_the_driven_joints_and_never_answers_itself():
+    """rosbridge's throttle keeps the LATEST /joint_states message per period, and this node's
+    message always follows the driven one: without the horns in it the web console saw two horn
+    updates per move and the hand jumped through one intermediate pose."""
+    import os
+    os.environ['ROS_DOMAIN_ID'] = '77'
+    os.environ['ROS_LOCALHOST_ONLY'] = '1'
+    import rclpy
+    from sensor_msgs.msg import JointState
+    from htn_control.linkage_publisher import LinkagePublisher
+
+    rclpy.init()
+    try:
+        node = LinkagePublisher()
+        driven = JointState(name=[f'{f}_joint' for f in FINGERS], position=[0.1, 0.2, 0.3, 0.4, 0.5])
+        out = node.complete(driven)
+        assert list(out.name[:5]) == driven.name and list(out.position[:5]) == pytest.approx(driven.position)
+        assert len(out.name) == 5 + 5 * len(PASSIVE) and len(set(out.name)) == len(out.name)
+        assert node.complete(out) is None, 'it must not answer its own message: that loops at full speed'
+        assert node.complete(JointState(name=['somebody_else'], position=[1.0])) is None
+        node.destroy_node()
+    finally:
+        rclpy.shutdown()

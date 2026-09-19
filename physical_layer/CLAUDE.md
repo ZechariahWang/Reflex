@@ -143,10 +143,26 @@ rosbridge, see `docs/specs/policy-link-design.md`.
   `rosbridge_port:=9191` + `ROSBRIDGE_PORT=9191` for the backend - 9090 is
   shared by every ROS domain on the machine, a backend on the default port
   talks to whoever owns it.
+- **Every message on `/joint_states` must carry the driven joints.** The topic
+  has two publishers (broadcaster / HAL: the 5 horns; `linkage_publisher`: the
+  passive joints, right after each of those). A subscriber that keeps only the
+  latest message per period - rosbridge with `throttle_rate`, i.e. the web
+  console - then sees almost nothing but the second kind: the 3D hand got TWO
+  horn updates per move (333 ms apart) and jumped through one intermediate
+  pose, while `/hand/state` on the same connection was fine. So
+  `linkage_publisher` repeats the horns in its message (and must never answer
+  its own message - that loops at full speed). When checking the viewer's
+  input, measure `joints` in `/ws/state`, not `state`.
+- **No `use_sim_time` on Python nodes.** Gazebo publishes `/clock` at the
+  physics rate (1 kHz) and rclpy spends ~half a core per node taking that
+  callback (HAL 55 % -> 14 %, linkage_publisher 45 % -> 9 % without it). Neither
+  needs it: the HAL's profile runs in wall time like a real servo's, the linkage
+  publisher copies the stamp it is given. C++ nodes (robot_state_publisher,
+  foxglove_bridge) keep it.
 - **Stale Gazebo**: Ctrl-C reaches the shell that started `ign gazebo`, not
   always the server behind it. A survivor poisons the next launch: the hand is
-  spawned twice over, `spawner_joint_state_broadcaster` hangs, no `/clock`, and
-  the HAL (sim time) freezes - commands go out (the web console's orange ghost
+  spawned twice over, `spawner_joint_state_broadcaster` hangs, and nothing
+  drives the joints - commands go out (the web console's orange ghost
   moves) but the measured hand never does. `sim.launch.py` now kills its own
   Gazebo on shutdown and refuses to start next to another server in the same
   `IGN_PARTITION`, printing the `kill -9 <pids>` to run. Symptom check: `ros2
@@ -188,9 +204,10 @@ export ROS_DOMAIN_ID=77 IGN_PARTITION=claude_test
 ros2 launch htn_launch sim.launch.py teleop:=false foxglove:=false rosbridge:=false
 ```
 
-If Gazebo dies, `sim.launch.py` shuts the whole launch down on purpose: the HAL
-runs on sim time, so without Gazebo it freezes silently and the control window
-looks alive while nothing moves.
+If Gazebo dies, `sim.launch.py` shuts the whole launch down on purpose: without
+it nothing drives the joints, while the HAL and the control window still look
+alive. Give an isolated sim its own rosbridge port as well
+(`rosbridge_port:=9191`): TCP ports are not part of a ROS domain.
 
 ## Testing without a GUI
 

@@ -141,9 +141,8 @@ def generate_launch_description():
         OpaqueFunction(function=refuse_stale_gazebo),
         RegisterEventHandler(OnShutdown(on_shutdown=[OpaqueFunction(function=stop_own_gazebo)])),
         gazebo,
-        # Without Gazebo the sim clock stops and the HAL (which runs on sim time)
-        # silently freezes: the control window then looks alive but nothing
-        # moves. Bring everything down instead so the failure is obvious.
+        # Without Gazebo nothing moves any more while every window still looks
+        # alive. Bring everything down instead so the failure is obvious.
         RegisterEventHandler(OnProcessExit(
             on_exit=lambda event, context: (
                 [Shutdown(reason='Gazebo exited - shutting the sim down')]
@@ -173,7 +172,9 @@ def generate_launch_description():
         Node(
             package='htn_control',
             executable='linkage_publisher',
-            parameters=[{'params_file': params_file, 'use_sim_time': True}],
+            # No use_sim_time for the Python nodes: /clock ticks at 1 kHz, and taking that
+            # callback costs rclpy half a core per node. This one copies the stamp it is given.
+            parameters=[{'params_file': params_file}],
         ),
 
         # HAL: /hand/command (0..1 per finger) -> simulated servos
@@ -182,8 +183,7 @@ def generate_launch_description():
             executable='hal',
             parameters=[{'backend': 'sim', 'params_file': params_file,
                          'max_speed': ParameterValue(LaunchConfiguration('max_speed'), value_type=float),
-                         'max_accel': ParameterValue(LaunchConfiguration('max_accel'), value_type=float),
-                         'use_sim_time': True}],
+                         'max_accel': ParameterValue(LaunchConfiguration('max_accel'), value_type=float)}],
             output='screen',
         ),
 

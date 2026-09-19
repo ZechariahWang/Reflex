@@ -34,7 +34,17 @@ It prints one observation, closes the hand, opens it again, and fails if
 Design: `../docs/specs/data-collection-design.md`. The HAL is in its torque-off
 mode, a person moves the fingers, and the encoder positions are the actions.
 `exo_hand_leader` reads them from `/hand/state`; `--robot.passive=true` stops
-the adapter from publishing them as commands. Run from the repo root:
+the adapter from publishing them as commands.
+
+First put the HAL in that mode, on the ROS machine: start it with
+`ros2 launch htn_launch hardware.launch.py passive:=true`, or switch a running
+one with the Backdrive button of the control window / web console, or
+`ros2 service call /hand/set_passive std_srvs/srv/SetBool '{data: true}'`.
+`/hand/passive` (latched Bool) tells which mode it is in. With the torque on the
+fingers do not move and every label is constant. Afterwards switch it off the
+same way (`data: false`): the hand then holds the pose the fingers are in.
+
+Then run from the repo root:
 
 ```bash
 lerobot-record \

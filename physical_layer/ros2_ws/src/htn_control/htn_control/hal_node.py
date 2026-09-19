@@ -1,3 +1,5 @@
+import math
+
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
@@ -35,6 +37,10 @@ class HandHal(Node):
         rate = self.declare_parameter('rate', 50.0).value
         # Fastest a finger may travel, in full ranges per second
         self.max_speed = self.declare_parameter('max_speed', 2.0).value
+        # How hard a finger may speed up and brake, in full ranges per second^2. A move is one
+        # sweep: ease in, cruise at max_speed, brake to arrive with zero speed. Without it the
+        # setpoint starts and stops dead, which a servo answers with a lurch and a crawl.
+        self.max_accel = self.declare_parameter('max_accel', 20.0).value
         # Start with the torque off (a data collection session)
         start_passive = self.declare_parameter('passive', False).value
 
@@ -46,6 +52,7 @@ class HandHal(Node):
         self.dt = 1.0 / rate
         self.target = [0.0] * len(FINGERS)
         self.setpoint = [0.0] * len(FINGERS)
+        self.velocity = [0.0] * len(FINGERS)
 
         self.create_subscription(Float64MultiArray, COMMAND_TOPIC, self.on_command, 10)
         self.command_pub = self.create_publisher(Float64MultiArray, COMMAND_TOPIC, 10)
@@ -70,6 +77,7 @@ class HandHal(Node):
             self.backend.set_torque(False)
         else:
             # update() kept setpoint = target = measured pose while passive
+            self.velocity = [0.0] * len(FINGERS)
             self.backend.set_torque(True, hold=self.setpoint)
             # One message so every controller on the shared topic (control
             # window, web console) starts from the real pose, not a stale one
@@ -106,15 +114,30 @@ class HandHal(Node):
                 # Follow the fingers, so leaving passive mode holds this pose
                 self.setpoint = [min(max(p, 0.0), 1.0) for p in state]
                 self.target = list(self.setpoint)
+                self.velocity = [0.0] * len(FINGERS)
             self.publish_state(state or self.setpoint)
             return
 
-        max_step = self.max_speed * self.dt
-        self.setpoint = [s + min(max(t - s, -max_step), max_step)
-                         for s, t in zip(self.setpoint, self.target)]
+        for i, target in enumerate(self.target):
+            self.setpoint[i], self.velocity[i] = self.sweep(self.setpoint[i], self.velocity[i], target)
         self.backend.write(self.setpoint)
 
         self.publish_state(self.backend.read() or self.setpoint)
+
+    def sweep(self, position, velocity, target):
+        """One tick of a speed- and acceleration-limited move towards `target`."""
+        distance = target - position
+        step_limit = self.max_accel * self.dt  # largest change of speed in one tick
+        # Fastest speed from which we can still brake to rest AT the target, counting the ground
+        # covered during this tick: v * dt + v^2 / 2a <= |distance|. The continuous-time
+        # sqrt(2 a d) ignores the first term and runs a few percent past the target.
+        brake = -step_limit + math.sqrt(step_limit * step_limit + 2.0 * self.max_accel * abs(distance))
+        wanted = math.copysign(min(self.max_speed, brake), distance)
+        velocity += min(max(wanted - velocity, -step_limit), step_limit)
+        step = velocity * self.dt
+        if abs(distance) <= abs(step) or (abs(distance) < 1e-4 and abs(velocity) <= step_limit):
+            return target, 0.0  # within this tick's reach: land exactly, at rest
+        return position + step, velocity
 
     def publish_state(self, state):
         self.state_pub.publish(Float64MultiArray(data=state))

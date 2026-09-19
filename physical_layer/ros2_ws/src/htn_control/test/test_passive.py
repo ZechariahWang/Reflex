@@ -110,3 +110,43 @@ def test_a_finger_pushed_past_its_range_is_held_at_the_limit(hal):
     node.set_passive(False)
     settle(node.backend)
     assert from_u16(servos.registers[1][42:44]) == OPEN
+
+
+def test_a_move_is_one_sweep_within_its_limits_and_never_overshoots(hal):
+    """Ease in, cruise, brake to rest AT the target - for any move, and for a target that keeps moving."""
+    import math
+    import random
+    node, _ = hal
+    random.seed(7)
+    limit = node.max_accel * node.dt
+    moves = [(0.0, 1.0), (1.0, 0.0), (0.0, 0.5), (0.3, 0.35), (0.2, 0.201)]
+    moves += [(random.random(), random.random()) for _ in range(200)]
+    for start, target in moves:
+        position, velocity, ticks = start, 0.0, 0
+        while (position, velocity) != (target, 0.0):
+            new_position, new_velocity = node.sweep(position, velocity, target)
+            if (new_position, new_velocity) != (target, 0.0):  # the landing tick ends at rest by construction
+                assert abs(new_velocity - velocity) <= limit + 1e-9
+            assert abs(new_velocity) <= node.max_speed + 1e-9
+            assert (new_position - target) * (target - start) <= 1e-9, 'ran past the target'
+            position, velocity, ticks = new_position, new_velocity, ticks + 1
+            assert ticks < 200, 'never arrives'
+
+    # a slider being dragged back and forth: the target never rests
+    position, velocity = 0.0, 0.0
+    for tick in range(400):
+        target = 0.5 + 0.5 * math.sin(tick * node.dt * 2 * math.pi * 0.7)
+        new_position, new_velocity = node.sweep(position, velocity, target)
+        if new_velocity != 0.0:
+            assert abs(new_velocity - velocity) <= limit + 1e-9
+        assert abs(new_velocity) <= node.max_speed + 1e-9 and -1e-9 <= new_position <= 1 + 1e-9
+        position, velocity = new_position, new_velocity
+
+
+def test_a_full_close_takes_about_600_ms(hal):
+    node, _ = hal
+    position, velocity, ticks = 0.0, 0.0, 0
+    while (position, velocity) != (1.0, 0.0):
+        position, velocity = node.sweep(position, velocity, 1.0)
+        ticks += 1
+    assert 0.5 <= ticks * node.dt <= 0.7

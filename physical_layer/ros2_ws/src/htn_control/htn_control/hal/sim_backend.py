@@ -7,10 +7,15 @@ from htn_control.hand_config import FINGERS
 
 # gz_ros2_control turns a position command into a joint velocity,
 # gain * error * update_rate, with gain = 0.1 at 100 Hz: every simulated servo is
-# a first-order lag of this many seconds behind its command. The gain cannot be
+# a first-order lag of about 100 ms behind its command (0.085 tracks best: measured). The gain cannot be
 # raised: release 0.7.x creates its node before it loads the parameter file, so
 # position_proportional_gain never reaches it (the log always says "set to: 0.1").
-SERVO_LAG_S = 0.10
+SERVO_LAG_S = 0.085
+# While a finger brakes into the end of its travel, the leading command has to sit a little
+# beyond that end (by up to max_accel * lag^2 / 2 of the range), or the finger crawls the last
+# tenth on Gazebo's lag alone. This is a command, not a position: the lead is zero whenever
+# the setpoint rests, so the joint never comes to rest out there (the DART limit trap).
+LEAD_BEYOND_RANGE = 0.12
 
 
 class SimBackend(HandBackend):
@@ -43,8 +48,7 @@ class SimBackend(HandBackend):
             dt = now - self.previous[1]
             lead = [SERVO_LAG_S * (p - q) / dt for p, q in zip(positions, self.previous[0])]
         self.previous = (list(positions), now)
-        # Never outside the travel: a joint resting on its limit stops obeying (DART)
-        angles = [lo + min(max(p + ahead, 0.0), 1.0) * (hi - lo)
+        angles = [lo + min(max(p + ahead, -LEAD_BEYOND_RANGE), 1.0 + LEAD_BEYOND_RANGE) * (hi - lo)
                   for p, ahead, lo, hi in zip(positions, lead, self.lower, self.upper)]
         self.command_pub.publish(Float64MultiArray(data=angles))
 

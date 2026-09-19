@@ -14,8 +14,9 @@ ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0
 
 Launch args: `gui:=true` (Gazebo window, sim only), `teleop:=false` (no control
 window), `foxglove:=false`, `rosbridge:=false`, `rosbridge_port:=9090`,
-`max_speed:=2.0` (HAL rate limit in full ranges per second; in sim the joint's
-`max_velocity` of 3 rad/s caps it at ~2.3), `passive:=true` (hardware only:
+`max_speed:=2.0` / `max_accel:=20.0` (HAL limits in full ranges per second and
+per second^2: a full close takes ~0.6 s; in sim the joint's `max_velocity` of
+3 rad/s caps the speed at ~2.3), `passive:=true` (hardware only:
 start with the torque off for a recording session), `camera:=none`, `color_profile:=640x480x15`,
 `depth_profile:=480x270x15`, `params_file:=<yaml>`, `require_all_servos:=false`
 (hardware only: bench test with fewer than 5 servos). Foxglove connects to
@@ -72,8 +73,10 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
   `/camera/...` topics of the root CLAUDE.md contract. Another camera = another
   node in that file publishing the same topics, selected by `camera:=`.
 - `htn_control` - the HAL and manual control:
-  - `hal_node.py`: subscribes `/hand/command` (5 x 0..1), clamps, rate-limits
-    (`max_speed`), writes to a backend, publishes `/hand/state`. Passive
+  - `hal_node.py`: subscribes `/hand/command` (5 x 0..1), clamps, and turns
+    every change of target into ONE sweep (`sweep()`: ease in at `max_accel`,
+    cruise at `max_speed`, brake to arrive at rest - discrete-exact, it never
+    overshoots), writes to a backend, publishes `/hand/state`. Passive
     (backdrive) mode - service `/hand/set_passive`, latched `/hand/passive`,
     launch arg `passive:=true`, button in the control window and the web
     console: torque off, commands ignored, state still read. While passive,
@@ -129,7 +132,12 @@ rosbridge, see `docs/specs/policy-link-design.md`.
   on top: gz_ros2_control 0.7.x makes every position-controlled joint a
   first-order lag (velocity = 0.1 * error * 100 Hz), and the gain cannot be set -
   the plugin creates its node before it loads the parameter file. `SimBackend`
-  therefore commands ahead of the setpoint by lag * velocity. The web path adds
+  therefore commands ahead of the setpoint by lag * velocity. That only works with
+  a setpoint that has a velocity worth the name: the HAL used to ramp at constant
+  speed and stop dead, and a finger then ran to ~88 % and crawled the rest (or
+  bounced at a mid-range target). While braking into an end of travel the leading
+  command has to go up to ~10 % BEYOND the range - allowed, because it is zero
+  again whenever the setpoint rests, so the joint never rests out there. The web path adds
   ~30 ms (60 Hz state, 16 ms rosbridge throttle). To test anything on rosbridge
   without touching a running sim, give yours its own port:
   `rosbridge_port:=9191` + `ROSBRIDGE_PORT=9191` for the backend - 9090 is

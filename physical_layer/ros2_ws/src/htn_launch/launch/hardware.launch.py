@@ -38,6 +38,9 @@ def generate_launch_description():
         DeclareLaunchArgument('max_speed', default_value='2.0',
                               description='HAL rate limit: fastest a finger may travel, in full ranges '
                                           'per second (2.0 = open to closed in 0.5 s)'),
+        DeclareLaunchArgument('max_accel', default_value='20.0',
+                              description='HAL: how hard a finger speeds up and brakes, in full ranges per '
+                                          'second^2 (a move eases in and brakes to rest at the target)'),
         DeclareLaunchArgument('rosbridge_port', default_value='9090',
                               description='Set ROSBRIDGE_PORT for application/ to match'),
         DeclareLaunchArgument('rosbridge', default_value='true',
@@ -69,6 +72,7 @@ def generate_launch_description():
                          'require_all_servos': ParameterValue(
                              LaunchConfiguration('require_all_servos'), value_type=bool),
                          'max_speed': ParameterValue(LaunchConfiguration('max_speed'), value_type=float),
+                         'max_accel': ParameterValue(LaunchConfiguration('max_accel'), value_type=float),
                          'passive': ParameterValue(LaunchConfiguration('passive'), value_type=bool)}],
             output='screen',
         ),

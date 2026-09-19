@@ -6,6 +6,7 @@
     servo_tool calibrate         (a window: set each finger's open pose -> hand_params.yaml)
 """
 import argparse
+import math
 import re
 import sys
 import termios
@@ -69,11 +70,20 @@ def yaml_line(finger, servo_id, open_step, closed):
 
 
 def rewrite_yaml(text, lines):
-    """Replace the `  <finger>: {id: ...}` lines of the servos section; everything else stays."""
+    """Replace the `  <finger>: {id: ...}` lines of the servos section (a rewritten line has no
+    `enabled: false` any more: a calibrated finger is driven) and set each finger's max_angle
+    to the travel that was set, so the URDF, the HAL's joint states and the 3D views agree with
+    the servo. Everything else in the file stays."""
     for finger, line in lines.items():
         text, count = re.subn(rf'^  {finger}:\s*\{{id:[^}}]*\}}[^\n]*$', line, text, flags=re.MULTILINE)
         if count != 1:
             raise ValueError(f'no single "  {finger}: {{id: ...}}" line in the parameter file')
+        open_step, closed = (int(v) for v in re.search(r'open_step: (\d+), closed_step: (\d+)', line).groups())
+        travel = abs(closed - open_step) * 2 * math.pi / 4096
+        text, count = re.subn(rf'^(  {finger}:\s*\{{min_angle: [^,]*, max_angle: )[^,]*(,[^\n]*\}})[^\n]*$',
+                              rf'\g<1>{travel:.4f}\g<2>', text, flags=re.MULTILINE)
+        if count != 1:
+            raise ValueError(f'no single "  {finger}: {{min_angle: ..., max_angle: ...}}" line in the parameter file')
     return text
 
 

@@ -167,3 +167,37 @@ def test_the_obstacle_going_away_frees_the_finger_too(hal):
     for _ in range(80):
         node.update()
     assert node.contacts[3].state == FREE and position(servos, 4) == pytest.approx(1.0, abs=0.02)
+
+
+def test_the_hal_runs_the_calibrated_fingers_while_others_are_disabled(params_file, tmp_path):
+    """Found with only the thumb calibrated: a disabled finger has no measured position, and the
+    HAL waited for one for ever - so the thumb never got torque either."""
+    import rclpy
+    import yaml
+    from htn_control.hal_node import HandHal
+
+    params = yaml.safe_load(open(params_file))
+    for finger in ('index', 'middle', 'ring', 'pinky'):
+        params['servos'][finger]['enabled'] = False
+    path = tmp_path / 'thumb_only.yaml'
+    path.write_text(yaml.safe_dump(params))
+    os.environ['ROS_DOMAIN_ID'] = '77'
+    os.environ['ROS_LOCALHOST_ONLY'] = '1'
+    servos = MovingServos(IDS)
+    for i in IDS:
+        servos.registers[i][56:58] = u16(OPEN)
+    rclpy.init(args=['--ros-args', '-p', 'backend:=feetech', '-p', f'serial_port:={servos.port}',
+                     '-p', f'params_file:={path}'])
+    try:
+        node = HandHal()
+        node.on_command(type('Msg', (), {'data': [1.0] * 5})())
+        for _ in range(80):
+            node.update()
+        node.backend.read()
+        assert node.ready and position(servos, 1) == pytest.approx(1.0, abs=0.02), 'the thumb is driven'
+        assert [servos.registers[i][40] for i in (2, 3, 4, 5)] == [0, 0, 0, 0], 'the others never get torque'
+        assert [position(servos, i) for i in (2, 3, 4, 5)] == [0.0] * 4
+        node.backend.close()
+        node.destroy_node()
+    finally:
+        rclpy.shutdown()

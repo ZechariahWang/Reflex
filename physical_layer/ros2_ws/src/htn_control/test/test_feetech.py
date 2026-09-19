@@ -198,16 +198,34 @@ def test_backend_runs_with_absent_servos_when_allowed(servos):
     assert servos.registers[1][40] == 0
 
 
-def test_calibration_lines_replace_only_their_own_lines():
+def test_saving_a_finger_enables_it_and_sets_its_travel_and_touches_nothing_else():
     from htn_control.servo_tool import rewrite_yaml, yaml_line
-    text = ('servos:\n  torque_limit: 300    # keep me\n'
-            '  thumb:  {id: 1, open_step: 2048, closed_step: 2884}\n'
-            '  index:  {id: 2, open_step: 2048, closed_step: 2884}   # old\n')
-    out = rewrite_yaml(text, {'index': yaml_line('index', 2, 1990, 1154)})
-    assert '  index:  {id: 2, open_step: 1990, closed_step: 1154}\n' in out
-    assert '  thumb:  {id: 1, open_step: 2048, closed_step: 2884}\n' in out and 'keep me' in out
+    text = ('fingers:\n  thumb:  {min_angle: 0.0, max_angle: 1.2828, mass: 0.020}\n'
+            '  index:  {min_angle: 0.0, max_angle: 1.2828, mass: 0.020}   # old note\n'
+            'servos:\n  torque_limit: 300    # keep me\n'
+            '  thumb:  {id: 1, open_step: 2048, closed_step: 2884, enabled: false}\n'
+            '  index:  {id: 2, open_step: 2048, closed_step: 2884, enabled: false}\n')
+    out = rewrite_yaml(text, {'index': yaml_line('index', 2, 1511, 2208)})
+    assert '  index:  {id: 2, open_step: 1511, closed_step: 2208}\n' in out          # enabled again
+    assert '  index:  {min_angle: 0.0, max_angle: 1.0692, mass: 0.020}\n' in out     # 697 steps of horn
+    assert '  thumb:  {id: 1, open_step: 2048, closed_step: 2884, enabled: false}\n' in out
+    assert '  thumb:  {min_angle: 0.0, max_angle: 1.2828, mass: 0.020}\n' in out and 'keep me' in out
     with pytest.raises(ValueError):
         rewrite_yaml(text, {'pinky': yaml_line('pinky', 5, 1, 2)})
+
+
+def test_a_disabled_finger_never_gets_torque_or_a_goal(servos):
+    params = {'servos': {**HAND_PARAMS['servos'], 'index': {'id': 2, 'open_step': 1000, 'closed_step': 3000,
+                                                            'enabled': False}}}
+    backend = FeetechBackend(FakeNode(serial_port=servos.port, require_all_servos=False), params)
+    assert backend.present[:3] == [True, False, True]
+    servos.registers[2][42:44] = u16(1234)
+    backend.set_torque(True, hold=[0.0] * 5)
+    backend.write([1.0] * 5)
+    state = backend.read()
+    assert servos.registers[2][40] == 0 and from_u16(servos.registers[2][42:44]) == 1234
+    assert servos.registers[1][40] == 1 and state[1] == 1.0  # it reports its command, like an absent servo
+    backend.close()
 
 
 def test_scan_reports_a_servo_that_pings_but_cannot_be_read(servos, bus, capsys):

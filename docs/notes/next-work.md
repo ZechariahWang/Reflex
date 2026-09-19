@@ -11,7 +11,13 @@ file at the end of a session; the designs themselves are in `../specs/`.
   (`../specs/hal-safety-design.md`, "What is built"). On the hand, in this order:
   `servo_tool scan`, `servo_tool calibrate` (a window) with the hand off the wearer,
   a launch, then tune `contact_stop:` and `hold_torque` in `hand_params.yaml`.
-- **The real hand still has PLACEHOLDER calibration** (`open_step: 2048` for
+- **Calibrated on the hand so far: the thumb** (open 1511, closed 2208 = 61 deg of
+  horn; its `max_angle` is that travel). index .. pinky are `enabled: false` in
+  `hand_params.yaml`: the HAL never gives them torque or a goal, whatever is
+  commanded, until they are saved in the calibration window (that enables them and
+  sets their `max_angle`). The web console drives the real hand as it is:
+  `hardware.launch.py` + `application/dev.sh`, ARM, sliders.
+- **The other fingers still have PLACEHOLDER calibration** (`open_step: 2048` for
   every finger; the span is now the linkage's `max_angle`, no longer 90 deg,
   which would have driven middle and ring into their bind at 84 deg). The HAL no
   longer drives anywhere at start: it holds the measured pose. A command still

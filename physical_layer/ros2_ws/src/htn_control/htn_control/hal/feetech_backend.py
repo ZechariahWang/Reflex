@@ -43,15 +43,26 @@ class FeetechBackend(HandBackend):
         require_all = node.declare_parameter('require_all_servos', True).value
         self.bus = FeetechBus(port, baud)
 
-        self.present = [self.bus.ping(i) for i in self.ids]
-        for finger, servo_id, present in zip(FINGERS, self.ids, self.present):
+        # `enabled: false` = not calibrated yet: that finger never gets torque or a goal, whatever
+        # is commanded. It is treated like a servo that is not there (it reports its command).
+        self.enabled = [servos[f].get('enabled', True) for f in FINGERS]
+        self.present = [enabled and self.bus.ping(i) for i, enabled in zip(self.ids, self.enabled)]
+        for finger, servo_id, present, enabled in zip(FINGERS, self.ids, self.present, self.enabled):
             if present:
+                continue
+            if not enabled:
+                node.get_logger().warning(f'{finger} servo (id {servo_id}) is disabled in hand_params.yaml '
+                                          f'(not calibrated): it will not be driven')
                 continue
             if require_all:
                 self.bus.close()
                 raise RuntimeError(f'No answer from {finger} servo (id {servo_id}) on {port}')
             node.get_logger().warning(f'No {finger} servo (id {servo_id}), running without it')
         self.active_ids = [i for i, present in zip(self.ids, self.present) if present]
+        # A finger without a servo reports its command. Before the first command that is "open":
+        # it must not stay None, or the HAL (which drives nothing before it has a whole measured
+        # pose) would wait for ever and the fingers that ARE there would never get torque.
+        self.measured = [None if present else 0.0 for present in self.present]
         # The torque limit is RAM: set it before the servos get torque. The torque itself stays
         # OFF here: the HAL turns it on through set_torque() once it knows the measured pose, with
         # that pose as the goal. Enabling it here drove every finger to whatever goal the servo

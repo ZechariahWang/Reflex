@@ -4,6 +4,3 @@ source;share/htn_auto/hook/pythonpath.sh
 source;share/htn_auto/hook/ament_prefix_path.ps1
 source;share/htn_auto/hook/ament_prefix_path.dsv
 source;share/htn_auto/hook/ament_prefix_path.sh
-source;../../build/htn_auto/share/htn_auto/hook/pythonpath_develop.ps1
-source;../../build/htn_auto/share/htn_auto/hook/pythonpath_develop.dsv
-source;../../build/htn_auto/share/htn_auto/hook/pythonpath_develop.sh

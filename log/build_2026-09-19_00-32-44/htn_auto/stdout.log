@@ -1,0 +1,32 @@
+running develop
+Removing /home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages/htn-auto.egg-link (link to .)
+running egg_info
+writing ../../../build/htn_auto/htn_auto.egg-info/PKG-INFO
+writing dependency_links to ../../../build/htn_auto/htn_auto.egg-info/dependency_links.txt
+writing entry points to ../../../build/htn_auto/htn_auto.egg-info/entry_points.txt
+writing requirements to ../../../build/htn_auto/htn_auto.egg-info/requires.txt
+writing top-level names to ../../../build/htn_auto/htn_auto.egg-info/top_level.txt
+reading manifest file '../../../build/htn_auto/htn_auto.egg-info/SOURCES.txt'
+writing manifest file '../../../build/htn_auto/htn_auto.egg-info/SOURCES.txt'
+running build
+running build_py
+creating /home/zech/htn-2026/build/htn_auto/build
+creating /home/zech/htn-2026/build/htn_auto/build/lib
+creating /home/zech/htn-2026/build/htn_auto/build/lib/htn_auto
+copying htn_auto/auto.py -> /home/zech/htn-2026/build/htn_auto/build/lib/htn_auto
+copying htn_auto/__init__.py -> /home/zech/htn-2026/build/htn_auto/build/lib/htn_auto
+running install
+running install_lib
+creating /home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages/htn_auto
+copying /home/zech/htn-2026/build/htn_auto/build/lib/htn_auto/auto.py -> /home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages/htn_auto
+copying /home/zech/htn-2026/build/htn_auto/build/lib/htn_auto/__init__.py -> /home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages/htn_auto
+byte-compiling /home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages/htn_auto/auto.py to auto.cpython-310.pyc
+byte-compiling /home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages/htn_auto/__init__.py to __init__.cpython-310.pyc
+running install_data
+copying resource/htn_auto -> /home/zech/htn-2026/install/htn_auto/share/ament_index/resource_index/packages
+copying package.xml -> /home/zech/htn-2026/install/htn_auto/share/htn_auto
+running install_egg_info
+Copying ../../../build/htn_auto/htn_auto.egg-info to /home/zech/htn-2026/install/htn_auto/lib/python3.10/site-packages/htn_auto-0.0.1-py3.10.egg-info
+running install_scripts
+Installing auto script to /home/zech/htn-2026/install/htn_auto/lib/htn_auto
+writing list of installed files to '/home/zech/htn-2026/build/htn_auto/install.log'

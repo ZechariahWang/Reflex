@@ -1,0 +1,57 @@
+running develop
+Removing /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn-control.egg-link (link to .)
+running egg_info
+writing ../../../build/htn_control/htn_control.egg-info/PKG-INFO
+writing dependency_links to ../../../build/htn_control/htn_control.egg-info/dependency_links.txt
+writing entry points to ../../../build/htn_control/htn_control.egg-info/entry_points.txt
+writing requirements to ../../../build/htn_control/htn_control.egg-info/requires.txt
+writing top-level names to ../../../build/htn_control/htn_control.egg-info/top_level.txt
+reading manifest file '../../../build/htn_control/htn_control.egg-info/SOURCES.txt'
+writing manifest file '../../../build/htn_control/htn_control.egg-info/SOURCES.txt'
+running build
+running build_py
+creating /home/zech/htn-2026/build/htn_control/build
+creating /home/zech/htn-2026/build/htn_control/build/lib
+creating /home/zech/htn-2026/build/htn_control/build/lib/htn_control
+copying htn_control/teleop.py -> /home/zech/htn-2026/build/htn_control/build/lib/htn_control
+copying htn_control/teleop_gui.py -> /home/zech/htn-2026/build/htn_control/build/lib/htn_control
+copying htn_control/__init__.py -> /home/zech/htn-2026/build/htn_control/build/lib/htn_control
+copying htn_control/hand_config.py -> /home/zech/htn-2026/build/htn_control/build/lib/htn_control
+copying htn_control/hal_node.py -> /home/zech/htn-2026/build/htn_control/build/lib/htn_control
+creating /home/zech/htn-2026/build/htn_control/build/lib/htn_control/hal
+copying htn_control/hal/serial_backend.py -> /home/zech/htn-2026/build/htn_control/build/lib/htn_control/hal
+copying htn_control/hal/__init__.py -> /home/zech/htn-2026/build/htn_control/build/lib/htn_control/hal
+copying htn_control/hal/base.py -> /home/zech/htn-2026/build/htn_control/build/lib/htn_control/hal
+copying htn_control/hal/sim_backend.py -> /home/zech/htn-2026/build/htn_control/build/lib/htn_control/hal
+running install
+running install_lib
+creating /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control
+copying /home/zech/htn-2026/build/htn_control/build/lib/htn_control/teleop.py -> /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control
+creating /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control/hal
+copying /home/zech/htn-2026/build/htn_control/build/lib/htn_control/hal/serial_backend.py -> /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control/hal
+copying /home/zech/htn-2026/build/htn_control/build/lib/htn_control/hal/__init__.py -> /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control/hal
+copying /home/zech/htn-2026/build/htn_control/build/lib/htn_control/hal/base.py -> /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control/hal
+copying /home/zech/htn-2026/build/htn_control/build/lib/htn_control/hal/sim_backend.py -> /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control/hal
+copying /home/zech/htn-2026/build/htn_control/build/lib/htn_control/teleop_gui.py -> /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control
+copying /home/zech/htn-2026/build/htn_control/build/lib/htn_control/__init__.py -> /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control
+copying /home/zech/htn-2026/build/htn_control/build/lib/htn_control/hand_config.py -> /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control
+copying /home/zech/htn-2026/build/htn_control/build/lib/htn_control/hal_node.py -> /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control
+byte-compiling /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control/teleop.py to teleop.cpython-310.pyc
+byte-compiling /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control/hal/serial_backend.py to serial_backend.cpython-310.pyc
+byte-compiling /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control/hal/__init__.py to __init__.cpython-310.pyc
+byte-compiling /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control/hal/base.py to base.cpython-310.pyc
+byte-compiling /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control/hal/sim_backend.py to sim_backend.cpython-310.pyc
+byte-compiling /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control/teleop_gui.py to teleop_gui.cpython-310.pyc
+byte-compiling /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control/__init__.py to __init__.cpython-310.pyc
+byte-compiling /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control/hand_config.py to hand_config.cpython-310.pyc
+byte-compiling /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control/hal_node.py to hal_node.cpython-310.pyc
+running install_data
+copying resource/htn_control -> /home/zech/htn-2026/install/htn_control/share/ament_index/resource_index/packages
+copying package.xml -> /home/zech/htn-2026/install/htn_control/share/htn_control
+running install_egg_info
+Copying ../../../build/htn_control/htn_control.egg-info to /home/zech/htn-2026/install/htn_control/lib/python3.10/site-packages/htn_control-0.0.1-py3.10.egg-info
+running install_scripts
+Installing hal script to /home/zech/htn-2026/install/htn_control/lib/htn_control
+Installing teleop script to /home/zech/htn-2026/install/htn_control/lib/htn_control
+Installing teleop_gui script to /home/zech/htn-2026/install/htn_control/lib/htn_control
+writing list of installed files to '/home/zech/htn-2026/build/htn_control/install.log'

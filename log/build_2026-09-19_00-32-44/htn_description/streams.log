@@ -1,0 +1,31 @@
+[0.009s] Invoking command in '/home/zech/htn-2026/build/htn_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/htn-2026/install/htn_control:/home/zech/htn-2026/install/htn_auto:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble /usr/bin/cmake /home/zech/htn-2026/ros2_ws/src/htn_description -DCMAKE_INSTALL_PREFIX=/home/zech/htn-2026/install/htn_description
+[0.018s] -- Found ament_cmake: 1.3.14 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.092s] -- Override CMake install command with custom implementation using symlinks instead of copying resources
+[0.157s] -- Configuring done
+[0.158s] -- Generating done
+[0.158s] -- Build files have been written to: /home/zech/htn-2026/build/htn_description
+[0.160s] Invoked command in '/home/zech/htn-2026/build/htn_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/htn-2026/install/htn_control:/home/zech/htn-2026/install/htn_auto:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble /usr/bin/cmake /home/zech/htn-2026/ros2_ws/src/htn_description -DCMAKE_INSTALL_PREFIX=/home/zech/htn-2026/install/htn_description
+[0.161s] Invoking command in '/home/zech/htn-2026/build/htn_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/htn-2026/install/htn_control:/home/zech/htn-2026/install/htn_auto:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble /usr/bin/cmake --build /home/zech/htn-2026/build/htn_description -- -j20 -l20
+[0.190s] Invoked command in '/home/zech/htn-2026/build/htn_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/htn-2026/install/htn_control:/home/zech/htn-2026/install/htn_auto:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble /usr/bin/cmake --build /home/zech/htn-2026/build/htn_description -- -j20 -l20
+[0.197s] Invoking command in '/home/zech/htn-2026/build/htn_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/htn-2026/install/htn_control:/home/zech/htn-2026/install/htn_auto:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble /usr/bin/cmake --install /home/zech/htn-2026/build/htn_description
+[0.203s] -- Install configuration: ""
+[0.203s] -- Execute custom install script
+[0.203s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/htn_description/config/hand_params.yaml
+[0.203s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/htn_description/urdf/hand.gazebo.xacro
+[0.203s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/htn_description/urdf/hand.urdf.xacro
+[0.203s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/ament_index/resource_index/package_run_dependencies/htn_description
+[0.203s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/ament_index/resource_index/parent_prefix_path/htn_description
+[0.203s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/htn_description/environment/ament_prefix_path.sh
+[0.203s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/htn_description/environment/ament_prefix_path.dsv
+[0.203s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/htn_description/environment/path.sh
+[0.203s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/htn_description/environment/path.dsv
+[0.203s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/htn_description/local_setup.bash
+[0.203s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/htn_description/local_setup.sh
+[0.204s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/htn_description/local_setup.zsh
+[0.204s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/htn_description/local_setup.dsv
+[0.204s] -- Symlinking: /home/zech/htn-2026/install/htn_description/share/htn_description/package.dsv
+[0.211s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/ament_index/resource_index/packages/htn_description
+[0.211s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/htn_description/cmake/htn_descriptionConfig.cmake
+[0.211s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/htn_description/cmake/htn_descriptionConfig-version.cmake
+[0.211s] -- Up-to-date symlink: /home/zech/htn-2026/install/htn_description/share/htn_description/package.xml
+[0.213s] Invoked command in '/home/zech/htn-2026/build/htn_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/htn-2026/install/htn_control:/home/zech/htn-2026/install/htn_auto:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble /usr/bin/cmake --install /home/zech/htn-2026/build/htn_description

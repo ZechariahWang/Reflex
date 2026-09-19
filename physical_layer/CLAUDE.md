@@ -108,9 +108,15 @@ rosbridge, see `docs/specs/policy-link-design.md`.
   (`htn_auto` went this way), `install/<pkg>` and `build/<pkg>` stay behind and
   `ros2 launch` dies with `package '<pkg>' not found`. Delete both folders (and
   the leftover `src/<pkg>/__pycache__`), then rebuild.
-- **Stale Gazebo**: Ctrl-C on a launch can leave `ign gazebo` alive; the next
-  launch then fails with `Failed to configure controller` / duplicate nodes.
-  Fix: `pkill -9 -f "ign gazebo"`.
+- **Stale Gazebo**: Ctrl-C reaches the shell that started `ign gazebo`, not
+  always the server behind it. A survivor poisons the next launch: the hand is
+  spawned twice over, `spawner_joint_state_broadcaster` hangs, no `/clock`, and
+  the HAL (sim time) freezes - commands go out (the web console's orange ghost
+  moves) but the measured hand never does. `sim.launch.py` now kills its own
+  Gazebo on shutdown and refuses to start next to another server in the same
+  `IGN_PARTITION`, printing the `kill -9 <pids>` to run. Symptom check: `ros2
+  node list --no-daemon` shows `/gz_ros2_control` twice and no
+  `/controller_manager`.
 - **Camera up but 0 Hz**: topics exist, nothing arrives, log repeats `Frames
   didn't arrived within 5 seconds`. On a USB 2 link that is USB link power
   management stalling the video transfers - not the cable, driver or firmware.

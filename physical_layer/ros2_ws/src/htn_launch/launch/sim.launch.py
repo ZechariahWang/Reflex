@@ -1,11 +1,12 @@
 import os
+import signal
 from pathlib import Path
 
 from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription, LogInfo,
                             OpaqueFunction, RegisterEventHandler, Shutdown)
 from launch.conditions import IfCondition
-from launch.event_handlers import OnProcessExit
+from launch.event_handlers import OnProcessExit, OnShutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (Command, LaunchConfiguration,
                                   PathJoinSubstitution, PythonExpression)
@@ -14,29 +15,47 @@ from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
-def refuse_stale_gazebo(context):
-    """A Gazebo server left over from an earlier launch (Ctrl-C does not always take it down)
-    shares our partition: the hand then gets spawned twice over, the controller spawner hangs,
-    no /clock arrives and the HAL - which runs on sim time - freezes. Everything LOOKS alive:
-    commands go out, nothing ever moves. Refuse to start in that state."""
+def gazebo_servers():
+    """pids of the Gazebo processes in our IGN_PARTITION."""
     partition = os.environ.get('IGN_PARTITION', '')
-    stale = []
+    found = []
     for proc in Path('/proc').iterdir():
         if not proc.name.isdigit():
             continue
         try:
             command = (proc / 'cmdline').read_bytes().replace(b'\0', b' ').decode(errors='replace')
-            if 'ign gazebo' not in command or ' -s' not in command and 'server' not in command:
+            if 'ign gazebo' not in command:
                 continue
             environ = (proc / 'environ').read_bytes().split(b'\0')
         except OSError:
             continue  # gone meanwhile, or somebody else's process
         theirs = next((e[14:].decode() for e in environ if e.startswith(b'IGN_PARTITION=')), '')
         if theirs == partition:
-            stale.append(proc.name)
+            found.append(int(proc.name))
+    return sorted(found)
+
+
+def stop_own_gazebo(context):
+    """Ctrl-C reaches the shell that started `ign gazebo`, not always the server behind it, and
+    a server that survives poisons the next launch (see refuse_stale_gazebo). Nothing else was
+    in our partition when we started, so whatever is there now is ours."""
+    for pid in gazebo_servers():
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+    return []
+
+
+def refuse_stale_gazebo(context):
+    """A Gazebo server left over from an earlier launch (Ctrl-C does not always take it down)
+    shares our partition: the hand then gets spawned twice over, the controller spawner hangs,
+    no /clock arrives and the HAL - which runs on sim time - freezes. Everything LOOKS alive:
+    commands go out, nothing ever moves. Refuse to start in that state."""
+    stale = gazebo_servers()
     if not stale:
         return []
-    pids = ' '.join(sorted(set(stale), key=int))
+    pids = ' '.join(str(pid) for pid in stale)
     return [LogInfo(msg=f'\n\n  A Gazebo server is already running in this partition (pid {pids}).\n'
                         f'  With it the sim starts half-dead: commands go out, the hand never moves.\n'
                         f'  Stop the other sim, or if it is a leftover:   kill -9 {pids}\n'),
@@ -112,6 +131,7 @@ def generate_launch_description():
                               description='Start rosbridge on ws://localhost:9090 (application/ backend)'),
 
         OpaqueFunction(function=refuse_stale_gazebo),
+        RegisterEventHandler(OnShutdown(on_shutdown=[OpaqueFunction(function=stop_own_gazebo)])),
         gazebo,
         # Without Gazebo the sim clock stops and the HAL (which runs on sim time)
         # silently freezes: the control window then looks alive but nothing

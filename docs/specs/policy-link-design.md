@@ -1,7 +1,7 @@
 # Policy link: LeRobot to ROS through rosbridge
 
 How the learned policy reads the hand and the camera and moves the fingers.
-Status: design, not implemented. Date: 2026-09-19. This closes open question 1
+Status: adapter implemented, not yet run against rosbridge. Date: 2026-09-19. This closes open question 1
 of `../system-design.md`.
 
 ## Decisions
@@ -173,7 +173,8 @@ import where possible:
   first.
 - `to_observation` has exactly the keys of `observation_features`.
 
-Smoke check: `python -m policy.exo_hand --host <ip>` against `sim.launch.py`.
+Smoke check: `python -m lerobot_robot_exo_hand.exo_hand --host <ip>` against
+`sim.launch.py`, after `pip install -e policy`.
 It prints the observation keys, shapes and ages, closes and opens the hand one
 time, and fails if `/hand/state` does not follow.
 
@@ -186,8 +187,11 @@ time, and fails if `/hand/state` does not follow.
    `actions_per_chunk`, `chunk_size_threshold` (default 0.5) and
    `aggregate_fn_name`.
 2. Done: pure functions and their tests (`convert.py`).
-3. `ExoHand` and the smoke check in sim, from a second device if possible
-   (firewall, TCP 9090).
+3. `ExoHand` is done, with tests that feed its callbacks directly (no
+   rosbridge). Not done: the smoke check,
+   `python -m lerobot_robot_exo_hand.exo_hand --host <ip>`, from a second
+   device if possible (firewall, TCP 9090). It needs the camera: the sim has no
+   simulated camera, so `connect()` fails with a RealSense unplugged.
 4. Full loop: `policy_server` and `RobotClient` with `smolvla_base` (the
    actions have no meaning, the loop and the timing are the test). Measure the
    frame age and the command rate.

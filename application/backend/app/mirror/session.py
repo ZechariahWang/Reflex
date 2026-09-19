@@ -56,7 +56,7 @@ class MirrorSession:
         self._read_state = read_state
         self._publish = publish
         self._command_tolerance = settings.mirror_command_tolerance
-        self._engage = Engage(settings.mirror_match_tolerance, settings.mirror_frame_timeout_s)
+        self._engage = Engage()
         self._filter = OneEuro(settings.mirror_min_cutoff, settings.mirror_beta)
         self._poses: dict[str, np.ndarray] = {}
         self._calibration: Calibration | None = None
@@ -85,7 +85,7 @@ class MirrorSession:
         elif self._calibration is not None:
             curls = [round(float(c), 4) for c in self._filter(self._calibration.curls(measured), now)]
 
-        mode = self._engage.update(curls, now)
+        mode = self._engage.update(curls)
         command = self._engage.command
         if mode == "following" and command is not None and self._changed(command):
             self._publish(command)

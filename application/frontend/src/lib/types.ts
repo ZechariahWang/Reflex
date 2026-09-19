@@ -91,7 +91,7 @@ export interface HealthResponse {
   topics: Record<TopicKey, TopicHealth>
 }
 
-export type MirrorMode = "off" | "no_hand" | "frozen" | "following"
+export type MirrorMode = "off" | "no_hand" | "following"
 export type MirrorPose = "open" | "fist"
 
 /** One /ws/mirror status message: what the backend made of the last webcam frame. */

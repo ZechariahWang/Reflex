@@ -51,7 +51,6 @@ class MockTracker:
 
     def detect(self, jpeg: bytes) -> Hand | None:
         now = time.monotonic()
-        # The mock hand's own wave, so it passes the pose the engage logic holds once in every period.
         holding = now < self._hold_until
         points = hand([self._held if holding else idle_curl(now, finger) for finger in range(5)])
         return Hand(world=points, image=image_points(points))

@@ -37,8 +37,8 @@ class Bench:
         return self.show(curls, frames=int(CAPTURE_S / FRAME_S) + 2)
 
     def calibrate(self) -> dict:
-        self.capture("open", [0.0] * 5)
-        return self.capture("fist", [1.0] * 5)
+        self.capture("fist", [1.0] * 5)
+        return self.capture("open", [0.0] * 5)
 
 
 def test_nothing_is_published_before_the_calibration():
@@ -49,46 +49,44 @@ def test_nothing_is_published_before_the_calibration():
     assert bench.published == []
 
 
-def test_calibrated_session_follows_after_a_match_and_publishes_only_changes():
-    bench = Bench(state=[0.0] * 5)
+def test_calibrated_session_follows_at_once_and_publishes_only_changes():
+    bench = Bench(state=[0.3] * 5)
     assert bench.calibrate()["calibrated"] is True
-    assert bench.show([1.0] * 5)["mode"] == "frozen"  # still the fist of the capture; the hand is open
-    assert bench.published == []
-
-    status = bench.show([0.0] * 5, frames=30)
-    assert status["mode"] == "following"
-    assert status["controller"] == pytest.approx([0.0] * 5, abs=0.02)
 
     status = bench.show([0.5, 1.0, 1.0, 0.0, 0.0], frames=60)
-    assert status["command"] == pytest.approx([0.5, 1.0, 1.0, 0.0, 0.0], abs=0.02)
+    assert status["mode"] == "following"
+    assert status["controller"] == pytest.approx([0.5, 1.0, 1.0, 0.0, 0.0], abs=0.02)
+    assert status["command"] == status["controller"]
     assert bench.published[-1] == pytest.approx(status["command"], abs=0.011)  # the deadband
     count = len(bench.published)
     bench.show([0.5, 1.0, 1.0, 0.0, 0.0], frames=30)
     assert len(bench.published) == count
 
-    assert bench.show(None)["mode"] == "no_hand"
-    assert bench.show([0.0] * 5, frames=30)["mode"] == "frozen"
+    status = bench.show(None)
+    assert status["mode"] == "no_hand" and status["command"] == pytest.approx([0.5, 1.0, 1.0, 0.0, 0.0], abs=0.02)
     assert len(bench.published) == count
+    assert bench.show([0.0] * 5)["mode"] == "following"  # no match needed: it resumes at once
+    assert len(bench.published) == count + 1
 
 
 def test_fist_that_is_no_fist_is_refused():
     bench = Bench(state=[0.0] * 5)
-    bench.capture("open", [0.0] * 5)
-    status = bench.capture("fist", [0.0, 1.0, 1.0, 1.0, 1.0])
+    bench.capture("fist", [0.0, 1.0, 1.0, 1.0, 1.0])
+    status = bench.capture("open", [0.0] * 5)
     assert status["calibrated"] is False and status["error"] is not None
     assert bench.calibrate()["error"] is None
 
 
 def test_capture_without_a_hand_is_refused():
     bench = Bench(state=[0.0] * 5)
-    assert bench.capture("open", None)["error"] is not None
+    assert bench.capture("fist", None)["error"] is not None
 
 
 def test_new_capture_stops_the_following():
     bench = Bench(state=[0.0] * 5)
     bench.calibrate()
     bench.show([0.0] * 5, frames=30)
-    bench.session.calibrate("open", bench.now)
+    bench.session.calibrate("fist", bench.now)
     assert bench.show([0.0] * 5)["mode"] == "off"
 
 
@@ -111,7 +109,7 @@ def frames_until(ws, done, timeout_s: float = 10.0) -> dict:
 def test_mock_mirror_calibrates_follows_and_commands_the_hand(client):
     with client.websocket_connect("/ws/mirror") as ws:
         assert frames_until(ws, lambda s: True)["mode"] == "off"
-        for pose in ("open", "fist"):
+        for pose in ("fist", "open"):
             ws.send_text(json.dumps({"type": "calibrate", "pose": pose}))
             frames_until(ws, lambda s: s["capturing"] == pose)
             status = frames_until(ws, lambda s: s["capturing"] is None)

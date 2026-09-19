@@ -59,42 +59,32 @@ def test_one_euro_forgets_after_a_reset():
     assert smooth(np.ones(5), 1.0) == pytest.approx(np.ones(5))
 
 
-def engage() -> Engage:
-    return Engage(match_tolerance=0.15, frame_timeout_s=0.3)
-
-
 def test_engage_is_off_until_started():
-    machine = engage()
-    assert machine.update(PINCH, 0.0) == "off"
+    machine = Engage()
+    assert machine.update(PINCH) == "off"
     assert machine.command is None
 
 
-def test_engage_holds_the_state_until_the_controller_matches_it():
-    machine = engage()
+def test_engage_follows_at_once_whatever_the_hand_holds():
+    machine = Engage()
     machine.start([0.0] * 5)
-    assert machine.update(PINCH, 0.0) == "frozen"
     assert machine.command == [0.0] * 5
-    assert machine.update([0.1, 0.1, 0.0, 0.0, 0.2], 0.03) == "frozen"  # pinky too far
-    assert machine.update([0.1] * 5, 0.06) == "following"
-    assert machine.command == [0.1] * 5
-    assert machine.update(PINCH, 0.09) == "following"  # once matched, any distance follows
+    assert machine.update(PINCH) == "following"
     assert machine.command == PINCH
 
 
-def test_engage_holds_through_a_dropout_and_needs_a_new_match():
-    machine = engage()
+def test_engage_holds_through_a_dropout_and_resumes_at_once():
+    machine = Engage()
     machine.start(PINCH)
-    assert machine.update(PINCH, 0.0) == "following"
-    assert machine.update(None, 0.03) == "no_hand"
+    machine.update(PINCH)
+    assert machine.update(None) == "no_hand"
     assert machine.command == PINCH
-    assert machine.update([0.0] * 5, 0.06) == "frozen"
-    assert machine.command == PINCH
-    assert machine.update(PINCH, 0.09) == "following"
+    assert machine.update([0.0] * 5) == "following"
+    assert machine.command == [0.0] * 5
 
 
-def test_engage_needs_a_new_match_after_a_gap_in_the_frames():
-    machine = engage()
+def test_engage_is_off_again_after_a_stop():
+    machine = Engage()
     machine.start(PINCH)
-    assert machine.update(PINCH, 0.0) == "following"
-    assert machine.update([0.0] * 5, 1.0) == "frozen"
-    assert machine.command == PINCH
+    machine.stop()
+    assert machine.update(PINCH) == "off" and machine.command is None

@@ -16,7 +16,7 @@ file at the end of a session; the designs themselves are in `../specs/`.
   the Mirror switch and panel (in the 3D hand's place) in the frontend,
   `exo_hand_command` in `policy/`. Left, in this order: the done check of the spec
   with a real webcam against the sim (open, fist, pinch, thumb at ~0.5, dropout),
-  tune `MIRROR_MIN_CUTOFF` / `MIRROR_BETA` / `MIRROR_MATCH_TOLERANCE`, two
+  tune `MIRROR_MIN_CUTOFF` / `MIRROR_BETA`, two
   `lerobot-record` episodes, the loop rate on one laptop. The thumb measure (joint
   angles) is the part most likely to need a change. On the real hand only the thumb
   moves until the other fingers are calibrated. TODO next to it: the forehead

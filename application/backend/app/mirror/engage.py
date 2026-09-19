@@ -1,41 +1,28 @@
-"""When the controller's hand may move the exoskeleton: only after it matched the held command."""
+"""What the mirror sends: the controller's curls while a hand is seen, the last command while not."""
 
 from __future__ import annotations
 
 from typing import Literal, Sequence
 
-Mode = Literal["off", "no_hand", "frozen", "following"]
+Mode = Literal["off", "no_hand", "following"]
 
 
 class Engage:
-    def __init__(self, match_tolerance: float, frame_timeout_s: float) -> None:
-        self._match_tolerance = match_tolerance
-        self._frame_timeout_s = frame_timeout_s
+    def __init__(self) -> None:
         self.command: list[float] | None = None
-        self._following = False
-        self._last_frame = 0.0
 
     def start(self, state: Sequence[float]) -> None:
-        """Hold the measured pose: the controller matches the real hand before the first motion."""
+        """Hold the measured pose until the first hand is seen."""
         self.command = list(state)
-        self._following = False
 
     def stop(self) -> None:
         self.command = None
 
-    def update(self, curls: Sequence[float] | None, now: float) -> Mode:
+    def update(self, curls: Sequence[float] | None) -> Mode:
         """One processed frame (`curls` is None when no hand was seen); `command` is what to send."""
         if self.command is None:
             return "off"
-        if now - self._last_frame > self._frame_timeout_s:
-            self._following = False
-        self._last_frame = now
         if curls is None:
-            self._following = False
             return "no_hand"
-        if not self._following:
-            self._following = all(abs(c - h) <= self._match_tolerance for c, h in zip(curls, self.command))
-        if not self._following:
-            return "frozen"
         self.command = list(curls)
         return "following"

@@ -31,8 +31,7 @@ const BAR_TITLES: Record<(typeof BARS)[number], string> = {
 
 const MODES: Record<MirrorMode, { status: Status; label: string; hint: string }> = {
   off: { status: "offline", label: "Off", hint: "calibrate to start" },
-  no_hand: { status: "waiting", label: "No hand", hint: "put your hand in view" },
-  frozen: { status: "waiting", label: "Frozen", hint: "match the cmd bars" },
+  no_hand: { status: "waiting", label: "No hand", hint: "put your hand in view: the robot hand holds its pose" },
   following: { status: "live", label: "Following", hint: "the hand copies you" },
 }
 
@@ -50,7 +49,7 @@ const POSE_PROMPT: Record<MirrorPose, string> = {
 
 const CAPTURE_ERRORS: Record<string, string> = {
   no_hand: "no hand was seen: start again",
-  range: "a finger moved too little between open and fist: start again",
+  range: "a finger moved too little between fist and open: start again",
 }
 
 /** Panel 01 while Mirror is on: the controller's webcam, what the backend sees in it, and what it sends. */
@@ -92,7 +91,7 @@ export function MirrorViewport() {
     }
   }, [])
 
-  const { videoRef, link, summary, calibrate } = useMirror(onFrame)
+  const { videoRef, link, summary, calibrate, recalibrate } = useMirror(onFrame)
   const { mode, calibrated, capturing, error, step } = summary
   const capture = useCallback(() => {
     if (step && !capturing) calibrate(step)
@@ -123,7 +122,7 @@ export function MirrorViewport() {
           <Button
             variant="outline"
             size="xs"
-            onClick={() => calibrate("open")}
+            onClick={recalibrate}
             className="label-micro h-6 rounded-[2px] bg-surface"
           >
             Recalibrate
@@ -152,6 +151,14 @@ export function MirrorViewport() {
         </div>
 
         {link !== "open" && <PanelNotice {...shown} />}
+
+        {link === "open" && !guiding && mode === "no_hand" && (
+          <div className="absolute inset-x-0 top-6 flex justify-center px-4">
+            <span className="border-2 border-destructive bg-surface px-5 py-3 text-sm font-medium text-destructive">
+              No hand in view: the robot hand holds its pose
+            </span>
+          </div>
+        )}
 
         {guiding && (
           <div className="absolute inset-x-0 bottom-6 flex justify-center px-4">

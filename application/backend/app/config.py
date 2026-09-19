@@ -24,8 +24,6 @@ class Settings:
     record3d_host: str = ""
     description_dir: Path = REPO_DESCRIPTION_DIR
     record3d_rotation: int = 90  # the phone's sensor is portrait; 90 / 270 show it landscape
-    mirror_match_tolerance: float = 0.15
-    mirror_frame_timeout_s: float = 0.3
     mirror_command_tolerance: float = 0.01
     mirror_min_cutoff: float = 1.5  # Hz: lower = calmer at rest
     mirror_beta: float = 1.0  # higher = less lag in a fast move
@@ -48,8 +46,6 @@ class Settings:
             record3d_host=env.get("RECORD3D_HOST", "").strip(),
             description_dir=Path(env.get("DESCRIPTION_DIR", str(REPO_DESCRIPTION_DIR))),
             record3d_rotation=int(env.get("RECORD3D_ROTATION", "90")),
-            mirror_match_tolerance=float(env.get("MIRROR_MATCH_TOLERANCE", "0.15")),
-            mirror_frame_timeout_s=float(env.get("MIRROR_FRAME_TIMEOUT_S", "0.3")),
             mirror_command_tolerance=float(env.get("MIRROR_COMMAND_TOLERANCE", "0.01")),
             mirror_min_cutoff=float(env.get("MIRROR_MIN_CUTOFF", "1.5")),
             mirror_beta=float(env.get("MIRROR_BETA", "1.0")),

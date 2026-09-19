@@ -86,17 +86,21 @@ Pure parts, each with tests and no camera:
    by some percent; without a filter the labels shake and the policy learns to
    shake. The HAL `max_speed` and the servo acceleration are the second and
    third stage.
-4. **`engage.py`**: the state machine.
+4. **`engage.py`**: what is sent.
 
    | Mode | When | Command |
    |---|---|---|
    | `off` | Mirror switch off, or no calibration | none published |
-   | `no_hand` | no landmarks, or no frame for `frame_timeout_s` (socket closed included) | hold the last one |
-   | `frozen` | hand seen, a finger further than `match_tolerance` from the held command | hold the last one |
-   | `following` | every finger within `match_tolerance` once; stays until the hand is lost | the filtered curls |
+   | `no_hand` | no landmarks in the frame (no frames at all: nothing is published) | hold the last one |
+   | `following` | a hand is seen | the filtered curls |
 
-   At the start the held command is the current `/hand/state`: the controller
-   matches the real hand before the first motion, nothing jumps.
+   A hand that comes back is followed at once. The first build made the
+   controller match the held pose first ("wait for a match"); on the bench five
+   fingers within 0.15 in one frame was too hard to hit, and it was removed
+   (2026-09-19). The cost: the command can jump after a dropout; the one-euro
+   filter and the HAL `max_speed` soften it. When the calibration completes the
+   held command is the current `/hand/state`, and the console captures the fist
+   first and the open hand last, so the first thing the hand does is open.
 
 Impure parts:
 
@@ -111,8 +115,7 @@ Impure parts:
 7. **Mock mode** (`MOCK=1`): a synthetic hand that opens and closes, so the
    panel is built and tested with no webcam and no MediaPipe.
 
-Config (env, defaults to tune on the bench): `MIRROR_MATCH_TOLERANCE=0.15`,
-`MIRROR_FRAME_TIMEOUT_S=0.3`, `MIRROR_COMMAND_TOLERANCE=0.01`, one-euro
+Config (env, defaults to tune on the bench): `MIRROR_COMMAND_TOLERANCE=0.01`, one-euro
 `MIRROR_MIN_CUTOFF` / `MIRROR_BETA`. `mediapipe` goes into `requirements.txt`.
 
 ### `WS /ws/mirror` (to add to `application/CONTRACT.md`)
@@ -139,15 +142,14 @@ already in `/ws/state`.
   the Backdrive switch: on = open the webcam and the socket, run the guided
   calibration, lock the sliders and presets (one command source at a time).
   Disarm = off. Off or a lost connection = the hand holds the last command.
-- **Guided calibration at every connect**: "open hand" -> capture, "fist" ->
+- **Guided calibration at every connect**: "fist" -> capture, "open hand" ->
   capture (a button and a shortcut for each). No `following` before it is done.
   Nothing is saved: always right for this person, camera and distance.
 - **Mirror panel**: the local webcam video with the skeleton drawn from
   `landmarks`; a mode badge, red border when not `following`, with the hint
-  ("put your hand in view" / "match the cmd bars"); it takes the place of the
+  ("put your hand in view"); it takes the place of the
   3D hand while Mirror is on; for each finger three bars:
-  **ctl** (controller), **cmd** (sent), **st** (measured). `frozen`: ctl differs
-  from cmd. Contact: cmd above st.
+  **ctl** (controller), **cmd** (sent), **st** (measured). Contact: cmd above st.
 - Frames: a canvas at 320x240 -> JPEG -> binary message, 30 fps, skip a frame
   while the socket's buffer is not empty.
 - **The webcam needs a secure context**: `localhost` or `https`. A controller on
@@ -171,9 +173,8 @@ Rule for a recording: nobody arms the sliders in another tab.
 - `curl`: synthetic landmarks, straight finger ~0, bent finger = the known sum;
   the same hand translated, scaled and rotated gives the same bends.
 - `calibration`: scaling, clipping, refusal of a degenerate range.
-- `engage`: start from the state -> `frozen` until matched; dropout -> hold;
-  return unmatched -> `frozen`; matched -> `following`; frame timeout ->
-  `no_hand`; off -> nothing published.
+- `engage`: off until started; a hand -> `following`; dropout -> hold; return ->
+  `following` at once; off -> nothing published.
 - Socket with a fake tracker: a second client is refused, publish only on
   change, mock mode.
 - `exo_hand_command`: returns the last command, the state before any command,
@@ -184,8 +185,8 @@ Rule for a recording: nobody arms the sliders in another tab.
 
 1. Sim or fake servos + backend + frontend: arm, Mirror on, calibrate. Open,
    fist and a pinch (thumb + index closed, the others open) show on the 3D hand;
-   the controller can hold the thumb at ~0.5. A hand out of the view freezes the
-   hand; it follows again only after a match.
+   the controller can hold the thumb at ~0.5. A hand out of the view holds the
+   hand; it follows again at once when the hand is back.
 2. `lerobot-record` with `exo_hand_command` for two short episodes: the `action`
    column is the mirror's command.
 3. Measure the loop rate with everything on one laptop (MediaPipe + camera

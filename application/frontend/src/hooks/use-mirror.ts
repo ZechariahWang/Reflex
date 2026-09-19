@@ -24,7 +24,7 @@ const FRAME_HEIGHT = 240
 const FRAME_INTERVAL_MS = 33
 const JPEG_QUALITY = 0.7
 const BUSY_CODE = 1013
-const IDLE: MirrorSummary = { mode: "off", calibrated: false, capturing: null, error: null, step: "open" }
+const IDLE: MirrorSummary = { mode: "off", calibrated: false, capturing: null, error: null, step: "fist" }
 
 export interface Mirror {
   /** Attach to a muted, autoplaying <video>: the local webcam. */
@@ -32,6 +32,8 @@ export interface Mirror {
   link: MirrorLink
   summary: MirrorSummary
   calibrate: (pose: MirrorPose) => void
+  /** Start the guided calibration again; the hand keeps following until the first capture. */
+  recalibrate: () => void
 }
 
 function isMirrorStatus(value: unknown): value is MirrorStatus {
@@ -46,6 +48,7 @@ export function useMirror(onFrame: (status: MirrorStatus) => void): Mirror {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const socketRef = useRef<WebSocket | null>(null)
   const onFrameRef = useRef(onFrame)
+  const stepRef = useRef<MirrorPose | null>("fist")
   const [link, setLink] = useState<MirrorLink>("camera")
   const [summary, setSummary] = useState<MirrorSummary>(IDLE)
 
@@ -60,7 +63,6 @@ export function useMirror(onFrame: (status: MirrorStatus) => void): Mirror {
     let frameTimer: ReturnType<typeof setInterval> | null = null
     let attempt = 0
     let encoding = false
-    let step: MirrorPose | null = "open"
     let wasCapturing: MirrorPose | null = null
     const canvas = document.createElement("canvas")
     canvas.width = FRAME_WIDTH
@@ -104,9 +106,9 @@ export function useMirror(onFrame: (status: MirrorStatus) => void): Mirror {
         onFrameRef.current(status)
         const { mode, calibrated, capturing, error } = status
         // A failed capture starts over: the backend drops both poses when the range is refused.
-        if (wasCapturing && !capturing) step = error ? "open" : wasCapturing === "open" ? "fist" : null
+        if (wasCapturing && !capturing) stepRef.current = error ? "fist" : wasCapturing === "fist" ? "open" : null
         wasCapturing = capturing
-        const next = step
+        const next = stepRef.current
         setSummary((prev) =>
           prev.mode === mode &&
           prev.calibrated === calibrated &&
@@ -119,7 +121,7 @@ export function useMirror(onFrame: (status: MirrorStatus) => void): Mirror {
       }
       socket.onclose = (event) => {
         socketRef.current = null
-        step = "open"
+        stepRef.current = "fist"
         wasCapturing = null
         setSummary(IDLE) // a new connection is a new session: the calibration is gone
         setLink(event.code === BUSY_CODE ? "busy" : "connecting")
@@ -160,5 +162,10 @@ export function useMirror(onFrame: (status: MirrorStatus) => void): Mirror {
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "calibrate", pose }))
   }, [])
 
-  return { videoRef, link, summary, calibrate }
+  const recalibrate = useCallback(() => {
+    stepRef.current = "fist"
+    setSummary((prev) => ({ ...prev, step: "fist" }))
+  }, [])
+
+  return { videoRef, link, summary, calibrate, recalibrate }
 }

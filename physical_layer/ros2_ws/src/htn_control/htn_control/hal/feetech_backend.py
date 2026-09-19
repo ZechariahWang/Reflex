@@ -44,7 +44,7 @@ class FeetechBackend(HandBackend):
             if require_all:
                 self.bus.close()
                 raise RuntimeError(f'No answer from {finger} servo (id {servo_id}) on {port}')
-            node.get_logger().warn(f'No {finger} servo (id {servo_id}), running without it')
+            node.get_logger().warning(f'No {finger} servo (id {servo_id}), running without it')
         self.active_ids = [i for i, present in zip(self.ids, self.present) if present]
         # The torque limit is RAM: set it before the servos get torque
         for servo_id in self.active_ids:
@@ -69,14 +69,14 @@ class FeetechBackend(HandBackend):
             if not self.present[n]:
                 continue
             if servo_id not in replies:
-                log.warn(f'No position from {finger} servo (id {servo_id})',
-                         throttle_duration_sec=2.0)
+                log.warning(f'No position from {finger} servo (id {servo_id})',
+                            throttle_duration_sec=2.0)
                 continue
             self.measured[n] = to_norm(
                 from_u16(replies[servo_id]), self.open_step[n], self.closed_step[n])
             if self.bus.errors.get(servo_id):
-                log.warn(f'{finger} servo (id {servo_id}) reports error '
-                         f'0x{self.bus.errors[servo_id]:02x}', throttle_duration_sec=2.0)
+                log.warning(f'{finger} servo (id {servo_id}) reports error '
+                            f'0x{self.bus.errors[servo_id]:02x}', throttle_duration_sec=2.0)
         return None if None in self.measured else list(self.measured)
 
     def close(self):

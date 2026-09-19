@@ -3,6 +3,7 @@ import threading
 import time
 
 import pytest
+import rclpy.logging
 
 from htn_control.hal.feetech import FeetechBus, FeetechError, from_u16, u16
 from htn_control.hal.feetech_backend import FeetechBackend, to_norm, to_step
@@ -150,15 +151,15 @@ def test_step_mapping_round_trips_with_mirrored_servo():
 class FakeNode:
     def __init__(self, **params):
         self.params = params
-        self.warnings = []
+        # One logger object per node, as in rclpy: its call-site checks reject
+        # some mixes of plain and throttled calls
+        self.logger = rclpy.logging.get_logger('test_feetech')
 
     def declare_parameter(self, name, default):
         return type('Parameter', (), {'value': self.params.get(name, default)})
 
     def get_logger(self):
-        return type('Logger', (), {
-            'info': lambda *a, **k: None,
-            'warn': lambda _, message, **k: self.warnings.append(message)})()
+        return self.logger
 
 
 HAND_PARAMS = {'servos': {
@@ -175,7 +176,7 @@ def test_backend_refuses_absent_servo_by_default(servos):
 def test_backend_runs_with_absent_servos_when_allowed(servos):
     node = FakeNode(serial_port=servos.port, require_all_servos=False)
     backend = FeetechBackend(node, HAND_PARAMS)
-    assert len(node.warnings) == 2  # ring and pinky
+    assert backend.present == [True, True, True, False, False]
     assert servos.registers[1][40] == 1 and from_u16(servos.registers[1][48:50]) == 300
 
     servos.registers[1][56:58] = u16(2000)
@@ -184,6 +185,8 @@ def test_backend_runs_with_absent_servos_when_allowed(servos):
     assert from_u16(servos.registers[1][42:44]) == 2000
     assert state[0] == pytest.approx(0.5)
     assert state[4] == pytest.approx(0.25)  # absent finger reports its command
+    servos.silent.add(2)
+    assert backend.read()[1] == state[1]  # no answer: warning, last value kept
     backend.close()
     deadline = time.time() + 1.0  # torque-off has no reply to wait for
     while servos.registers[1][40] and time.time() < deadline:

@@ -1,0 +1,69 @@
+# physical_layer
+
+ROS 2 **Humble** workspace (`ros2_ws/`) for the exoskeleton hand. Gazebo
+**Fortress** (`ign gazebo`, via `ros_gz` + `gz_ros2_control`), not Gazebo Classic.
+
+## Build / run
+
+```bash
+cd physical_layer/ros2_ws          # always build from here
+colcon build --symlink-install
+source install/setup.bash
+ros2 launch htn_launch sim.launch.py        # Gazebo headless + HAL + Foxglove bridge + control window
+ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0
+```
+
+Launch args: `gui:=true` (Gazebo window, sim only), `teleop:=false` (no control
+window), `foxglove:=false`, `params_file:=<yaml>`. Foxglove connects to
+`ws://localhost:8765`.
+
+With `--symlink-install`, edits to Python, launch, YAML and xacro files need no
+rebuild - just relaunch. Rebuild after adding files, entry points or packages.
+
+## Packages (`ros2_ws/src`)
+
+- `htn_description` - `urdf/hand.urdf.xacro` builds the whole URDF from
+  `config/hand_params.yaml` (palm/finger sizes, masses, angle limits, mount
+  poses, joint physics, sim mount, servo calibration). Change the hand by
+  editing the YAML, not the xacro. `sim:=gazebo` pulls in `hand.gazebo.xacro`
+  (world mount + ros2_control).
+- `htn_launch` - `sim.launch.py`, `hardware.launch.py`, `config/controllers.yaml`,
+  `worlds/`.
+- `htn_control` - the HAL and manual control:
+  - `hal_node.py`: subscribes `/hand/command` (5 x 0..1), clamps, rate-limits
+    (`max_speed`), writes to a backend, publishes `/hand/state`.
+  - `hal/`: `HandBackend` base class, `SimBackend` (radians ->
+    `/hand_position_controller/commands`), `SerialBackend` (servo degrees over
+    serial; wire protocol documented in the file - firmware must match it).
+    New hardware = new subclass registered in `hal/__init__.py`.
+  - `teleop_gui.py` (tkinter window, started by the launch files) and
+    `teleop.py` (terminal version, needs its own TTY so it is never launched).
+  - `hand_config.py`: `FINGERS` order and the YAML loader.
+- `htn_auto` - stub for autonomous control. Must only talk to `/hand/command` /
+  `/hand/state`; policy/VLA code lives outside this workspace.
+
+## Gotchas
+
+- **DART joint limits**: in Gazebo a joint resting exactly on its limit ignores
+  velocity commands and sticks forever. `hand.urdf.xacro` therefore widens the
+  hard limits by `limit_margin` in sim only. Don't remove it, and don't command
+  outside `[min_angle, max_angle]`.
+- **Stale Gazebo**: Ctrl-C on a launch can leave `ign gazebo` alive; the next
+  launch then fails with `Failed to configure controller` / duplicate nodes.
+  Fix: `pkill -9 -f "ign gazebo"`.
+- Joint names are `<finger>_joint`, links `<finger>_finger`, root `base_link`
+  (`world` exists only in sim).
+- Only the HAL's sim backend may publish to `/hand_position_controller/commands`.
+- A ROS package must never be called `launch` (shadows the `launch` Python
+  module) - hence the `htn_` prefix everywhere.
+
+## Testing without a GUI
+
+```bash
+ros2 topic pub --once /hand/command std_msgs/msg/Float64MultiArray "{data: [0, 1, 1, 0, 0]}"
+ros2 topic echo /hand/state --once
+ros2 control list_controllers      # both must be active
+```
+
+The serial backend can be tested without hardware by pointing `serial_port` at a
+pty and reading the `S ...` lines it writes.

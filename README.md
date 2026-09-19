@@ -2,16 +2,17 @@
 
 Monorepo for the exoskeleton hand.
 
-- `ros2_ws/` - ROS 2 (Humble) workspace
-  - `htn_description` - URDF of the hand, generated from `config/hand_params.yaml`
-  - `htn_launch` - `sim.launch.py` and `hardware.launch.py`
-  - `htn_control` - hand HAL (sim / serial backends) and keyboard teleop
-  - `htn_auto` - autonomous finger control (stub; policy/VLA details live outside the workspace)
+- `physical_layer/` - everything that touches the hand itself
+  - `ros2_ws/` - ROS 2 (Humble) workspace
+    - `htn_description` - URDF of the hand, generated from `config/hand_params.yaml`
+    - `htn_launch` - `sim.launch.py` and `hardware.launch.py`
+    - `htn_control` - hand HAL (sim / serial backends) and keyboard teleop
+    - `htn_auto` - autonomous finger control (stub; policy/VLA details live outside the workspace)
 
 ## Run
 
 ```bash
-cd ros2_ws
+cd physical_layer/ros2_ws
 colcon build --symlink-install
 source install/setup.bash
 
@@ -43,7 +44,7 @@ teleop / auto --/hand/command--> HAL --+-- sim backend    -> ros2_control -> Gaz
 - Everything above the HAL speaks normalized finger positions in
   thumb, index, middle, ring, pinky order: `0` = open, `1` = closed (each finger
   is 1 DOF). The HAL clamps and rate-limits (`max_speed`) before anything moves.
-- `htn_description/config/hand_params.yaml` holds the physical description:
+- `physical_layer/ros2_ws/src/htn_description/config/hand_params.yaml` holds the physical description:
   palm and finger sizes, masses, angle limits, mount poses, joint physics, and
   servo calibration. The URDF and the HAL both read it; pass
   `params_file:=/path/to/other.yaml` to either launch file to try another hand.

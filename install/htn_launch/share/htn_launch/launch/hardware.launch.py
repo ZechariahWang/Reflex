@@ -1,1 +1,0 @@
-/home/zech/htn-2026/ros2_ws/src/htn_launch/launch/hardware.launch.py

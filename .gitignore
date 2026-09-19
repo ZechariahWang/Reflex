@@ -1,5 +1,7 @@
-ros2_ws/build/
-ros2_ws/install/
-ros2_ws/log/
+# colcon output, wherever it gets run from
+build/
+install/
+log/
+
 __pycache__/
 *.pyc

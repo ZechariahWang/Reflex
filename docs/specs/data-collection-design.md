@@ -75,6 +75,11 @@ imports the two. lerobot imports the package because of its
 - `get_action()`: the latest state as `thumb.pos` .. `pinky.pos`, the keys of
   `ExoHand.action_features`. Raises `ConnectionError` if the state is older
   than `max_age_s`, as `ExoHand.get_observation()` does.
+- `require_passive = True`: `connect()` and each `get_action()` raise unless the
+  latched `/hand/passive` of the HAL is true. With torque the fingers do not
+  move, and the recorder would store constant labels with no error. An
+  unknown mode counts as not passive. Set it to false for a recording where
+  something else commands the hand.
 - `action_features`: the 5 keys, float. `feedback_features`: empty.
   `send_feedback`, `calibrate`, `configure`: nothing.
 - It reuses `KEYS`, `is_fresh` and `to_observation`-style helpers of
@@ -88,6 +93,10 @@ teleoperator action; without the switch the adapter publishes the encoder
 positions as commands, and the hand jumps to the last one when the torque
 comes back. The dataset is not affected: lerobot stores the teleoperator
 action, not the return value of `send_action()`.
+
+Without `passive`, `send_action()` raises if the HAL reports passive mode: a
+passive HAL ignores `/hand/command`, so a policy would run and the hand would
+not move.
 
 ### `label.py` - the offline label script
 
@@ -172,7 +181,7 @@ shows people.
 | Event | Result |
 |---|---|
 | WiFi drops or the camera stops | `get_observation()` or `get_action()` raises after `max_age_s`; `lerobot-record` stops. Record the episode again. |
-| Torque is on during a recording | The fingers do not move, the labels are constant. `passive` prevents commands from the recorder; other publishers (teleop, web console) must be idle. |
+| Torque is on during a recording | The leader raises at `connect()`, or at the next `get_action()` if the mode changes in a session (`require_passive`). |
 | `passive` is not set | The adapter publishes encoder positions to `/hand/command`. No effect while the torque is off; the hand jumps when the torque comes back. |
 
 ## Tests

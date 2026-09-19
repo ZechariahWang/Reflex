@@ -120,3 +120,12 @@ def test_passive_send_action_publishes_nothing(robot):
 
     assert robot.send_action(action(0.7)) == action(0.7)
     assert robot._command_out.sent == []
+
+
+def test_send_action_refuses_while_the_hal_ignores_commands(robot):
+    robot._on_passive({"data": True})
+    with pytest.raises(RuntimeError):
+        robot.send_action(action(0.5))
+
+    robot.config.passive = True  # a recording: nothing is published, so the HAL mode is no problem
+    assert robot.send_action(action(0.5)) == action(0.5)

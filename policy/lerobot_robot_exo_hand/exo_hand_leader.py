@@ -11,7 +11,7 @@ from lerobot.teleoperators.teleoperator import Teleoperator
 
 from .config_exo_hand_leader import ExoHandLeaderConfig
 from .convert import KEYS, is_fresh
-from .exo_hand import MULTI_ARRAY, STATE_TOPIC
+from .exo_hand import BOOL, MULTI_ARRAY, PASSIVE_TOPIC, STATE_TOPIC
 
 
 class ExoHandLeader(Teleoperator):
@@ -25,6 +25,8 @@ class ExoHandLeader(Teleoperator):
         self._lock = threading.Lock()
         self._state: list[float] | None = None
         self._state_stamp: float | None = None
+        # Latched by the HAL; None until it arrives
+        self._hal_passive: bool | None = None
 
     @property
     def action_features(self) -> dict[str, type]:
@@ -57,6 +59,7 @@ class ExoHandLeader(Teleoperator):
             raise ConnectionError(f"{self} is already connected")
         ros = roslibpy.Ros(self.config.host, self.config.port)
         roslibpy.Topic(ros, STATE_TOPIC, MULTI_ARRAY, queue_length=1).subscribe(self._on_state)
+        roslibpy.Topic(ros, PASSIVE_TOPIC, BOOL, queue_length=1).subscribe(self._on_passive)
         ros.run(timeout=self.config.connect_timeout_s)
         self._ros = ros
 
@@ -66,6 +69,14 @@ class ExoHandLeader(Teleoperator):
                 self.disconnect()
                 raise ConnectionError(f"rosbridge is up but {STATE_TOPIC} is silent")
             time.sleep(0.05)
+        # The latched mode arrives with the first state or soon after it
+        while self.config.require_passive and self._hal_passive is None and time.monotonic() < deadline:
+            time.sleep(0.05)
+        try:
+            self._check_mode()
+        except RuntimeError:
+            self.disconnect()
+            raise
 
     def disconnect(self) -> None:
         if self._ros is not None:
@@ -77,12 +88,24 @@ class ExoHandLeader(Teleoperator):
         with self._lock:
             self._state, self._state_stamp = list(message["data"]), time.monotonic()
 
+    def _on_passive(self, message: dict) -> None:
+        with self._lock:
+            self._hal_passive = bool(message["data"])
+
+    def _check_mode(self) -> None:
+        if self.config.require_passive and not self._hal_passive:
+            raise RuntimeError(
+                f"the HAL does not report passive mode on {PASSIVE_TOPIC}: with torque the fingers do not "
+                "move and the labels are constant. Switch it to passive, or set require_passive=false"
+            )
+
     def _fresh(self) -> bool:
         with self._lock:
             stamp = self._state_stamp
         return is_fresh((stamp,), time.monotonic(), self.config.max_age_s)
 
     def get_action(self) -> dict[str, float]:
+        self._check_mode()
         with self._lock:
             state, stamp = self._state, self._state_stamp
         # Without this a dead link labels the rest of the episode with one frozen pose

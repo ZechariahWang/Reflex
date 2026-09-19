@@ -41,7 +41,9 @@ First put the HAL in that mode, on the ROS machine: start it with
 one with the Backdrive button of the control window / web console, or
 `ros2 service call /hand/set_passive std_srvs/srv/SetBool '{data: true}'`.
 `/hand/passive` (latched Bool) tells which mode it is in. With the torque on the
-fingers do not move and every label is constant. Afterwards switch it off the
+fingers do not move and every label is constant, so `exo_hand_leader` refuses to
+record unless `/hand/passive` is true (`--teleop.require_passive=false` for a
+recording where something else commands the hand). Afterwards switch it off the
 same way (`data: false`): the hand then holds the pose the fingers are in.
 
 Then run from the repo root:
@@ -84,7 +86,9 @@ python -m lerobot.async_inference.robot_client \
     --debug_visualize_queue_size=True
 ```
 
-`--fps` is the rate of `send_action()`; the camera delivers 15 fps. To stop the
+`--fps` is the rate of `send_action()`; the camera delivers 15 fps. The HAL must
+be active: `ExoHand` raises if it is passive, because a passive HAL ignores
+every command. To stop the
 policy and take the hand back with teleop, stop the client: a running policy
 overrides every other publisher on `/hand/command`.
 

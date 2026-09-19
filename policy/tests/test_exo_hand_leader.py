@@ -32,6 +32,7 @@ def test_lerobot_finds_the_teleoperator_from_its_config(tmp_path):
 
 
 def test_get_action_is_the_latest_state_in_the_action_keys_of_the_robot(leader, tmp_path):
+    leader._on_passive({"data": True})
     leader._on_state({"data": [0.9] * 5})
     leader._on_state({"data": [0.0, 0.1, 0.2, 0.3, 0.4]})
 
@@ -43,9 +44,24 @@ def test_get_action_is_the_latest_state_in_the_action_keys_of_the_robot(leader, 
 
 
 def test_get_action_fails_without_a_state_and_on_a_frozen_stream(leader, clock):
+    leader._on_passive({"data": True})
     with pytest.raises(ConnectionError):
         leader.get_action()
     leader._on_state({"data": [0.0] * 5})
     clock.value += 0.4
     with pytest.raises(ConnectionError):
         leader.get_action()
+
+
+def test_get_action_refuses_a_hal_with_torque_unless_told_otherwise(leader):
+    leader._on_state({"data": [0.0] * 5})
+    with pytest.raises(RuntimeError):  # mode unknown
+        leader.get_action()
+    leader._on_passive({"data": True})
+    leader.get_action()
+    leader._on_passive({"data": False})  # somebody switched the torque on in the middle of a session
+    with pytest.raises(RuntimeError):
+        leader.get_action()
+
+    leader.config.require_passive = False
+    leader.get_action()

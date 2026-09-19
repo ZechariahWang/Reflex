@@ -12,3 +12,6 @@ class ExoHandLeaderConfig(TeleoperatorConfig):
     # Oldest state that get_action() accepts
     max_age_s: float = 0.3
     connect_timeout_s: float = 10.0
+    # Refuse to record unless the HAL reports torque off: with torque the fingers do not move and
+    # every label is constant. False for a recording where something else commands the hand.
+    require_passive: bool = True

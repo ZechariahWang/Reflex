@@ -27,8 +27,10 @@ from .convert import (
 
 STATE_TOPIC = "/hand/state"
 COMMAND_TOPIC = "/hand/command"
+PASSIVE_TOPIC = "/hand/passive"
 MULTI_ARRAY = "std_msgs/Float64MultiArray"
 COMPRESSED_IMAGE = "sensor_msgs/CompressedImage"
+BOOL = "std_msgs/Bool"
 
 
 class ExoHand(Robot):
@@ -49,6 +51,8 @@ class ExoHand(Robot):
         self._jpeg_stamp: float | None = None
         # Last command on the topic, from us or from another publisher
         self._last_command: list[float] | None = None
+        # Latched by the HAL; None until it arrives (or with a HAL that has no passive mode)
+        self._hal_passive: bool | None = None
 
     @property
     def observation_features(self) -> dict[str, type | tuple[int, int, int]]:
@@ -81,6 +85,7 @@ class ExoHand(Robot):
             (STATE_TOPIC, MULTI_ARRAY, self._on_state),
             (self.config.color_topic, COMPRESSED_IMAGE, self._on_color),
             (COMMAND_TOPIC, MULTI_ARRAY, self._on_command),
+            (PASSIVE_TOPIC, BOOL, self._on_passive),
         ):
             roslibpy.Topic(ros, name, message_type, queue_length=1).subscribe(callback)
         # A Topic replays only one of subscribe / advertise on reconnect, so publishing gets its own
@@ -117,6 +122,10 @@ class ExoHand(Robot):
         with self._lock:
             self._last_command = list(message["data"])
 
+    def _on_passive(self, message: dict) -> None:
+        with self._lock:
+            self._hal_passive = bool(message["data"])
+
     def _fresh(self) -> bool:
         with self._lock:
             stamps = (self._state_stamp, self._jpeg_stamp)
@@ -143,6 +152,9 @@ class ExoHand(Robot):
         if self.config.passive:
             return dict(zip(KEYS, command))
         with self._lock:
+            # A passive HAL ignores every command: the policy would run and the hand would not move
+            if self._hal_passive:
+                raise RuntimeError(f"the HAL is passive (torque off) and ignores {COMMAND_TOPIC}; switch it to active")
             last = self._last_command
             publish = last is None or differs(command, last, self.config.command_tolerance)
             if publish:

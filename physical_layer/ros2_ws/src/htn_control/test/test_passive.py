@@ -12,6 +12,12 @@ IDS = [1, 2, 3, 4, 5]
 OPEN, CLOSED = 2048, 3072  # hand_params.yaml
 
 
+def settle(backend):
+    """Sync writes get no reply, so the fake may still be chewing on one. A read does
+    get a reply: once it returns, everything sent before it has been handled."""
+    backend.read()
+
+
 def writes(servos, addr):
     """(position in the request log, {id: value}) of every sync write to `addr`."""
     found = []
@@ -29,12 +35,13 @@ def test_torque_comes_back_on_the_measured_pose_goal_first():
     backend.write([0.0] * 5)
 
     backend.set_torque(False)
+    settle(backend)
     assert all(servos.registers[i][40] == 0 for i in IDS)
 
     hold = [0.5, 0.25, 0.0, 1.0, 0.75]
     del servos.requests[:]
     backend.set_torque(True, hold=hold)
-    backend.read()  # a request with a reply: everything before it has been handled
+    settle(backend)
     goal, torque = writes(servos, feetech.ADDR_GOAL_POSITION), writes(servos, feetech.ADDR_TORQUE_ENABLE)
     assert len(goal) == 1 and len(torque) == 1
     assert goal[0][0] < torque[0][0], 'the goal must be on the bus before the torque'
@@ -69,6 +76,7 @@ def test_hal_follows_backdriven_fingers_and_holds_them_afterwards(hal):
     assert node.target == [1.0] * 5
 
     node.set_passive(True)
+    settle(node.backend)
     assert all(servos.registers[i][40] == 0 for i in IDS)
 
     # A person closes the index finger half way; nothing may be commanded meanwhile
@@ -82,13 +90,14 @@ def test_hal_follows_backdriven_fingers_and_holds_them_afterwards(hal):
 
     del servos.requests[:]
     node.set_passive(False)
-    node.backend.read()
+    settle(node.backend)
     goal, torque = writes(servos, feetech.ADDR_GOAL_POSITION), writes(servos, feetech.ADDR_TORQUE_ENABLE)
     assert goal[0][0] < torque[0][0]
     assert from_u16(goal[0][1][2]) == (OPEN + CLOSED) // 2 and from_u16(goal[0][1][1]) == OPEN
     assert all(servos.registers[i][40] == 1 for i in IDS)
 
     node.update()  # active again: holds the pose, does not run to the pre-passive target
+    settle(node.backend)
     assert from_u16(servos.registers[2][42:44]) == (OPEN + CLOSED) // 2
 
 
@@ -99,4 +108,5 @@ def test_a_finger_pushed_past_its_range_is_held_at_the_limit(hal):
     node.update()
     assert node.setpoint[0] == 0.0
     node.set_passive(False)
+    settle(node.backend)
     assert from_u16(servos.registers[1][42:44]) == OPEN

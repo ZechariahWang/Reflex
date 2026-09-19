@@ -1,64 +1,206 @@
-# Mirror teleop: the free hand commands the exoskeleton
+# Mirror teleop: a second person's hand commands the exoskeleton
 
 How the demonstrations are made now that backdrive is not usable
-(`data-collection-design.md`, Backdrive result). Status: design notes from the
-discussion of 2026-09-19, nothing implemented, nothing verified.
+(`data-collection-design.md`, Backdrive result). Status: design agreed on
+2026-09-19, nothing implemented. It replaces the design notes of the same day
+(free hand of the wearer, standalone script, OpenCV window).
+
+Scope: data collection only. From the controller's webcam to `/hand/command`,
+the panel in the web console, and the teleoperator that puts the commands into a
+LeRobot recording. Not in scope: the policy cameras, the recording buttons in
+the web console (next spec, "recording console"), training.
+
+## Terms
+
+| Term | Who | Cameras |
+|---|---|---|
+| **Wearer** | Has the exoskeleton on the LEFT hand, moves the arm | Wrist RealSense, forehead iPhone: the policy cameras, in the dataset |
+| **Controller** | Sits at a browser; the curl of their fingers is the command | Laptop webcam: tracking only, **never in the dataset** |
 
 ## Decisions
 
-- Record with the torque ON. The action is the command on `/hand/command`, the
-  observation is the wrist camera and `/hand/state`, as before.
-- The commands come from the other (free) hand of the wearer or of a second
-  person: a webcam sees that hand and the exoskeleton copies its finger curl.
-  This gives human timing (the reason for the backdrive idea) and commands that
-  go past the contact point, so the grip intent is in the labels.
-- Hand detection: **MediaPipe Hands**. It is a pretrained model (21 landmarks
-  for each hand and frame, runs on a CPU in real time). **No training of ours.**
-  The only per-person step is a short calibration: open hand, then fist, to
-  scale each finger to `0..1`.
-- It is also a possible product mode ("mirror my good hand"), not only a data
-  collection tool.
+- The controller is a second person. The wearer's own free hand is not used: a
+  head camera sees it, and a policy that sees the commanding hand learns to copy
+  it and fails at inference, where that hand is absent (causal confusion).
+  **The controller's hand stays out of the view of both policy cameras.**
+- Either hand of the controller works (no handedness in the maths). One hand in
+  the webcam view.
+- Record with the torque ON. `action` = the value sent on `/hand/command` (it
+  goes past the contact point: `1.0` while the finger stops at `0.6`).
+  `observation.state` = `/hand/state`, measured. The difference is the grip
+  intent, and the contact stop of the HAL turns it into a constant soft squeeze
+  (`hal-safety-design.md`). No relabel with `label.py`; look again after the
+  first recording.
+- Webcam frames are used for the tracking and dropped. Nothing of them goes to
+  ROS or to the dataset.
+- Hand tracking: **MediaPipe `HandLandmarker`** (pretrained, CPU, real time),
+  **no training of ours**. `mediapipe 1.0.1` has a `py3-none-manylinux_2_28`
+  wheel (checked). Not verified: whether 1.0 still has the old `solutions.hands`
+  API; the design uses the Tasks API (`HandLandmarker` + a `.task` model file,
+  stored in the repo, no download at run time).
+- The browser is only a camera. Vision and all logic are Python, in
+  `application/backend`.
+- Tasks: grasps and different grip types (full grasp, pinch, tripod). The grip
+  follows from the object the cameras see (one object -> one grip, always); one
+  generic instruction for all episodes.
+- One episode: reach with the hand open, grasp, lift, put down, release, move
+  away open (~10 to 15 s). Vary object, position and approach; ~50 episodes for
+  each object is the start point.
+- Episodes end with the keys of `lerobot-record` (right arrow = save, left
+  arrow = record again, Esc = stop) and `--dataset.episode_time_s` as the upper
+  limit. Not verified: LeRobot reads the keys with `pynput`, which often does not
+  work on Wayland; the fallback is the fixed episode time. Buttons in the web
+  console are the next spec.
 
-## Components
+## Data flow
 
-1. **Command teleoperator** in `policy/lerobot_robot_exo_hand`: a LeRobot
-   `Teleoperator` whose `get_action()` is the last message on `/hand/command`
-   (~10 lines and a test; `ExoHandLeader` is the pattern). Record with
-   `--robot.passive=true` (the adapter must not publish the commands again) and
-   with this teleoperator instead of `exo_hand_leader`. It makes a recording
-   with the keys or the hold-to-move buttons possible before the mirror exists.
-2. **Mirror script** in `policy/`, plain Python, no ROS: webcam -> MediaPipe ->
-   one curl value for each finger -> filter -> `/hand/command` through
-   rosbridge (`roslibpy`).
-   - Curl from the landmarks: the joint angles of each finger, or the distance
-     fingertip to wrist divided by the palm size. The thumb is the hard one.
-   - Filter: a one-euro filter on each curl value. Hand tracking jitters by
-     some percent; without a filter the labels shake and the policy learns to
-     shake. The HAL rate limit (`max_speed`) and the servo acceleration are the
-     second and third smoothing stage.
-   - Tracking lost (hand turned away, covered, bad light): hold the last
-     value, publish nothing.
-   - Obey the `/hand/command` rule of `physical_layer/CLAUDE.md`: publish only
-     on change (a deadband), never on a timer.
-   - Pure parts (curl, filter, calibration scaling) get tests with no camera.
-3. **Labels**: `label.py` stays. With commands as the source, `gain = 0` (the
-   command has the intent past contact already) and `k` small or `0` (the
-   command leads the state by itself). `label.py` reads `observation.state`
-   today; for command recordings it must label from the recorded `action`, or
-   the recording is used with no relabel. Decide when the first recording
-   exists.
+```
+controller's browser                 backend (FastAPI, Python)                     ROS
+webcam -> JPEG 320x240, 30 fps  -->  decode -> HandLandmarker (world landmarks)
+          WS /ws/mirror (binary)     -> curl -> calibration -> filter -> engage -> /hand/command -> HAL
+panel  <-- mode, curls, landmarks <--  (JSON on the same socket)
 
-## Expected behaviour
+recorder (policy/): teleoperator `exo_hand_command` = last /hand/command  -> dataset `action`
+```
 
-- Delay from the free hand to the exoskeleton ~0.1 to 0.15 s. Visible, no harm
-  to the data: the label is the command.
-- The free hand is busy during a demonstration. Fine for a grasp with the
-  exoskeleton hand; no two-hand tasks.
+One machine or several: every link is a host setting that exists
+(`ROSBRIDGE_HOST`, `--robot.host`, the frontend's backend address).
 
-## Open / not verified
+## Backend: `app/mirror/`
 
-- MediaPipe wheels for Python 3.12 (the `policy/` venv). Not checked.
-- The contact stop of the HAL (`hal-safety-design.md`) matters more with this
-  method: the mirror commands "past contact" all the time.
-- The ROS container on the development laptop has no RealSense driver: no
-  wrist camera topic there. Install it, or record on the machine that has it.
+Pure parts, each with tests and no camera:
+
+1. **`curl.py`**: 21 world landmarks -> 5 bend angles (radians). The bend of a
+   finger is the sum of the angles between successive bones, from 3D vectors:
+   index = `angle(0->5, 5->6) + angle(5->6, 6->7) + angle(6->7, 7->8)`; the
+   other fingers and the thumb (`0->1->2->3->4`) the same way. World landmarks
+   (metres, hand-centred), not image landmarks: a finger that curls towards the
+   camera moves mostly in depth. The result does not depend on the position,
+   distance or rotation of the hand. The curl of one finger is ONE function, so
+   the thumb can change to another measure (thumb tip to pinky base) if the
+   bench check below fails.
+2. **`calibration.py`**: `curl = clip((bend - open) / (fist - open), 0, 1)` for
+   each finger; a capture averages ~0.5 s of bends. A calibration whose `fist -
+   open` is too small for a finger is refused.
+3. **`one_euro.py`**: a one-euro filter for each finger. Hand tracking jitters
+   by some percent; without a filter the labels shake and the policy learns to
+   shake. The HAL `max_speed` and the servo acceleration are the second and
+   third stage.
+4. **`engage.py`**: the state machine.
+
+   | Mode | When | Command |
+   |---|---|---|
+   | `off` | Mirror switch off, or no calibration | none published |
+   | `no_hand` | no landmarks, or no frame for `frame_timeout_s` (socket closed included) | hold the last one |
+   | `frozen` | hand seen, a finger further than `match_tolerance` from the held command | hold the last one |
+   | `following` | every finger within `match_tolerance` once; stays until the hand is lost | the filtered curls |
+
+   At the start the held command is the current `/hand/state`: the controller
+   matches the real hand before the first motion, nothing jumps.
+
+Impure parts:
+
+5. **`tracker.py`**: `HandLandmarker`, `num_hands=1`, JPEG bytes -> world
+   landmarks + image landmarks (for the drawing) or `None`. Runs off the event
+   loop (a worker thread); latest frame only, never a queue.
+6. **`WS /ws/mirror`** in `main.py`: one client at a time (a second one is closed
+   with a reason); the same `Origin` allow-list as the other sockets. It
+   publishes through the existing `/hand/command` publisher of `ros_client.py`,
+   **only on change** (deadband `command_tolerance`), never on a timer
+   (`physical_layer/CLAUDE.md`).
+7. **Mock mode** (`MOCK=1`): a synthetic hand that opens and closes, so the
+   panel is built and tested with no webcam and no MediaPipe.
+
+Config (env, defaults to tune on the bench): `MIRROR_MATCH_TOLERANCE=0.15`,
+`MIRROR_FRAME_TIMEOUT_S=0.3`, `MIRROR_COMMAND_TOLERANCE=0.01`, one-euro
+`MIRROR_MIN_CUTOFF` / `MIRROR_BETA`. `mediapipe` goes into `requirements.txt`.
+
+### `WS /ws/mirror` (to add to `application/CONTRACT.md`)
+
+Client -> server: binary = one JPEG frame; JSON text =
+`{"type": "calibrate", "pose": "open" | "fist"}`.
+
+Server -> client, one JSON for each processed frame:
+
+```json
+{"mode": "following", "calibrated": true,
+ "controller": [0.1, 0.8, 0.8, 0.7, 0.6],
+ "command":  [0.1, 0.8, 0.8, 0.7, 0.6],
+ "landmarks": [[0.41, 0.63], "... 21 image points, 0..1, or null"]}
+```
+
+The measured state is already in `/ws/state`.
+
+## Frontend
+
+- **Mirror switch** in the command block, usable only while armed, built like
+  the Backdrive switch: on = open the webcam and the socket, run the guided
+  calibration, lock the sliders and presets (one command source at a time).
+  Disarm = off. Off or a lost connection = the hand holds the last command.
+- **Guided calibration at every connect**: "open hand" -> capture, "fist" ->
+  capture (a button and a shortcut for each). No `following` before it is done.
+  Nothing is saved: always right for this person, camera and distance.
+- **Mirror panel**: the local webcam video with the skeleton drawn from
+  `landmarks`; a mode badge, red border when not `following`, with the hint
+  ("put your hand in view" / "match the cmd bars"); for each finger three bars:
+  **ctl** (controller), **cmd** (sent), **st** (measured). `frozen`: ctl differs
+  from cmd. Contact: cmd above st.
+- Frames: a canvas at 320x240 -> JPEG -> binary message, 30 fps, skip a frame
+  while the socket's buffer is not empty.
+- **The webcam needs a secure context**: `localhost` or `https`. A controller on
+  another laptop runs the frontend locally against the remote backend
+  (`CORS_ORIGINS` has the origin), or the frontend is served over HTTPS.
+
+## Recorder: `exo_hand_command` in `policy/lerobot_robot_exo_hand`
+
+A LeRobot `Teleoperator` whose `get_action()` is the last message on
+`/hand/command` (`ExoHandLeader` is the pattern: same features, same freshness
+and connection checks, no passive check). Before the first command it returns
+`/hand/state`. Record with `--teleop.type=exo_hand_command --robot.passive=true`:
+the robot must not publish the command a second time. The saved action can be
+one frame (33 ms) behind the sent one. It works with any command source
+(sliders, keys, mirror).
+
+Rule for a recording: nobody arms the sliders in another tab.
+
+## Tests (TDD, no camera, no ROS)
+
+- `curl`: synthetic landmarks, straight finger ~0, bent finger = the known sum;
+  the same hand translated, scaled and rotated gives the same bends.
+- `calibration`: scaling, clipping, refusal of a degenerate range.
+- `engage`: start from the state -> `frozen` until matched; dropout -> hold;
+  return unmatched -> `frozen`; matched -> `following`; frame timeout ->
+  `no_hand`; off -> nothing published.
+- Socket with a fake tracker: a second client is refused, publish only on
+  change, mock mode.
+- `exo_hand_command`: returns the last command, the state before any command,
+  stale data raises as in `ExoHandLeader`.
+- Frontend: the panel against `MOCK=1`; no test of copy or layout.
+
+## Done check (sim, then the real hand)
+
+1. Sim or fake servos + backend + frontend: arm, Mirror on, calibrate. Open,
+   fist and a pinch (thumb + index closed, the others open) show on the 3D hand;
+   the controller can hold the thumb at ~0.5. A hand out of the view freezes the
+   hand; it follows again only after a match.
+2. `lerobot-record` with `exo_hand_command` for two short episodes: the `action`
+   column is the mirror's command.
+3. Measure the loop rate with everything on one laptop (MediaPipe + camera
+   streams + video encoding); below 30 Hz, record at 15 to 20 fps or use two
+   machines.
+
+Real hand, same code, only the launch file differs. Before anybody wears it
+under mirror control: `servo_tool calibrate --write`, tune `contact_stop:` and
+`hold_torque` (`hal-safety-design.md`), a first mirror run with the hand off the
+wearer. **Do not change the contact stop after the recording starts**: the
+policy learns against it.
+
+## TODO, outside this spec
+
+- **The forehead iPhone as a ROS topic** and as a second image key in `ExoHand`
+  (today the recorder saves only the RealSense colour image). The backend
+  receives the iPhone through Record3D already, but nothing of it is in ROS. The
+  mirror is the same with one policy camera or two.
+- Recording console: episode buttons, shortcuts and recording status in the
+  frontend. Starts with a read of the `lerobot==0.6.1` record loop to find the
+  hook for the three flags.

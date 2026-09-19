@@ -11,6 +11,12 @@ file at the end of a session; the designs themselves are in `../specs/`.
   (`../specs/hal-safety-design.md`, "What is built"). On the hand, in this order:
   `servo_tool scan`, `servo_tool calibrate` (a window) with the hand off the wearer,
   a launch, then tune `contact_stop:` and `hold_torque` in `hand_params.yaml`.
+- **Mirror teleop: design agreed, nothing built** (`../specs/mirror-teleop-design.md`).
+  A second person (the controller) at a browser webcam -> backend (MediaPipe,
+  curl, engage logic) -> `/hand/command`; `exo_hand_command` teleoperator for the
+  recorder. Build it against the sim; it needs the tuned contact stop only for
+  the real hand. TODO next to it: the forehead iPhone as a ROS topic + second
+  image key in `ExoHand`, then the recording console spec.
 - **Calibrated on the hand so far: the thumb** (open 1511, closed 2208 = 61 deg of
   horn; its `max_angle` is that travel). index .. pinky are `enabled: false` in
   `hand_params.yaml`: the HAL never gives them torque or a goal, whatever is

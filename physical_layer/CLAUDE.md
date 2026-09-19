@@ -224,5 +224,7 @@ ros2 control list_controllers      # both must be active
 
 The Feetech protocol has tests with a fake servo bus on a pty (no hardware):
 `python3 -m pytest ros2_ws/src/htn_control/test` with ROS sourced. Servo setup:
-`ros2 run htn_control servo_tool scan | set-id <old> <new> | jog <id> | calibrate [--write]`.
+`ros2 run htn_control servo_tool scan | set-id <old> <new> | jog <id> | calibrate`
+(`calibrate` is a window, `calibrate_gui.py`: its logic is the tkinter-free
+`Calibrator`, tested on fake servos; the window only draws it).
 First run on the real hand: `docs/notes/next-work.md`.

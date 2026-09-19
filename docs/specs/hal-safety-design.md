@@ -117,10 +117,13 @@ servo can have a mechanical stop. The thresholds need tuning on the hand.
   own toggle point after 28 deg of horn (thumb, index, pinky) or 33 deg (middle,
   ring) - `open_lock_rad` in `config/linkage.yaml`. "Drive until blocked" would
   find that point, with the pin forces a toggle brings, not the open pose.
-  `servo_tool calibrate` is therefore a low-torque jog to the open pose (the CAD
-  pose = the web console's 3D view at 0 %), a small test move for the closing
-  direction, `closed_step = open_step +- max_angle * 4096 / (2 pi)`, a check that
-  the travel stays clear of the encoder wrap, and `--write`. If a blocked-based
+  `servo_tool calibrate` is therefore a window (the first version was a terminal
+  jog loop, and nobody could use it): pick a finger - only that one gets torque,
+  and a low one - nudge it to the open pose (the CAD pose = the web console's 3D
+  view at 0 %), "This is open", say which way the test twitch went,
+  `closed_step = open_step +- max_angle * 4096 / (2 pi)`, a check that the travel
+  stays clear of the encoder wrap, an optional slow test of the whole travel that
+  stops pushing when the finger is blocked, and Save into `hand_params.yaml`. If a blocked-based
   open search is wanted later, it has to back off by `open_lock_rad` from the
   blocked point and needs a torque low enough for the toggle.
 - The placeholder calibration spanned 1024 steps = 90 deg of horn; middle and

@@ -9,7 +9,7 @@ file at the end of a session; the designs themselves are in `../specs/`.
   the mirror teleop. The start-up hazards, the contact stop and `servo_tool
   calibrate` are built and tested on the fake servo bus only
   (`../specs/hal-safety-design.md`, "What is built"). On the hand, in this order:
-  `servo_tool scan`, `servo_tool calibrate --write` with the hand off the wearer,
+  `servo_tool scan`, `servo_tool calibrate` (a window) with the hand off the wearer,
   a launch, then tune `contact_stop:` and `hold_torque` in `hand_params.yaml`.
 - **The real hand still has PLACEHOLDER calibration** (`open_step: 2048` for
   every finger; the span is now the linkage's `max_angle`, no longer 90 deg,

@@ -13,7 +13,8 @@ ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0
 ```
 
 Launch args: `gui:=true` (Gazebo window, sim only), `teleop:=false` (no control
-window), `foxglove:=false`, `rosbridge:=false`, `camera:=none`, `color_profile:=640x480x15`,
+window), `foxglove:=false`, `rosbridge:=false`, `passive:=true` (hardware only:
+start with the torque off for a recording session), `camera:=none`, `color_profile:=640x480x15`,
 `depth_profile:=480x270x15`, `params_file:=<yaml>`, `require_all_servos:=false`
 (hardware only: bench test with fewer than 5 servos). Foxglove connects to
 `ws://localhost:8765`, rosbridge (JSON websocket for `application/`) listens on
@@ -42,7 +43,13 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
   node in that file publishing the same topics, selected by `camera:=`.
 - `htn_control` - the HAL and manual control:
   - `hal_node.py`: subscribes `/hand/command` (5 x 0..1), clamps, rate-limits
-    (`max_speed`), writes to a backend, publishes `/hand/state`.
+    (`max_speed`), writes to a backend, publishes `/hand/state`. Passive
+    (backdrive) mode - service `/hand/set_passive`, latched `/hand/passive`,
+    launch arg `passive:=true`, button in the control window and the web
+    console: torque off, commands ignored, state still read. While passive,
+    `setpoint = target = measured`, so leaving it holds the current pose; the
+    backend gets `set_torque(True, hold=pose)` and must write the goal BEFORE
+    the torque (a servo that gets torque with a stale goal drives there at once).
   - `hal/`: `HandBackend` base class, `SimBackend` (radians ->
     `/hand_position_controller/commands`), `FeetechBackend` (Feetech ST bus servos on
     a USB bus adapter, no MCU; `hal/feetech.py` is the wire protocol, no ROS in
@@ -76,6 +83,10 @@ rosbridge, see `docs/specs/policy-link-design.md`.
   velocity commands and sticks forever. `hand.urdf.xacro` therefore widens the
   hard limits by `limit_margin` in sim only. Don't remove it, and don't command
   outside `[min_angle, max_angle]`.
+- **Stale install of a removed package**: after a pull that deletes a package
+  (`htn_auto` went this way), `install/<pkg>` and `build/<pkg>` stay behind and
+  `ros2 launch` dies with `package '<pkg>' not found`. Delete both folders (and
+  the leftover `src/<pkg>/__pycache__`), then rebuild.
 - **Stale Gazebo**: Ctrl-C on a launch can leave `ign gazebo` alive; the next
   launch then fails with `Failed to configure controller` / duplicate nodes.
   Fix: `pkill -9 -f "ign gazebo"`.

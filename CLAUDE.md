@@ -31,6 +31,12 @@ everything else goes in a top-level subfolder per concern.
   (`std_msgs/Float64MultiArray`, 5 values, `0` = open .. `1` = closed) and reads
   `/hand/state` (same layout, measured). Nothing outside the HAL uses radians,
   servo steps or serial.
+- Backdrive (passive) mode, for recording demonstrations: call
+  `/hand/set_passive` (`std_srvs/SetBool`) and the HAL cuts the torque, ignores
+  `/hand/command` and keeps publishing `/hand/state` from the encoders while a
+  person moves the fingers. `/hand/passive` (`std_msgs/Bool`, latched) reports
+  the mode. Leaving it holds the pose the fingers are in and publishes that pose
+  once on `/hand/command`. A recorder needs only `/hand/state` and the camera.
 - Anything that wants to see reads the camera from `/camera/color/image_raw`
   (`sensor_msgs/Image`, rgb8, + `/compressed`), `/camera/depth/image_rect_raw`
   and `/camera/aligned_depth_to_color/image_raw` (16UC1, millimetres), each
@@ -45,7 +51,9 @@ everything else goes in a top-level subfolder per concern.
   doc update) commit it right away without asking: `git add -A :/` from
   anywhere in the repo, one commit per logical change, message says what and
   why. Verify first (tests / build for the part you touched) - never commit a
-  known-broken state. Do NOT push; pushing stays a manual step.
+  known-broken state. Then `git pull --rebase` and `git push` (a teammate
+  pushes to `origin/main` too, so always rebase, never merge or force-push; on
+  a rebase conflict stop and say so instead of guessing).
 - Keep it bare-bones: this is a hackathon project, prefer the smallest thing
   that works over frameworks and abstraction.
 - Build with `physical_layer/build.sh`. Never run `colcon build` from the repo

@@ -42,6 +42,7 @@ class Source(Protocol):
     def start(self) -> None: ...
     async def stop(self) -> None: ...
     def send_command(self, values: list[float]) -> None: ...
+    def set_passive(self, passive: bool) -> None: ...
 
 
 def is_finite_number(value: object) -> bool:
@@ -101,6 +102,19 @@ def parse_command(text: str) -> list[float] | None:
     return values
 
 
+def parse_passive(text: str) -> bool | None:
+    """{"type": "passive", "data": true|false} -> the flag; None for anything else."""
+    if len(text) > MAX_COMMAND_CHARS:
+        return None
+    try:
+        message = json.loads(text)
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(message, dict) or message.get("type") != "passive":
+        return None
+    return message["data"] if isinstance(message.get("data"), bool) else None
+
+
 async def ticks(period: float) -> AsyncIterator[None]:
     """Yield on a fixed, drift-free cadence; skips ahead instead of bursting when late."""
     loop = asyncio.get_running_loop()
@@ -119,6 +133,7 @@ class Hub:
         self._joints: dict[str, float] = {f"{finger}_joint": 0.0 for finger in FINGERS}
         self._state: list[float] = [0.0] * len(FINGERS)
         self._command: list[float] | None = None
+        self._passive = False
         self._urdf: str | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._colorizer = Colorizer(settings.depth_min_mm, settings.depth_max_mm)
@@ -155,6 +170,10 @@ class Hub:
             self._meters["hand_command"].tick(time.monotonic())
             if vector is not None:
                 self._command = vector
+
+    def on_passive(self, passive: object) -> None:
+        with self._lock:
+            self._passive = passive is True
 
     def clear_hand_command(self) -> None:
         """Back to "nobody has commanded": the mock calls this when its override expires."""
@@ -248,6 +267,7 @@ class Hub:
                 "joints": dict(self._joints),
                 "state": list(self._state),
                 "command": None if self._command is None else list(self._command),
+                "passive": self._passive,
                 "rates": {topic: meter.hz(now) for topic, meter in self._meters.items()},
             }
 

@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .config import Settings
-from .hub import CAMERA_KINDS, CAMERA_SOURCES, Hub, Source, parse_command, ticks
+from .hub import CAMERA_KINDS, CAMERA_SOURCES, Hub, Source, parse_command, parse_passive, ticks
 from .mock import MockSource
 from .record3d import ROTATIONS, Record3DClient, normalize_host
 from .ros_client import RosClient
@@ -145,6 +145,9 @@ def create_app(settings: Settings) -> FastAPI:
             values = parse_command(text)
             if values is not None:
                 source.send_command(values)
+            passive = parse_passive(text)
+            if passive is not None:
+                source.set_passive(passive)
 
         await serve_socket(ws, settings.cors_origins, send_state, on_text)
 

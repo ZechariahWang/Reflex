@@ -7,7 +7,7 @@ import { CommandThrottle } from "@/components/telemetry/command-throttle"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
-import { selectIsLive, selectSnapshot, useSimStore } from "@/lib/sim-store"
+import { selectIsLive, selectPassive, selectSnapshot, useSimStore } from "@/lib/sim-store"
 import { FINGERS, TOPIC_NAMES, type FingerValues } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -37,6 +37,8 @@ const matches = (a: FingerValues, b: FingerValues) => a.every((v, i) => Math.abs
 export function CommandBlock() {
   const online = useSimStore(selectIsLive)
   const snapshot = useSimStore(selectSnapshot)
+  // Backdrive: the HAL has the torque off and ignores commands while a person moves the fingers.
+  const passive = useSimStore(selectPassive)
   const [armed, setArmed] = useState(false)
   /** Local target while the user is driving; null = mirror the hand. */
   const [target, setTarget] = useState<FingerValues | null>(null)
@@ -106,7 +108,7 @@ export function CommandBlock() {
                   min={0}
                   max={100}
                   step={1}
-                  disabled={!armed}
+                  disabled={!armed || passive}
                   value={[Math.round(shown[i] * 100)]}
                   onValueChange={([value]) => drive(shown.with(i, value / 100) as FingerValues)}
                   onValueCommit={release}
@@ -146,13 +148,31 @@ export function CommandBlock() {
           />
         </label>
 
+        <label className="flex items-center justify-between gap-3">
+          <span className="flex min-w-0 items-center gap-2">
+            <StatusDot status={passive ? "live" : "offline"} />
+            <span className={cn("label-micro", passive && "text-ink")}>Backdrive</span>
+            <span className="label-micro truncate leading-4 tracking-normal normal-case">
+              {passive ? "torque off" : "torque on"}
+            </span>
+          </span>
+          <Switch
+            size="sm"
+            checked={passive}
+            disabled={!armed}
+            onCheckedChange={(next) => useSimStore.getState().setPassive(next)}
+            aria-label="Backdrive mode: torque off, move the fingers by hand"
+            className="rounded-[2px] data-checked:bg-signal [&_[data-slot=switch-thumb]]:rounded-[1px]"
+          />
+        </label>
+
         <div className="grid grid-cols-5 gap-1">
           {PRESETS.map(({ name, pose }) => (
             <Button
               key={name}
               variant="outline"
               size="xs"
-              disabled={!armed}
+              disabled={!armed || passive}
               onClick={() => {
                 drive(pose)
                 release()
@@ -168,7 +188,9 @@ export function CommandBlock() {
         </div>
 
         <p className="label-micro mt-auto leading-[1.5] tracking-normal normal-case">
-          {armed
+          {passive
+            ? `torque off: move the fingers by hand, ${TOPIC_NAMES.hand_state} records them`
+            : armed
             ? `publishing ${TOPIC_NAMES.hand_command} · 20 Hz max`
             : online
               ? `arm to publish ${TOPIC_NAMES.hand_command}`

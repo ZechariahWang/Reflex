@@ -79,6 +79,14 @@ class FeetechBackend(HandBackend):
                             f'0x{self.bus.errors[servo_id]:02x}', throttle_duration_sec=2.0)
         return None if None in self.measured else list(self.measured)
 
+    def set_torque(self, enabled, hold=None):
+        if enabled and hold is not None:
+            # Goal first, torque second: a servo that gets torque with a stale
+            # goal drives there at once, through whatever the fingers hold.
+            self.write(hold)
+        self.bus.sync_write(feetech.ADDR_TORQUE_ENABLE,
+                            {i: [1 if enabled else 0] for i in self.active_ids})
+
     def close(self):
         try:
             self.bus.sync_write(feetech.ADDR_TORQUE_ENABLE, {i: [0] for i in self.active_ids})

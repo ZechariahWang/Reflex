@@ -28,6 +28,9 @@ def generate_launch_description():
         DeclareLaunchArgument('baud_rate', default_value='1000000'),
         DeclareLaunchArgument('require_all_servos', default_value='true',
                               description='false = bench test with part of the servos'),
+        DeclareLaunchArgument('passive', default_value='false',
+                              description='Start with the torque off: fingers are moved by hand '
+                                          '(demonstration recording). Toggle later with /hand/set_passive'),
         DeclareLaunchArgument('teleop', default_value='true',
                               description='Open the finger control window'),
         DeclareLaunchArgument('foxglove', default_value='true',
@@ -50,7 +53,8 @@ def generate_launch_description():
                          'serial_port': LaunchConfiguration('serial_port'),
                          'baud_rate': ParameterValue(LaunchConfiguration('baud_rate'), value_type=int),
                          'require_all_servos': ParameterValue(
-                             LaunchConfiguration('require_all_servos'), value_type=bool)}],
+                             LaunchConfiguration('require_all_servos'), value_type=bool),
+                         'passive': ParameterValue(LaunchConfiguration('passive'), value_type=bool)}],
             output='screen',
         ),
 

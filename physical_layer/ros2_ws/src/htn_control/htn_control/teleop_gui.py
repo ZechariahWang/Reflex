@@ -3,7 +3,9 @@ from tkinter import ttk
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float64MultiArray
+from rclpy.qos import DurabilityPolicy, QoSProfile
+from std_msgs.msg import Bool, Float64MultiArray
+from std_srvs.srv import SetBool
 
 from htn_control.hand_config import FINGERS
 from htn_control.poses import POSES, SEQUENCES, resolve
@@ -83,6 +85,16 @@ class TeleopGui(Node):
         self.add_buttons(frame, len(FINGERS) + 2, 'Poses', POSES, self.toggle_pose)
         self.add_buttons(frame, len(FINGERS) + 3, 'Sequences', SEQUENCES, self.toggle_sequence)
 
+        # Backdrive: torque off so the fingers can be moved by hand while
+        # /hand/state records them. The HAL owns the mode; this only asks.
+        self.passive = False
+        self.passive_client = self.create_client(SetBool, '/hand/set_passive')
+        latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.create_subscription(Bool, '/hand/passive', self.on_passive, latched)
+        self.passive_button = tk.Button(frame, width=44, command=self.toggle_passive)
+        self.passive_button.grid(row=len(FINGERS) + 4, column=0, columnspan=4, pady=(10, 0))
+        self.on_passive(Bool(data=False))
+
         root.bind('<KeyPress>', self.on_key_press)
         root.bind('<KeyRelease>', self.on_key_release)
         # Keys can't be "let go" of once the window loses focus: stop everything
@@ -136,8 +148,8 @@ class TeleopGui(Node):
 
     def on_key_press(self, event):
         key = event.keysym.lower()
-        if key not in self.bindings:
-            return
+        if key not in self.bindings or self.passive:
+            return  # passive: the HAL ignores commands, so do not pile any up
         pending = self.pending_release.pop(key, None)
         if pending is not None:
             self.root.after_cancel(pending)
@@ -156,6 +168,23 @@ class TeleopGui(Node):
 
     def differs(self, values):
         return any(abs(a - b) > COMMAND_TOLERANCE for a, b in zip(values, self.last_command))
+
+    def toggle_passive(self):
+        if not self.passive_client.service_is_ready():
+            self.get_logger().warning('No /hand/set_passive service: is the HAL running?')
+            return
+        self.passive_client.call_async(SetBool.Request(data=not self.passive))
+
+    def on_passive(self, msg):
+        self.passive = msg.data
+        if self.passive:
+            self.held.clear()
+            self.set_active(None)
+        self.passive_button.config(
+            text='BACKDRIVE ON - torque off, move the fingers by hand (click to power the hand)'
+            if self.passive else 'Backdrive (torque off) for recording demonstrations',
+            relief='sunken' if self.passive else 'raised',
+            bg='#f4c9a8' if self.passive else self.root.cget('bg'))
 
     def on_command(self, msg):
         values = list(msg.data)

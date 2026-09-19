@@ -112,6 +112,9 @@ class MockSource:
             task.cancel()
         await asyncio.gather(*self._tasks, return_exceptions=True)
 
+    def set_passive(self, passive: bool) -> None:
+        self._hub.on_passive(passive)  # the mock hand has no torque to cut; the UI still follows
+
     def send_command(self, values: list[float]) -> None:
         self._command = values
         self._command_until = time.monotonic() + COMMAND_HOLD_S

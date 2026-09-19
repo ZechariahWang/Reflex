@@ -38,6 +38,8 @@ export interface StateMessage {
   state: FingerValues
   /** Last commanded target, finger order; null until one is published. */
   command: FingerValues | null
+  /** Backdrive mode: the HAL has the torque off, a person moves the fingers, commands are ignored. */
+  passive: boolean
   rates: TopicRates
 }
 

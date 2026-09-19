@@ -104,13 +104,17 @@ Server -> client, JSON text, one message every 33 ms (30 Hz) regardless of ROS r
  "command": [1.0, 0.0, 0.0, 0.0, 0.0],
  "rates":   {"joint_states": 99.8, "hand_state": 50.0, "hand_command": 0.0, "color": 15.0, "depth": 15.0, "iphone": 30.0}}
 ```
-`joints` are radians by joint name; `state`/`command` are 0..1 in finger order (`command` is `null` until someone has published one). When ROS is down, keep sending with `ros_connected: false` and the last known values.
+`passive` (bool, also in the JSON above as `"passive": false`) mirrors the HAL's latched `/hand/passive`: torque off, a person moves the fingers, `/hand/command` is ignored. `joints` are radians by joint name; `state`/`command` are 0..1 in finger order (`command` is `null` until someone has published one). When ROS is down, keep sending with `ros_connected: false` and the last known values.
 
 Client -> server, JSON text:
 ```json
 {"type": "command", "data": [0.0, 1.0, 1.0, 0.0, 0.0]}
 ```
 -> published to `/hand/command` (values clamped to 0..1, must be exactly 5; anything else is ignored).
+```json
+{"type": "passive", "data": true}
+```
+-> calls `/hand/set_passive` (`std_srvs/SetBool`); the result comes back as `passive` in the state. The Backdrive switch in the command block sends it (only while armed) and locks the sliders and presets while it is on.
 
 ### `WS /ws/camera/{realsense|iphone}/{color|depth}`
 Four streams, same protocol. The page opens only the one each panel is showing, and the backend only renders streams that have a viewer (`LatestChannel.viewers`). iPhone frames are capped at 30 fps (the phone sends 60; dropped before they are copied) and shrunk to 640 px on the long side: the browser decodes every frame on its main thread, next to the 3D hand. Server -> client, **binary** messages, each one complete JPEG. Latest-frame only: if the client is slow, drop frames, never queue.

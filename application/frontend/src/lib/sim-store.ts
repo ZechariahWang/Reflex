@@ -42,6 +42,8 @@ export interface SimStore {
    * clamped to 0..1. Returns false if the input is malformed or the socket is down.
    */
   sendCommand: (data: number[]) => boolean
+  /** Ask the HAL for backdrive mode (torque off) or back; the result shows up as `snapshot.passive`. */
+  setPassive: (passive: boolean) => boolean
 }
 
 let socket: WebSocket | null = null
@@ -60,6 +62,11 @@ export const useSimStore = create<SimStore>()(() => ({
     const clamped = data.map((v) => Math.min(1, Math.max(0, v))) as FingerValues
     const message: CommandMessage = { type: "command", data: clamped }
     socket.send(JSON.stringify(message))
+    return true
+  },
+  setPassive: (passive) => {
+    if (socket?.readyState !== WebSocket.OPEN) return false
+    socket.send(JSON.stringify({ type: "passive", data: passive }))
     return true
   },
 }))
@@ -146,6 +153,7 @@ export function useSimConnection(): void {
 
 export const selectStatus = (s: SimStore): ConnectionStatus => s.status
 export const selectSnapshot = (s: SimStore): StateMessage | null => s.snapshot
+export const selectPassive = (s: SimStore): boolean => s.snapshot?.passive ?? false
 export const selectRosConnected = (s: SimStore): boolean => s.snapshot?.ros_connected ?? false
 /** Socket open and ROS reachable: hand data is flowing. */
 export const selectIsLive = (s: SimStore): boolean => s.status === "open" && selectRosConnected(s)

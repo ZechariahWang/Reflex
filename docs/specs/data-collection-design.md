@@ -30,9 +30,13 @@ In: a LeRobot `Teleoperator` that returns `/hand/state`, a `passive` switch on
 `.gitignore` entry for `policy/datasets/`.
 
 Out:
-- The HAL passive mode (torque off, `/hand/state` still published). The HAL
-  sets the torque on at start (`feetech_backend.py`) and off only at exit.
-  Another person builds this. The recorder depends only on `/hand/state`.
+- The HAL passive mode (torque off, `/hand/state` still published). **Built**
+  (2026-09-19): service `/hand/set_passive`, latched `/hand/passive`, launch arg
+  `passive:=true`, toggles in the control window and the web console; see
+  `physical_layer/CLAUDE.md`. Leaving the mode holds the measured pose and
+  publishes it once on `/hand/command`, so the "hand jumps when the torque comes
+  back" row below no longer applies to the HAL itself. The recorder depends
+  only on `/hand/state`.
 - Depth (RGB only, as in `policy-link-design.md`).
 - Force control. The HAL does position control; the only force value is
   `servos.torque_limit` in `hand_params.yaml`.

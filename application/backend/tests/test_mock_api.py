@@ -33,7 +33,7 @@ def test_urdf(client):
 def test_state_shape_and_command_override(client):
     with client.websocket_connect("/ws/state") as ws:
         message = ws.receive_json()
-        assert list(message) == ["t", "ros_connected", "fingers", "joints", "state", "command", "rates"]
+        assert list(message) == ["t", "ros_connected", "fingers", "joints", "state", "command", "passive", "rates"]
         assert message["fingers"] == list(FINGERS)
         assert set(message["joints"]) == {f"{finger}_joint" for finger in FINGERS}
         assert len(message["state"]) == 5 and message["command"] is None
@@ -90,3 +90,17 @@ def test_phone_rotation_is_settable_and_validated(client):
     assert client.post("/api/iphone", json={"rotation": 270}).json()["rotation"] == 270
     assert client.post("/api/iphone", json={"rotation": 45}).status_code == 422
     assert client.post("/api/iphone", json={"rotation": 0}).json()["rotation"] == 0
+
+
+def test_passive_request_round_trips_through_the_state(client):
+    with client.websocket_connect("/ws/state") as ws:
+        assert ws.receive_json()["passive"] is False
+        ws.send_text(json.dumps({"type": "passive", "data": True}))
+        ws.send_text(json.dumps({"type": "passive", "data": "yes"}))  # not a bool: ignored
+        for _ in range(10):
+            message = ws.receive_json()
+        assert message["passive"] is True
+        ws.send_text(json.dumps({"type": "passive", "data": False}))
+        for _ in range(10):
+            message = ws.receive_json()
+        assert message["passive"] is False

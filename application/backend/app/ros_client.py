@@ -35,6 +35,7 @@ class RosClient:
         self._hub = hub
         self._ros: roslibpy.Ros | None = None
         self._command_out: roslibpy.Topic | None = None
+        self._passive_service: roslibpy.Service | None = None
 
     @property
     def connected(self) -> bool:
@@ -67,6 +68,10 @@ class RosClient:
             ros, DEPTH_TOPIC, COMPRESSED_IMAGE, IMAGE_THROTTLE_MS, lambda m: hub.on_depth(base64.b64decode(m["data"]))
         )
 
+        # Latched by the HAL: true while the torque is off and the fingers are backdriven
+        self._subscribe(ros, "/hand/passive", "std_msgs/Bool", 0, lambda m: hub.on_passive(m["data"]))
+        self._passive_service = roslibpy.Service(ros, "/hand/set_passive", "std_srvs/SetBool")
+
         # A Topic replays only one message on reconnect, so publishing gets its own.
         self._command_out = roslibpy.Topic(ros, "/hand/command", MULTI_ARRAY, queue_size=1)
         self._command_out.advertise()
@@ -80,6 +85,15 @@ class RosClient:
     def send_command(self, values: list[float]) -> None:
         if self.connected and self._command_out is not None:
             self._command_out.publish(roslibpy.Message({"data": values}))
+
+    def set_passive(self, passive: bool) -> None:
+        """Ask the HAL for backdrive mode; the answer arrives on /hand/passive."""
+        if self.connected and self._passive_service is not None:
+            self._passive_service.call(
+                roslibpy.ServiceRequest({"data": passive}),
+                callback=lambda _: None,
+                errback=lambda error: LOGGER.warning("set_passive failed: %s", error),
+            )
 
     async def stop(self) -> None:
         if self._ros is None:

@@ -25,5 +25,15 @@ class HandBackend(ABC):
     def read(self):
         """Return measured finger positions (normalized), or None if unknown."""
 
+    def set_torque(self, enabled, hold=None):
+        """Power the motors, or release them so the fingers can be moved by hand.
+
+        The HAL calls this with False when it enters passive (backdrive) mode
+        and with True when it leaves it. `hold` is then the measured pose
+        (normalized): the backend must make it the goal BEFORE the torque comes
+        back, or the hand snaps to wherever it was last commanded.
+        Default: nothing to do (the simulated hand cannot be pushed around).
+        """
+
     def close(self):
         """Release the device. Called once on shutdown."""

@@ -2,7 +2,8 @@
 # Millimetres, CAD assembly frame. `pivots` are in the linkage plane: (y, z) for axis x,
 # (x, y) for axis z, so counter-clockwise there is a positive turn about +axis.
 # closed_rad = servo horn angle for a 90 deg curl of the contact pad; lock_rad = where
-# the mechanism binds. The CAD pose is the open hand.
+# the mechanism binds when closing, open_lock_rad = where it binds when opening PAST the CAD
+# pose (nothing else stops it sooner). The CAD pose is the open hand.
 curl_closed_deg: 90.0
 fingers:
   thumb:
@@ -42,6 +43,7 @@ fingers:
       - 12.76
     closed_rad: 1.2828
     lock_rad: 1.7104
+    open_lock_rad: 0.4931
   index:
     axis: x
     plane: 78.0
@@ -79,6 +81,7 @@ fingers:
       - 49.02
     closed_rad: 1.2828
     lock_rad: 1.7541
+    open_lock_rad: 0.4931
   middle:
     axis: x
     plane: 55.0
@@ -116,6 +119,7 @@ fingers:
       - 49.02
     closed_rad: 1.2523
     lock_rad: 1.4704
+    open_lock_rad: 0.576
   ring:
     axis: x
     plane: 33.0
@@ -153,6 +157,7 @@ fingers:
       - 49.02
     closed_rad: 1.2523
     lock_rad: 1.4704
+    open_lock_rad: 0.576
   pinky:
     axis: x
     plane: 10.0
@@ -190,3 +195,4 @@ fingers:
       - 49.02
     closed_rad: 1.2828
     lock_rad: 1.7541
+    open_lock_rad: 0.4931

@@ -76,7 +76,12 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
   - `hal_node.py`: subscribes `/hand/command` (5 x 0..1), clamps, and turns
     every change of target into ONE sweep (`sweep()`: ease in at `max_accel`,
     cruise at `max_speed`, brake to arrive at rest - discrete-exact, it never
-    overshoots), writes to a backend, publishes `/hand/state`. Passive
+    overshoots), writes to a backend, publishes `/hand/state`. Nothing is driven
+    blind: the motors get torque only once the first measured pose is in, with
+    that pose as the goal, and a finger outside its travel is swept in, not
+    snapped to the edge. Contact stop (`hal/contact.py`, real servos only): a
+    finger that is far from its setpoint AND not moving gets `hold_torque` and a
+    frozen setpoint until the command goes the other way or it moves again. Passive
     (backdrive) mode - service `/hand/set_passive`, latched `/hand/passive`,
     launch arg `passive:=true`, button in the control window and the web
     console: torque off, commands ignored, state still read. While passive,
@@ -219,4 +224,5 @@ ros2 control list_controllers      # both must be active
 
 The Feetech protocol has tests with a fake servo bus on a pty (no hardware):
 `python3 -m pytest ros2_ws/src/htn_control/test` with ROS sourced. Servo setup:
-`ros2 run htn_control servo_tool scan | set-id <old> <new> | jog <id>`.
+`ros2 run htn_control servo_tool scan | set-id <old> <new> | jog <id> | calibrate [--write]`.
+First run on the real hand: `docs/notes/next-work.md`.

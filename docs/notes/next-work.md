@@ -5,26 +5,27 @@ file at the end of a session; the designs themselves are in `../specs/`.
 
 ## State on 2026-09-19
 
-- **Next: calibration and motor safety on the real hand**, then the mirror
-  teleop. Read `../specs/hal-safety-design.md` first (state of the hand, the
-  hazards, the contact stop, the calibration, the work order), then
-  `../specs/mirror-teleop-design.md`. Both are design notes; nothing of them is
-  implemented.
-- **The real hand has PLACEHOLDER calibration** (`open_step: 2048`,
-  `closed_step: 3072` for every finger). A launch without `passive:=true`
-  drives every finger to step 2048 with the full torque limit, and the exit of
-  passive mode can make a finger jump. Keep the hand out of the exoskeleton at
-  each start until `hand_params.yaml` has real values.
+- **Next: run the calibration and tune the contact stop ON THE REAL HAND**, then
+  the mirror teleop. The start-up hazards, the contact stop and `servo_tool
+  calibrate` are built and tested on the fake servo bus only
+  (`../specs/hal-safety-design.md`, "What is built"). On the hand, in this order:
+  `servo_tool scan`, `servo_tool calibrate --write` with the hand off the wearer,
+  a launch, then tune `contact_stop:` and `hold_torque` in `hand_params.yaml`.
+- **The real hand still has PLACEHOLDER calibration** (`open_step: 2048` for
+  every finger; the span is now the linkage's `max_angle`, no longer 90 deg,
+  which would have driven middle and ring into their bind at 84 deg). The HAL no
+  longer drives anywhere at start: it holds the measured pose. A command still
+  moves the fingers within the placeholder range, so keep the hand off the
+  wearer until the calibration has run.
+- The adapter passes its supply straight to the servos: these are the 7.4 V
+  STS3215, so 6 .. 8.4 V on the adapter, never 12 V.
 - **Backdrive is closed** for these servos: too stiff with the torque off, and
   an encoder-only active backdrive did not give a light start
   (`../specs/data-collection-design.md`, Backdrive result). Do not start it
   again unless the hardware changes (force sensor, elastic link, lower gear
   ratio).
-- The contact stop changes HAL code of a teammate (`hal_node.py`,
-  `feetech_backend.py`): tell them before the edit.
-- Work order of the contact stop: the pure `hal/contact.py` with tests first,
-  then the HAL integration on the fake servo bus, then `servo_tool calibrate`
-  on the same detector, then the tuning on the hand.
+- Left of the contact stop's work order: the tuning on the hand (the
+  `blocked_*` values, `hold_torque`, then `torque_limit` back up for speed).
 
 ## Done and working
 

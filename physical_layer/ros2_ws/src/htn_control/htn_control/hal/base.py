@@ -12,6 +12,8 @@ class HandBackend(ABC):
 
     # True if something else already publishes /joint_states for this backend
     publishes_joint_states = False
+    # True if set_torque_limit() does something: the HAL then runs the contact stop
+    has_torque_limit = False
 
     def __init__(self, node, hand_params):
         self.node = node
@@ -34,6 +36,10 @@ class HandBackend(ABC):
         back, or the hand snaps to wherever it was last commanded.
         Default: nothing to do (the simulated hand cannot be pushed around).
         """
+
+    def set_torque_limit(self, finger, blocked):
+        """Contact stop: `blocked` True -> the low holding torque for this finger (index in
+        FINGERS order), False -> the normal limit again. Default: nothing (no such thing in sim)."""
 
     def close(self):
         """Release the device. Called once on shutdown."""

@@ -1,7 +1,9 @@
 # HAL safety: calibration and the contact stop
 
 The next work on the real hand. Status: design notes from the discussion and
-the hardware tests of 2026-09-19, nothing implemented.
+the hardware tests of 2026-09-19. **Implemented later that day, on the fake
+servo bus only** - see "What is built" at the end; nothing of it has run on the
+real hand, and the thresholds are untuned.
 
 ## State of the real hand (2026-09-19)
 
@@ -97,6 +99,33 @@ servo can have a mechanical stop. The thresholds need tuning on the hand.
   exoskeleton during the run.
 - Until it exists: `servo_tool jog <id>` by hand, note the open and the closed
   step, type them into `hand_params.yaml` (no rebuild, restart the launch).
+
+## What is built (2026-09-19, fake servo bus only)
+
+- Hazards 1-4 are fixed. The backend no longer enables the torque in its
+  constructor. The HAL adopts the first measured pose (NOT clamped), gives the
+  motors torque with that pose as the goal, and sweeps a finger that is outside
+  its travel into range at the normal speed; the same on the way out of passive
+  mode. `servo_tool scan` reports a servo that pings but cannot be read.
+- Contact stop as designed: `hal/contact.py` (pure), `set_torque_limit(finger,
+  blocked)` on the backend, `servos.hold_torque` and a `contact_stop:` section in
+  `hand_params.yaml`. Tests run the HAL on fake servos that move and can have a
+  mechanical stop (`test_contact.py`), and `hardware.launch.py` ran end to end
+  against them: blocked at the obstacle, low torque, freed by the open command.
+- **The calibration is NOT motor-driven towards open, on purpose.** The linkage
+  has no open stop before it binds: opening past the CAD pose it runs into its
+  own toggle point after 28 deg of horn (thumb, index, pinky) or 33 deg (middle,
+  ring) - `open_lock_rad` in `config/linkage.yaml`. "Drive until blocked" would
+  find that point, with the pin forces a toggle brings, not the open pose.
+  `servo_tool calibrate` is therefore a low-torque jog to the open pose (the CAD
+  pose = the web console's 3D view at 0 %), a small test move for the closing
+  direction, `closed_step = open_step +- max_angle * 4096 / (2 pi)`, a check that
+  the travel stays clear of the encoder wrap, and `--write`. If a blocked-based
+  open search is wanted later, it has to back off by `open_lock_rad` from the
+  blocked point and needs a torque low enough for the toggle.
+- The placeholder calibration spanned 1024 steps = 90 deg of horn; middle and
+  ring bind at 84 deg. It now spans `max_angle` (836 / 816 steps). It is still a
+  placeholder: `open_step: 2048` is a guess.
 
 ## Order
 

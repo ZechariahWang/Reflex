@@ -9,6 +9,7 @@ from std_msgs.msg import Bool, Float64MultiArray
 from std_srvs.srv import SetBool
 
 from htn_control.hal import BACKENDS
+from htn_control.hal.contact import BLOCKED, ContactDetector
 from htn_control.hand_config import FINGERS, load_hand_params
 
 COMMAND_TOPIC = '/hand/command'  # Float64MultiArray, 5 x [0..1], FINGERS order
@@ -28,6 +29,12 @@ class HandHal(Node):
     off, a person moves the fingers, and /hand/state keeps reporting the
     encoders. Commands are ignored meanwhile. Leaving the mode holds the pose
     the fingers are in, so the hand never snaps back to an old target.
+
+    Nothing is driven blind. The motors get torque only once the first measured
+    pose is in, with that pose as their goal; a finger that starts outside its
+    calibrated travel is swept into it at the normal speed, it does not jump to
+    the edge. On backends with a torque limit a finger that has to move and does
+    not is put on a low holding torque (hal/contact.py).
     """
 
     def __init__(self):
@@ -53,6 +60,14 @@ class HandHal(Node):
         self.target = [0.0] * len(FINGERS)
         self.setpoint = [0.0] * len(FINGERS)
         self.velocity = [0.0] * len(FINGERS)
+        self.ready = False      # True once the first measured pose has been adopted
+        self.commanded = False  # a command that arrives before that must survive it
+        stop = self.hand_params.get('contact_stop', {})
+        self.contacts = []
+        if self.backend.has_torque_limit and stop.get('enabled', True):
+            self.contacts = [ContactDetector(stop.get('blocked_error', 0.06), stop.get('blocked_motion', 0.004),
+                                             stop.get('blocked_cycles', 10), stop.get('hold_lead', 0.03))
+                             for _ in FINGERS]
 
         self.create_subscription(Float64MultiArray, COMMAND_TOPIC, self.on_command, 10)
         self.command_pub = self.create_publisher(Float64MultiArray, COMMAND_TOPIC, 10)
@@ -76,12 +91,14 @@ class HandHal(Node):
         if passive:
             self.backend.set_torque(False)
         else:
-            # update() kept setpoint = target = measured pose while passive
+            # update() kept the setpoint on the measured pose while passive
             self.velocity = [0.0] * len(FINGERS)
-            self.backend.set_torque(True, hold=self.setpoint)
+            self.release_contacts()
+            if self.ready:
+                self.backend.set_torque(True, hold=self.setpoint)
             # One message so every controller on the shared topic (control
             # window, web console) starts from the real pose, not a stale one
-            self.command_pub.publish(Float64MultiArray(data=self.setpoint))
+            self.command_pub.publish(Float64MultiArray(data=self.target))  # the pose, within 0..1
         self.passive = passive
         self.passive_pub.publish(Bool(data=passive))
         self.get_logger().info(
@@ -106,23 +123,60 @@ class HandHal(Node):
                 throttle_duration_sec=2.0)
             return
         self.target = [min(max(v, 0.0), 1.0) for v in msg.data]
+        self.commanded = True
+
+    def adopt(self, state):
+        """Make the measured pose the setpoint. NOT clamped: a finger outside its calibrated
+        travel is held where it is and then swept into range, it must not jump to the edge."""
+        self.setpoint = list(state)
+        self.velocity = [0.0] * len(FINGERS)
+        if self.passive or not self.commanded:
+            self.target = [min(max(p, 0.0), 1.0) for p in state]
+
+    def release_contacts(self):
+        for finger, contact in enumerate(self.contacts):
+            if contact.state == BLOCKED:
+                self.backend.set_torque_limit(finger, False)
+            contact.reset()
 
     def update(self):
+        if not self.ready:
+            state = self.backend.read()
+            if state is None:
+                return  # no measured pose yet (sim: no joint states so far): command nothing
+            self.adopt(state)
+            if not self.passive:
+                self.backend.set_torque(True, hold=self.setpoint)
+            self.ready = True
+
         if self.passive:
             state = self.backend.read()
             if state is not None:
-                # Follow the fingers, so leaving passive mode holds this pose
-                self.setpoint = [min(max(p, 0.0), 1.0) for p in state]
-                self.target = list(self.setpoint)
-                self.velocity = [0.0] * len(FINGERS)
+                self.adopt(state)  # follow the fingers, so leaving passive mode holds this pose
             self.publish_state(state or self.setpoint)
             return
 
         for i, target in enumerate(self.target):
-            self.setpoint[i], self.velocity[i] = self.sweep(self.setpoint[i], self.velocity[i], target)
+            if self.contacts and self.contacts[i].state == BLOCKED:
+                self.setpoint[i], self.velocity[i] = self.contacts[i].hold_setpoint(), 0.0
+            else:
+                self.setpoint[i], self.velocity[i] = self.sweep(self.setpoint[i], self.velocity[i], target)
         self.backend.write(self.setpoint)
-
-        self.publish_state(self.backend.read() or self.setpoint)
+        state = self.backend.read()
+        if state is not None:
+            for i, contact in enumerate(self.contacts):
+                before = contact.state
+                after = contact.update(self.setpoint[i], state[i], self.target[i])
+                if after == before:
+                    continue
+                self.backend.set_torque_limit(i, after == BLOCKED)
+                if after == BLOCKED:
+                    self.get_logger().info(f'{FINGERS[i]}: blocked at {state[i]:.2f}, holding with low torque')
+                else:
+                    self.get_logger().info(f'{FINGERS[i]}: free again')
+                    # pick the sweep up from where the finger is, not from the frozen setpoint
+                    self.setpoint[i], self.velocity[i] = state[i], 0.0
+        self.publish_state(state or self.setpoint)
 
     def sweep(self, position, velocity, target):
         """One tick of a speed- and acceleration-limited move towards `target`."""

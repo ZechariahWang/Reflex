@@ -62,13 +62,33 @@ sim_mount:
   xyz: [0.0, 0.0, 0.30]
   rpy: [0.0, 0.0, 0.0]
 
-# Real servos (HAL feetech backend only). Steps are 0..4095 (4096 per turn).
-# closed_step < open_step is correct for a mirrored servo. Find the values with
-# `ros2 run htn_control servo_tool jog <id>`.
+# Real servos (HAL feetech backend only): Feetech STS3215, 7.4 V, 1:345, on a
+# Waveshare bus servo adapter (CH343 -> /dev/ttyACM0, 1 Mbaud). The adapter passes
+# its supply straight to the servos: feed it 6 .. 8.4 V, NOT 12 V.
+# Steps are 0..4095 (4096 per turn = 651.9 per rad). <finger>_joint is the servo
+# horn, so:   closed_step = open_step +- max_angle * 651.9
+# (836 steps for thumb/index/pinky, 816 for middle/ring; + or - depends on how the
+# servo is mounted). `ros2 run htn_control servo_tool calibrate` finds open_step
+# and the sign and prints these lines. NEVER widen the span: the linkage binds
+# 10 .. 25 deg of horn past closed, and ~30 deg past open.
+#
+# UNCALIBRATED: open_step 2048 is a guess for every finger. Keep the hand off the
+# wearer and start with `passive:=true` until `servo_tool calibrate` has run.
 servos:
-  torque_limit: 300    # 0..1000, fraction of stall torque, set at each start
-  thumb:  {id: 1, open_step: 2048, closed_step: 3072}
-  index:  {id: 2, open_step: 2048, closed_step: 3072}
-  middle: {id: 3, open_step: 2048, closed_step: 3072}
-  ring:   {id: 4, open_step: 2048, closed_step: 3072}
-  pinky:  {id: 5, open_step: 2048, closed_step: 3072}
+  torque_limit: 300    # 0..1000, drive duty cap in free motion (speed AND stall torque)
+  hold_torque: 120     # the same while a finger is blocked: the force it keeps pushing with
+  thumb:  {id: 1, open_step: 2048, closed_step: 2884}
+  index:  {id: 2, open_step: 2048, closed_step: 2884}
+  middle: {id: 3, open_step: 2048, closed_step: 2864}
+  ring:   {id: 4, open_step: 2048, closed_step: 2864}
+  pinky:  {id: 5, open_step: 2048, closed_step: 2884}
+
+# Contact stop (hal/contact.py, design in docs/specs/hal-safety-design.md): a finger
+# that has to move and does not gets hold_torque and a frozen setpoint. In finger
+# travel (0..1) and HAL cycles (50 Hz). NOT tuned on the hand yet.
+contact_stop:
+  enabled: true
+  blocked_error: 0.06    # further than this from the setpoint = it has to move
+  blocked_motion: 0.004  # less travel than this over blocked_cycles = it does not
+  blocked_cycles: 10     # 0.2 s
+  hold_lead: 0.03        # the frozen setpoint sits this far past the obstacle

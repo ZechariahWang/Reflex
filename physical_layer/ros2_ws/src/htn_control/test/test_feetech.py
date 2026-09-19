@@ -177,7 +177,11 @@ def test_backend_runs_with_absent_servos_when_allowed(servos):
     node = FakeNode(serial_port=servos.port, require_all_servos=False)
     backend = FeetechBackend(node, HAND_PARAMS)
     assert backend.present == [True, True, True, False, False]
-    assert servos.registers[1][40] == 1 and from_u16(servos.registers[1][48:50]) == 300
+    # No torque from the constructor: the HAL turns it on once it knows the measured pose
+    assert servos.registers[1][40] == 0 and from_u16(servos.registers[1][48:50]) == 300
+    backend.set_torque(True, hold=[0.0] * 5)
+    backend.read()
+    assert servos.registers[1][40] == 1
 
     servos.registers[1][56:58] = u16(2000)
     backend.write([0.5, 0.0, 0.0, 0.0, 0.25])
@@ -192,3 +196,39 @@ def test_backend_runs_with_absent_servos_when_allowed(servos):
     while servos.registers[1][40] and time.time() < deadline:
         time.sleep(0.01)
     assert servos.registers[1][40] == 0
+
+
+def test_closed_step_is_the_horn_travel_from_open_in_either_direction():
+    from htn_control.servo_tool import closed_step
+    assert closed_step(2048, True, 1.2828) == 2048 + 836
+    assert closed_step(2048, False, 1.2523) == 2048 - 816
+
+
+def test_travel_too_close_to_the_encoder_wrap_is_refused():
+    from htn_control.servo_tool import check_travel
+    assert check_travel('index', 2048, 2884, 0.4939) is None
+    assert 'encoder wrap' in check_travel('index', 3500, 4336, 0.4939)      # closed beyond 4095
+    assert 'encoder wrap' in check_travel('index', 200, 1036, 0.4939)       # no room to come back from too far open
+    assert check_travel('index', 3000, 2164, 0.4939) is None                # mirrored servo
+
+
+def test_calibration_lines_replace_only_their_own_lines():
+    from htn_control.servo_tool import rewrite_yaml, yaml_line
+    text = ('servos:\n  torque_limit: 300    # keep me\n'
+            '  thumb:  {id: 1, open_step: 2048, closed_step: 2884}\n'
+            '  index:  {id: 2, open_step: 2048, closed_step: 2884}   # old\n')
+    out = rewrite_yaml(text, {'index': yaml_line('index', 2, 1990, 1154)})
+    assert '  index:  {id: 2, open_step: 1990, closed_step: 1154}\n' in out
+    assert '  thumb:  {id: 1, open_step: 2048, closed_step: 2884}\n' in out and 'keep me' in out
+    with pytest.raises(ValueError):
+        rewrite_yaml(text, {'pinky': yaml_line('pinky', 5, 1, 2)})
+
+
+def test_scan_reports_a_servo_that_pings_but_cannot_be_read(servos, bus, capsys):
+    from htn_control.servo_tool import scan
+    real_read = bus.read
+    bus.read = lambda servo_id, addr, length: (_ for _ in ()).throw(FeetechError('bad reply checksum')) \
+        if servo_id == 2 else real_read(servo_id, addr, length)
+    scan(bus, ids=range(1, 5))
+    out = capsys.readouterr().out
+    assert 'id 1: position' in out and 'id 3: position' in out and 'several servos on this id' in out

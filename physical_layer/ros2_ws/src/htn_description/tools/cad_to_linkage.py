@@ -149,6 +149,7 @@ def main():
         fingers[finger] = {
             'axis': axis, 'plane': round(plane, 2), 'closing': closing, 'pivots': pivots,
             'closed_rad': round(closed, 4), 'lock_rad': round(lock, 4),
+            'open_lock_rad': round(abs(sweeps[-closing][-1]['horn']), 4),
         }
         print(f'{finger:7s} axis {axis}  closes {"+" if closing > 0 else "-"}  '
               f'closed at {math.degrees(closed):5.1f} deg horn, locks at {math.degrees(lock):5.1f} deg')
@@ -157,7 +158,8 @@ def main():
               '# Millimetres, CAD assembly frame. `pivots` are in the linkage plane: (y, z) for axis x,\n'
               '# (x, y) for axis z, so counter-clockwise there is a positive turn about +axis.\n'
               '# closed_rad = servo horn angle for a 90 deg curl of the contact pad; lock_rad = where\n'
-              '# the mechanism binds. The CAD pose is the open hand.\n')
+              '# the mechanism binds when closing, open_lock_rad = where it binds when opening PAST the CAD\n'
+              '# pose (nothing else stops it sooner). The CAD pose is the open hand.\n')
     (PACKAGE / 'config' / 'linkage.yaml').write_text(
         header + yaml.safe_dump({'curl_closed_deg': CURL_CLOSED_DEG, 'fingers': fingers}, sort_keys=False))
     total = sum(f.stat().st_size for f in out_meshes.glob('*.stl'))

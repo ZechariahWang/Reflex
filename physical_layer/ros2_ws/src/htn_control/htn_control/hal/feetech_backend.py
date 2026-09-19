@@ -12,6 +12,10 @@ def to_norm(step, open_step, closed_step):
     return (step - open_step) / (closed_step - open_step)
 
 
+def clamp_step(step):
+    return min(max(step, 0), 4095)
+
+
 class FeetechBackend(HandBackend):
     """Feetech ST series bus servos behind a USB bus adapter (no MCU).
 
@@ -28,6 +32,8 @@ class FeetechBackend(HandBackend):
         self.open_step = [servos[f]['open_step'] for f in FINGERS]
         self.closed_step = [servos[f]['closed_step'] for f in FINGERS]
         self.measured = [None] * len(FINGERS)
+        self.torque_limit = servos['torque_limit']
+        self.hold_torque = servos.get('hold_torque', self.torque_limit)
 
         port = node.declare_parameter('serial_port', '/dev/ttyACM0').value
         baud = node.declare_parameter('baud_rate', 1_000_000).value
@@ -46,19 +52,29 @@ class FeetechBackend(HandBackend):
                 raise RuntimeError(f'No answer from {finger} servo (id {servo_id}) on {port}')
             node.get_logger().warning(f'No {finger} servo (id {servo_id}), running without it')
         self.active_ids = [i for i, present in zip(self.ids, self.present) if present]
-        # The torque limit is RAM: set it before the servos get torque
+        # The torque limit is RAM: set it before the servos get torque. The torque itself stays
+        # OFF here: the HAL turns it on through set_torque() once it knows the measured pose, with
+        # that pose as the goal. Enabling it here drove every finger to whatever goal the servo
+        # still held, at full torque, before anything had looked at where the fingers are.
         for servo_id in self.active_ids:
-            self.bus.write(servo_id, feetech.ADDR_TORQUE_LIMIT, u16(servos['torque_limit']))
+            self.bus.write(servo_id, feetech.ADDR_TORQUE_ENABLE, [0])
+            self.bus.write(servo_id, feetech.ADDR_TORQUE_LIMIT, u16(self.torque_limit))
             self.bus.write(servo_id, feetech.ADDR_ACCELERATION, [acceleration])
-            self.bus.write(servo_id, feetech.ADDR_TORQUE_ENABLE, [1])
         node.get_logger().info(f'Feetech backend on {port} @ {baud}, ids {self.active_ids}')
+
+    has_torque_limit = True
+
+    def set_torque_limit(self, finger, blocked):
+        if self.present[finger]:
+            self.bus.write(self.ids[finger], feetech.ADDR_TORQUE_LIMIT,
+                           u16(self.hold_torque if blocked else self.torque_limit))
 
     def write(self, positions):
         for n, position in enumerate(positions):
             if not self.present[n]:
                 self.measured[n] = position
         self.bus.sync_write(feetech.ADDR_GOAL_POSITION, {
-            i: u16(to_step(p, o, c))
+            i: u16(clamp_step(to_step(p, o, c)))  # a pose outside 0..1 is legal (start-up), the encoder range is not
             for i, p, o, c, present in zip(self.ids, positions, self.open_step,
                                            self.closed_step, self.present) if present})
 

@@ -51,7 +51,7 @@ def test_torque_comes_back_on_the_measured_pose_goal_first():
 
 
 @pytest.fixture
-def hal():
+def hal(params_file):
     # A private ROS graph: never the one a running sim or hand lives in
     os.environ['ROS_DOMAIN_ID'] = '77'
     os.environ['ROS_LOCALHOST_ONLY'] = '1'
@@ -61,7 +61,8 @@ def hal():
     servos = FakeServos(IDS)
     for i in IDS:
         servos.registers[i][56:58] = u16(OPEN)
-    rclpy.init(args=['--ros-args', '-p', 'backend:=feetech', '-p', f'serial_port:={servos.port}'])
+    rclpy.init(args=['--ros-args', '-p', 'backend:=feetech', '-p', f'serial_port:={servos.port}',
+                      '-p', f'params_file:={params_file}'])
     node = HandHal()
     yield node, servos
     node.backend.close()
@@ -101,14 +102,20 @@ def test_hal_follows_backdriven_fingers_and_holds_them_afterwards(hal):
     assert from_u16(servos.registers[2][42:44]) == (OPEN + CLOSED) // 2
 
 
-def test_a_finger_pushed_past_its_range_is_held_at_the_limit(hal):
+def test_a_finger_pushed_past_its_range_is_held_where_it_is_then_swept_in(hal):
     node, servos = hal
+    node.update()
     node.set_passive(True)
     servos.registers[1][56:58] = u16(OPEN - 80)  # beyond fully open
     node.update()
-    assert node.setpoint[0] == 0.0
+    assert node.setpoint[0] < 0.0 and node.target[0] == 0.0
     node.set_passive(False)
     settle(node.backend)
+    assert from_u16(servos.registers[1][42:44]) == OPEN - 80, 'torque comes back ON the finger, not at the range edge'
+    for _ in range(30):
+        node.update()
+        settle(node.backend)
+        servos.registers[1][56:58] = servos.registers[1][42:44]  # these fake servos do not move by themselves
     assert from_u16(servos.registers[1][42:44]) == OPEN
 
 

@@ -13,9 +13,10 @@ ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0
 ```
 
 Launch args: `gui:=true` (Gazebo window, sim only), `teleop:=false` (no control
-window), `foxglove:=false`, `camera:=none`, `color_profile:=640x480x15`,
+window), `foxglove:=false`, `rosbridge:=false`, `camera:=none`, `color_profile:=640x480x15`,
 `depth_profile:=480x270x15`, `params_file:=<yaml>`. Foxglove connects to
-`ws://localhost:8765`; import `foxglove/htn_hand.json` (Layouts -> Import from
+`ws://localhost:8765`, rosbridge (JSON websocket for `application/`) listens on
+`ws://localhost:9090`; import `foxglove/htn_hand.json` (Layouts -> Import from
 file) for hand model + color + depth.
 
 One-time camera setup on a new machine: `sudo apt install
@@ -59,6 +60,14 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
 
 ## Gotchas
 
+- **URDF visuals are boxes only, main body first.** The web viewer in
+  `application/` restyles every box, builds the ghost hand from them and reads
+  each fingertip off the finger link's *first* box. Cylinders/spheres/meshes
+  would show up as solid lumps in the ghost overlay. Decorative parts go through
+  the `vbox` macro; colours live under `appearance:` in `hand_params.yaml`.
+  Collisions and inertia stay the plain palm plate / finger box - looks never
+  change physics.
+
 - **DART joint limits**: in Gazebo a joint resting exactly on its limit ignores
   velocity commands and sticks forever. `hand.urdf.xacro` therefore widens the
   hard limits by `limit_margin` in sim only. Don't remove it, and don't command
@@ -76,6 +85,8 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
 - **Camera profiles**: the defaults (640x480 color + 480x270 depth, 15 fps) run
   at a full 15 Hz on USB 2. Depth and infrared share one sensor and must use
   the same resolution, which is why `camera.launch.py` turns infrared off.
+- **rosbridge throttling**: a rosbridge subscription with `throttle_rate` but no
+  `queue_length` silently drops to ~1.6 Hz. Always pass `queue_length=1` too.
 - **Measuring camera rates**: `ros2 topic hz` on an `image_raw` topic reports
   ~5 Hz because the Python tool cannot keep up with the images. Measure the
   matching `camera_info` topic instead (one tiny message per frame).

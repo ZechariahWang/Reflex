@@ -61,6 +61,14 @@ fingers:
     mount_xyz: [0.030, -0.033, 0.0]
     mount_rpy: [0.0, 0.0, 0.0]
 
+# Looks only (RGB 0..1). No effect on collisions, masses or control.
+appearance:
+  body:   [0.12, 0.13, 0.15]   # palm plate, back housing, finger bands
+  servo:  [0.23, 0.24, 0.27]   # servo blocks behind each knuckle
+  finger: [0.82, 0.84, 0.87]   # finger segments
+  accent: [0.95, 0.42, 0.12]   # knuckle hinges, stripe
+  pad:    [0.04, 0.04, 0.05]   # rubber: fingertip pads, wrist cuff
+
 # Servo / hinge physics (sim only)
 joint:
   max_effort: 1.0      # N m

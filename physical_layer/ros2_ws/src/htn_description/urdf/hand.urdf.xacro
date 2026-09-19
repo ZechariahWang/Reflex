@@ -20,8 +20,27 @@
        range [min_angle, max_angle] and the servos never touch them. -->
   <xacro:property name="limit_margin" value="${0.05 if '$(arg sim)' == 'gazebo' else 0.0}"/>
 
-  <material name="dark"><color rgba="0.15 0.15 0.15 1"/></material>
-  <material name="light"><color rgba="0.85 0.85 0.85 1"/></material>
+  <xacro:property name="look" value="${params['appearance']}"/>
+  <xacro:macro name="colour" params="name">
+    <material name="${name}"><color rgba="${' '.join(str(v) for v in look[name])} 1"/></material>
+  </xacro:macro>
+  <xacro:colour name="body"/>
+  <xacro:colour name="servo"/>
+  <xacro:colour name="finger"/>
+  <xacro:colour name="accent"/>
+  <xacro:colour name="pad"/>
+
+  <!-- A decorative box. Visuals are boxes only, and every link's first visual
+       is its main body: the web viewer in application/ restyles boxes and reads
+       fingertip positions off each finger's first box. Collisions and inertia
+       stay the plain palm plate / finger box. -->
+  <xacro:macro name="vbox" params="size xyz material">
+    <visual>
+      <origin xyz="${xyz}"/>
+      <geometry><box size="${size}"/></geometry>
+      <material name="${material}"/>
+    </visual>
+  </xacro:macro>
 
   <!-- Inertia of a solid box about its centre -->
   <xacro:macro name="box_inertial" params="m x y z xyz:='0 0 0'">
@@ -33,12 +52,44 @@
     </inertial>
   </xacro:macro>
 
-  <!-- Palm: a flat plate, origin at its centre -->
-  <link name="base_link">
+  <!-- Palm: a flat plate, origin at its centre. +Z is the back of the hand -->
+  <xacro:property name="PL" value="${palm['length']}"/>
+  <xacro:property name="PW" value="${palm['width']}"/>
+  <xacro:property name="PT" value="${palm['thickness']}"/>
+  <xacro:property name="HOUSING_H" value="0.010"/>
+
+  <!-- Servo block on the back of the palm, right behind a finger's knuckle -->
+  <xacro:macro name="servo_block" params="name">
+    <xacro:property name="f" value="${params['fingers'][name]}"/>
+    <xacro:property name="yaw" value="${f['mount_rpy'][2]}"/>
     <visual>
-      <geometry><box size="${palm['length']} ${palm['width']} ${palm['thickness']}"/></geometry>
-      <material name="dark"/>
+      <origin xyz="${f['mount_xyz'][0] - 0.010 * cos(yaw)} ${mirror * (f['mount_xyz'][1] - 0.010 * sin(yaw))} ${PT/2 + 0.006}"
+              rpy="0 0 ${mirror * yaw}"/>
+      <geometry><box size="0.016 ${f['width'] + 0.004} 0.012"/></geometry>
+      <material name="servo"/>
     </visual>
+  </xacro:macro>
+
+  <link name="base_link">
+    <xacro:vbox size="${PL} ${PW} ${PT}" xyz="0 0 0" material="body"/>
+    <!-- back housing with an accent stripe -->
+    <xacro:vbox size="${PL*0.62} ${PW*0.78} ${HOUSING_H}" xyz="${-PL*0.10} 0 ${PT/2 + HOUSING_H/2}" material="body"/>
+    <xacro:vbox size="0.004 ${PW*0.78} 0.0012" xyz="${-PL*0.27} 0 ${PT/2 + HOUSING_H + 0.0006}" material="accent"/>
+    <!-- rubber wrist cuff -->
+    <xacro:vbox size="0.012 ${PW*0.86} 0.014" xyz="${-PL/2 - 0.004} 0 0.002" material="pad"/>
+    <!-- bracket carrying the thumb hinge, when it sits outside the plate -->
+    <xacro:property name="thumb" value="${params['fingers']['thumb']}"/>
+    <xacro:property name="overhang" value="${fabs(thumb['mount_xyz'][1]) + thumb['width']/2 - PW/2}"/>
+    <xacro:if value="${overhang > 0}">
+      <xacro:vbox size="0.020 ${overhang + 0.002} ${PT}"
+                  xyz="${thumb['mount_xyz'][0]} ${mirror * (PW/2 + overhang/2 - 0.001) * (1 if thumb['mount_xyz'][1] > 0 else -1)} 0"
+                  material="body"/>
+    </xacro:if>
+    <xacro:servo_block name="thumb"/>
+    <xacro:servo_block name="index"/>
+    <xacro:servo_block name="middle"/>
+    <xacro:servo_block name="ring"/>
+    <xacro:servo_block name="pinky"/>
     <collision>
       <geometry><box size="${palm['length']} ${palm['width']} ${palm['thickness']}"/></geometry>
     </collision>
@@ -52,11 +103,15 @@
     <xacro:property name="W" value="${f['width']}"/>
 
     <link name="${name}_finger">
-      <visual>
-        <origin xyz="0 0 ${-L/2}"/>
-        <geometry><box size="${W} ${W} ${L}"/></geometry>
-        <material name="light"/>
-      </visual>
+      <!-- main body first (see vbox note) -->
+      <xacro:vbox size="${W} ${W} ${L}" xyz="0 0 ${-L/2}" material="finger"/>
+      <!-- hinge block at the knuckle -->
+      <xacro:vbox size="${W*1.15} ${W*1.25} ${W*1.15}" xyz="0 0 0" material="accent"/>
+      <!-- two bands suggesting the finger segments -->
+      <xacro:vbox size="${W*1.06} ${W*1.06} 0.0015" xyz="0 0 ${-L*0.42}" material="body"/>
+      <xacro:vbox size="${W*1.06} ${W*1.06} 0.0015" xyz="0 0 ${-L*0.70}" material="body"/>
+      <!-- rubber fingertip pad on the palm-facing (-X) side -->
+      <xacro:vbox size="0.0025 ${W*0.80} ${L*0.26}" xyz="${-W/2 - 0.0008} 0 ${-L*0.85}" material="pad"/>
       <collision>
         <origin xyz="0 0 ${-L/2}"/>
         <geometry><box size="${W} ${W} ${L}"/></geometry>

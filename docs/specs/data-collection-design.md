@@ -5,6 +5,14 @@ labelled. Status: implemented; record and
 label run end to end without hardware, not yet against the hand. Date: 2026-09-19. This closes
 "the data collection method" of `policy-link-design.md` (Scope, Out).
 
+> **2026-09-19, result on the real hand: backdrive does not work with these
+> servos.** The fingers are too stiff to move by hand, see "Backdrive result"
+> below. The method of this document (torque off, labels from the encoders) is
+> not usable on this hardware. The recorder, the label script and the HAL
+> passive mode work as described and stay; the source of the actions must
+> change to commands with the torque on (`require_passive=false`, a teleoperator
+> that reads `/hand/command`). That design is not written yet.
+
 ## Decisions
 
 - Backdrive is a mode for data collection only. During a demonstration the
@@ -208,6 +216,36 @@ hand, then `label`, then a load of the output with `LeRobotDataset` that shows
    move them in inference. The speed profile is different. The shift and the
    action chunks decrease the effect but do not remove it.
 3. The friction of backdriven gears (see Recording protocol).
+
+## Backdrive result
+
+Tested on 2026-09-19 on the thumb of the real hand (Feetech ST servos, ids 1 to
+5 on the bus, low torque limits).
+
+- Torque off (HAL passive mode): the HAL side works, all 5 servos answer and
+  `/hand/state` is published. The finger is too stiff to move by hand. The
+  cause is the friction of the high-ratio gear train, multiplied by the three
+  four-bar linkages of the finger. The motor is not the cause.
+- Active backdrive, tried as a throwaway `servo_tool follow` (not in the repo).
+  Four versions, all in position mode and with the encoder as the only sensor:
+  1. The goal follows the finger when the offset is above a deadband. Harder to
+     push than with the torque off: the servo holds the goal against the push.
+  2. The goal leads the finger after a push (`lead`). Vibrates: the encoder
+     noise (1 to 2 steps) is as large as the signal.
+  3. Admittance, the offset is integrated to a goal speed. Limit cycle with
+     hands off: the standing offset from the gear play looks like a push. With
+     a deadband that stops it, the finger is again too hard to move.
+  4. Goal = position + assist x measured speed (motor power proportional to the
+     speed of the push, no goal at rest). The best one: no vibration, lighter
+     during the motion. The start still needs a hard push, because the motor
+     sees nothing before the static friction breaks. Dither was added and not
+     evaluated.
+- A hard push against a holding motor gave 6.5 to 13 mA on register 69 (present
+  current): the gear friction carries the load, so neither the current nor the
+  encoder shows a push before the gears move.
+- Not tried: the PWM mode of the servo (operating mode register, EEPROM). A
+  light feel needs a force sensor at the finger, an elastic link, or servos
+  with a lower gear ratio.
 
 ## Not verified
 

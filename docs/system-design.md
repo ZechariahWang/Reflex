@@ -88,9 +88,9 @@ instruction.
 
 - **Task:** close when the wearer reaches for an object, hold during transport,
   release when the wearer puts the object down. The wearer cannot move their
-  fingers. In operation the servos have torque and are not backdriven; a
-  torque-off mode exists only for data collection
-  (`specs/data-collection-design.md`).
+  fingers. The servos cannot be backdriven: a torque-off mode exists in the HAL,
+  but the gear friction makes the fingers too stiff to move by hand
+  (`specs/data-collection-design.md`, Backdrive result).
 - **Input:** wrist RGB and depth, and the 5 values of `/hand/state`.
   **Output:** 5 targets for `/hand/command`.
 - Inference needs ~2 GB of VRAM. The constant instruction makes the language

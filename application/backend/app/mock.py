@@ -18,6 +18,7 @@ JOINT_MAX_RAD = 1.25  # within every finger's max_angle in hand_params.yaml
 JOINT_RATE_HZ = 100
 CAMERA_RATE_HZ = 15
 CURL_PERIOD_S = 4.0
+FINGER_PHASE_RAD = 0.9
 SLEW_PER_S = 2.5
 COMMAND_HOLD_S = 3.0
 WIDTH, HEIGHT = 640, 480
@@ -27,6 +28,11 @@ HAIRLINE = (0xDC, 0xDC, 0xDC)
 TRACK_ALPHA = 0.25
 # The mock phone watches the same scene a few seconds later, so the two panels differ.
 PHONE_TIME_OFFSET_S = 3.0
+
+
+def idle_curl(now: float, finger: int) -> float:
+    """The wave the mock hand makes while nobody commands it."""
+    return 0.5 - 0.5 * math.cos(2 * math.pi * now / CURL_PERIOD_S - FINGER_PHASE_RAD * finger)
 
 
 def encode_compressed_depth(depth_mm: np.ndarray) -> bytes:
@@ -134,7 +140,7 @@ class MockSource:
                 if now < self._command_until:
                     target = self._command[i]
                 else:
-                    target = 0.5 - 0.5 * math.cos(2 * math.pi * now / CURL_PERIOD_S - 0.9 * i)
+                    target = idle_curl(now, i)
                 state[i] += min(max_step, max(-max_step, target - state[i]))
             self._hub.on_joint_states(names, [value * JOINT_MAX_RAD for value in state])
             if tick % 2 == 0:

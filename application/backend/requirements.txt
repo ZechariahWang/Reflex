@@ -7,3 +7,4 @@ wsaccel==0.6.7
 aiortc==1.15.0
 record3d==1.4.1
 PyYAML==6.0.3
+mediapipe==1.0.1

@@ -130,8 +130,28 @@ Right after connect, and whenever it changes, the server also sends a JSON **tex
 ```
 (`min_mm`/`max_mm` only on depth.) `available: false` = no frame received in the last 2 s.
 
+### `WS /ws/mirror`
+Mirror teleop (`docs/specs/mirror-teleop-design.md`): the controller's webcam in, `/hand/command` out. One client at a time: a second one is accepted and closed with 1013 and a reason. The frames are tracked (MediaPipe `HandLandmarker`) and dropped; nothing of them reaches ROS.
+
+Client -> server: a binary message = one JPEG frame (320x240 is enough; over 1 MB is dropped; only the newest frame is processed). Text:
+```json
+{"type": "calibrate", "pose": "open"}
+```
+(`"open"` or `"fist"`.) The next 0.5 s of frames are averaged as that pose. A capture drops the calibration in use, so the hand holds until both poses are captured again. Anything malformed is ignored.
+
+Server -> client, one text message for each processed frame:
+```json
+{"mode": "following", "calibrated": true, "capturing": null, "error": null,
+ "controller": [0.1, 0.8, 0.8, 0.7, 0.6],
+ "command": [0.1, 0.8, 0.8, 0.7, 0.6],
+ "landmarks": [[0.41, 0.63], "... 21 image points, x and y in 0..1"]}
+```
+`mode`: `off` (no calibration: nothing is published), `no_hand` (no hand in the frame), `frozen` (a finger of the controller is further than `MIRROR_MATCH_TOLERANCE` from `command`), `following` (every finger matched once; stays until the hand is lost or the frames stop for `MIRROR_FRAME_TIMEOUT_S`). Only `following` moves `command`, and it is published on `/hand/command` only when a finger changes by more than `MIRROR_COMMAND_TOLERANCE`. When the calibration completes, `command` starts as the measured `/hand/state`. `capturing`: the pose being captured, or `null`. `error`: why the last capture failed (`"no_hand"`, or `"range"` = a finger bent too little between open and fist; both poses must be captured again), `null` after the next `calibrate`. `controller` (the controller's curls, filtered) is `null` without a calibration or a hand; `command` is `null` in `off`; `landmarks` is `null` without a hand. The measured state is in `/ws/state`.
+
+Env: `MIRROR_MATCH_TOLERANCE` (`0.15`), `MIRROR_FRAME_TIMEOUT_S` (`0.3`), `MIRROR_COMMAND_TOLERANCE` (`0.01`), one-euro filter `MIRROR_MIN_CUTOFF` (`1.5` Hz) and `MIRROR_BETA` (`1.0`).
+
 ### Mock mode (`MOCK=1`)
-No rosbridge connection. Joints: each finger curls on its own smooth, phase-shifted sine so the hand looks alive. Color: a generated moving test image. Depth: a generated moving depth field run through the real colorize path. iPhone: the same scene a few seconds later, packed as a real Record3D side-by-side hue frame and run through the real split/decode path. `/ws/state` commands are accepted and override the animation for 3 s. The 5-vector overrides all fingers; when the 3 s hold expires the mock sets `command` back to `null` (live mode never does). Everything above behaves identically otherwise.
+No rosbridge connection. Joints: each finger curls on its own smooth, phase-shifted sine so the hand looks alive. Color: a generated moving test image. Depth: a generated moving depth field run through the real colorize path. iPhone: the same scene a few seconds later, packed as a real Record3D side-by-side hue frame and run through the real split/decode path. `/ws/state` commands are accepted and override the animation for 3 s. The 5-vector overrides all fingers; when the 3 s hold expires the mock sets `command` back to `null` (live mode never does). `/ws/mirror` ignores the content of the frames and tracks a synthetic hand that makes the same wave as the mock joints (so it matches a held pose within one period) and holds the pose of a running capture; MediaPipe is not loaded. Everything above behaves identically otherwise.
 
 ## Frontend
 

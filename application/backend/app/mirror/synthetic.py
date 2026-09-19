@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import math
+import time
 from typing import Sequence
 
 import numpy as np
+
+from ..mock import idle_curl
+from .session import Hand
 
 JOINT_MAX_RAD = 1.2
 FAN_RAD = (0.9, 0.3, 0.0, -0.3, -0.6)  # thumb .. pinky, from the middle finger's direction
 KNUCKLE_M = (0.03, 0.09, 0.09, 0.085, 0.08)
 BONE_M = 0.03
 INTO_PALM = np.array([0.0, 0.0, -1.0])
+MOCK_HOLD_S = 1.5
 
 
 def hand(curls: Sequence[float]) -> np.ndarray:
@@ -31,3 +36,25 @@ def hand(curls: Sequence[float]) -> np.ndarray:
 def image_points(points: np.ndarray) -> list[list[float]]:
     """The same hand as MediaPipe's image landmarks: x, y in 0..1, y down."""
     return [[round(0.5 + 2.5 * x, 4), round(0.85 - 2.5 * y, 4)] for x, y, _ in points]
+
+
+class MockTracker:
+    """MOCK=1: ignores the frames; its hand waves, and holds a pose that is being captured."""
+
+    def __init__(self) -> None:
+        self._held = 0.0
+        self._hold_until = 0.0
+
+    def hold(self, pose: str) -> None:
+        self._held = 1.0 if pose == "fist" else 0.0
+        self._hold_until = time.monotonic() + MOCK_HOLD_S
+
+    def detect(self, jpeg: bytes) -> Hand | None:
+        now = time.monotonic()
+        # The mock hand's own wave, so it passes the pose the engage logic holds once in every period.
+        holding = now < self._hold_until
+        points = hand([self._held if holding else idle_curl(now, finger) for finger in range(5)])
+        return Hand(world=points, image=image_points(points))
+
+    def close(self) -> None:
+        pass

@@ -18,12 +18,16 @@ from pydantic import BaseModel
 
 from .config import Settings
 from .hub import CAMERA_KINDS, CAMERA_SOURCES, Hub, Source, parse_command, parse_passive, ticks
+from .frames import LatestChannel
+from .mirror.session import MirrorSession, Tracker, parse_calibrate
+from .mirror.synthetic import MockTracker
 from .mock import MockSource
 from .record3d import ROTATIONS, Record3DClient, normalize_host
 from .ros_client import RosClient
 
 STATE_PERIOD_S = 1 / 60  # one /ws/state message per display frame
 META_PERIOD_S = 1.0
+MAX_MIRROR_FRAME_BYTES = 1_000_000  # a 320x240 JPEG is ~15 kB
 
 MESH_NAME = re.compile(r"^[a-z0-9_]+\.stl$")
 MOCK_PHONE = {"host": "mock", "state": "streaming", "detail": ""}
@@ -40,13 +44,8 @@ class PhoneSettings(BaseModel):
     rotation: int | None = None
 
 
-async def serve_socket(
-    ws: WebSocket,
-    allowed_origins: Sequence[str],
-    sender: Callable[[], Coroutine[None, None, None]],
-    on_text: Callable[[str], None] | None = None,
-) -> None:
-    """Run `sender` until the client goes away or it fails; incoming text goes to `on_text`.
+async def admit(ws: WebSocket, allowed_origins: Sequence[str]) -> bool:
+    """Accept the socket unless its page comes from somewhere else.
 
     Browsers always send Origin, and CORS does not cover websockets, so a page from
     anywhere else is turned away here. Clients without one (CLI tools, tests) pass.
@@ -55,8 +54,30 @@ async def serve_socket(
     if origin is not None and origin not in allowed_origins:
         LOGGER.warning("refusing websocket from origin %s", origin)
         await ws.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
+        return False
     await ws.accept()
+    return True
+
+
+async def serve_socket(
+    ws: WebSocket,
+    allowed_origins: Sequence[str],
+    sender: Callable[[], Coroutine[None, None, None]],
+    on_text: Callable[[str], None] | None = None,
+    on_bytes: Callable[[bytes], None] | None = None,
+) -> None:
+    """Run `sender` until the client goes away or it fails; incoming messages go to `on_text` / `on_bytes`."""
+    if not await admit(ws, allowed_origins):
+        return
+    await run_socket(ws, sender, on_text, on_bytes)
+
+
+async def run_socket(
+    ws: WebSocket,
+    sender: Callable[[], Coroutine[None, None, None]],
+    on_text: Callable[[str], None] | None = None,
+    on_bytes: Callable[[bytes], None] | None = None,
+) -> None:
 
     async def send() -> None:
         try:
@@ -77,6 +98,8 @@ async def serve_socket(
                 break
             if on_text is not None and message.get("text") is not None:
                 on_text(message["text"])
+            if on_bytes is not None and message.get("bytes") is not None:
+                on_bytes(message["bytes"])
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
@@ -204,6 +227,55 @@ def create_app(settings: Settings) -> FastAPI:
             await ws.close(code=status.WS_1008_POLICY_VIOLATION)
             return
         await serve_socket(ws, settings.cors_origins, lambda: send_camera(ws, camera, kind))
+
+    mirror_busy = False
+
+    def make_tracker() -> Tracker:
+        if settings.mock:
+            return MockTracker()
+        from .mirror.tracker import MediaPipeTracker  # mediapipe is slow to import and the mock needs none of it
+
+        return MediaPipeTracker()
+
+    @app.websocket("/ws/mirror")
+    async def ws_mirror(ws: WebSocket) -> None:
+        """The controller's webcam frames in, the mirror's status out; it commands the hand."""
+        nonlocal mirror_busy
+        if not await admit(ws, settings.cors_origins):
+            return
+        if mirror_busy:
+            await ws.close(code=status.WS_1013_TRY_AGAIN_LATER, reason="another controller is connected")
+            return
+        mirror_busy = True
+        tracker: Tracker | None = None
+        try:
+            tracker = await asyncio.to_thread(make_tracker)
+            session = MirrorSession(settings, lambda: hub.hand_state, source.send_command)
+            frames: LatestChannel[bytes] = LatestChannel()
+
+            async def send_status() -> None:
+                seen = 0
+                while True:
+                    seen, jpeg = await frames.next(seen)
+                    hand = await asyncio.to_thread(tracker.detect, jpeg)
+                    await ws.send_text(json.dumps(session.on_hand(hand, time.monotonic())))
+
+            def on_text(text: str) -> None:
+                pose = parse_calibrate(text)
+                if pose is not None:
+                    session.calibrate(pose, time.monotonic())
+                    if isinstance(tracker, MockTracker):
+                        tracker.hold(pose)
+
+            def on_bytes(jpeg: bytes) -> None:
+                if len(jpeg) <= MAX_MIRROR_FRAME_BYTES:
+                    frames.publish(jpeg)
+
+            await run_socket(ws, send_status, on_text, on_bytes)
+        finally:
+            mirror_busy = False
+            if tracker is not None:
+                tracker.close()
 
     return app
 

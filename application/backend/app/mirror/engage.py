@@ -20,6 +20,9 @@ class Engage:
         self.command = list(state)
         self._following = False
 
+    def stop(self) -> None:
+        self.command = None
+
     def update(self, curls: Sequence[float] | None, now: float) -> Mode:
         """One processed frame (`curls` is None when no hand was seen); `command` is what to send."""
         if self.command is None:

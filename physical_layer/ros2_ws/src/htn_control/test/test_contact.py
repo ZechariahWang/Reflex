@@ -203,6 +203,20 @@ def test_a_blocked_finger_gets_the_low_torque_and_a_frozen_setpoint_and_comes_ba
     assert position(servos, 3) == pytest.approx(0.1, abs=0.02)
 
 
+def test_the_motor_currents_are_published_next_to_the_state(hal):
+    node, servos = hal
+    published = []
+    node.current_pub.publish = lambda msg: published.append(list(msg.data))
+    for _ in range(3):
+        node.update()
+    servos.stops[3] = (0, OPEN + 500)  # the middle finger runs into something: 260 mA, the others 26
+    node.on_command(type('Msg', (), {'data': [0.3, 0.3, 1.0, 0.3, 0.3]})())
+    for _ in range(40):
+        node.update()
+    assert len(published) == 43, 'one message per cycle'
+    assert max(row[2] for row in published) == pytest.approx(260) and published[-1][0] == pytest.approx(26)
+
+
 def test_a_finger_stopped_just_before_its_target_is_blocked_by_the_current(hal):
     node, servos = hal
     assert node.contacts[1].blocked_current == 100

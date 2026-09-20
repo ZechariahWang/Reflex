@@ -31,6 +31,7 @@ TOPICS = ("joint_states", "hand_state", "hand_command", "color", "depth", "iphon
 CAMERA_STREAMS = {"realsense": ("color", "depth"), "iphone": ("color",)}
 RATE_WINDOW_S = 2.0
 STALE_AFTER_MS = 2000
+CURRENT_PEAK_S = 0.5  # the state shows each finger's highest motor current of this long
 _CV_ROTATIONS = {90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
 DETECT_FALLBACK_S = 2.0  # no wrist camera frame for this long: the detector takes the head camera
 MAX_COMMAND_CHARS = 512  # a valid command is under 150
@@ -166,6 +167,7 @@ class Hub:
         self._orientation: dict[str, float] | None = None
         self._passive = False
         self._blocked = [False] * len(FINGERS)
+        self._currents: deque[tuple[float, list[float]]] = deque()  # (arrival, mA per finger)
         self._urdf: str | None = None
         self._tracker = Tracker()
         self._intrinsics: Intrinsics | None = None
@@ -241,6 +243,19 @@ class Hub:
         if vector is not None:
             with self._lock:
                 self._blocked = [value > 0.5 for value in vector]
+
+    def on_current(self, values: Sequence[object]) -> None:
+        vector = finger_vector(values)
+        if vector is not None:
+            with self._lock:
+                self._currents.append((time.monotonic(), vector))
+
+    def _peak_current(self, now: float) -> list[float] | None:
+        """Per finger the highest of the last CURRENT_PEAK_S: one cycle at 250 mA blocks a finger,
+        and nobody reads a number that lives for 20 ms."""
+        while self._currents and now - self._currents[0][0] > CURRENT_PEAK_S:
+            self._currents.popleft()
+        return [max(column) for column in zip(*(vector for _, vector in self._currents))] or None
 
     def clear_hand_command(self) -> None:
         """Back to "nobody has commanded": the mock calls this when its override expires."""
@@ -418,6 +433,7 @@ class Hub:
                 "command": None if self._command is None else list(self._command),
                 "passive": self._passive,
                 "blocked": list(self._blocked),
+                "current": self._peak_current(now),
                 "objects": self._tracker.objects(now),
                 "rates": {topic: meter.hz(now) for topic, meter in self._meters.items()},
             }

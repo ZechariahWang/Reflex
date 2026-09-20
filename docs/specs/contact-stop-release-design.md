@@ -96,6 +96,12 @@ hand topics. A new entry in "Contracts that cross folders" of the root `CLAUDE.m
 
 The sim never publishes a 1: `SimBackend` has no torque limit, so the HAL makes no detectors.
 
+### Topic `/hand/current`
+
+Added the same day, to tune on the hand: the motor currents the detector decides on, 5 values in
+mA, every cycle, from a backend that measures them (not the sim). The console shows per finger the
+peak of the last 0.5 s next to its slider.
+
 ### Web console
 
 - Backend: `blocked` (5 booleans) in the `/ws/state` JSON next to `passive`, from the topic. All

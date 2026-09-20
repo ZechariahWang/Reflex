@@ -29,7 +29,7 @@ class HandBackend(ABC):
 
     def read_current(self):
         """Motor current of each finger at the last read(), in mA (absolute), or None if the
-        backend cannot measure it: the contact stop then has the encoder rule only."""
+        backend cannot measure it: there is no contact stop then."""
         return None
 
     def set_torque(self, enabled, hold=None):

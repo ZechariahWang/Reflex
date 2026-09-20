@@ -189,6 +189,14 @@ export function CommandBlock() {
                 />
               )}
             </div>
+            {snapshot?.current && (
+              <span
+                className={`label-micro w-6 text-right tabular-nums tracking-normal ${snapshot.blocked?.[i] ? "text-signal" : ""}`}
+                title="motor current, mA: the peak of the last half second"
+              >
+                {Math.round(snapshot.current[i])}
+              </span>
+            )}
           </div>
         ))}
       </div>

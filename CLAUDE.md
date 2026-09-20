@@ -52,6 +52,8 @@ subfolder per concern.
 - `/hand/blocked` (`std_msgs/Float64MultiArray`, 5 values, latched) says which
   fingers the HAL's contact stop holds: `1` = the finger met resistance and
   pushes on with a low torque, `0` = free. Always `0` in the sim.
+  `/hand/current` (same layout, mA, 50 Hz) is what it decides on: the motor
+  currents, from the real servos only.
 - Anything that wants to see reads the camera from `/camera/color/image_raw`
   (`sensor_msgs/Image`, rgb8, + `/compressed`), `/camera/depth/image_rect_raw`
   and `/camera/aligned_depth_to_color/image_raw` (16UC1, millimetres), each

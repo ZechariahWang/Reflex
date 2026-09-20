@@ -177,3 +177,17 @@ def test_blocked_fingers_from_the_hal_show_in_the_state():
     hub.on_blocked([1.0])  # not 5 values: ignored
     assert hub.snapshot(True)["blocked"] == [False, False, True, False, False]
 
+
+def test_motor_currents_show_as_the_peak_of_the_last_half_second(monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr("app.hub.time.monotonic", lambda: clock[0])
+    hub = Hub(Settings())
+    assert hub.snapshot(True)["current"] is None  # the sim has no current
+    hub.on_current([26.0, 26.0, 260.0, 26.0, 26.0])  # one cycle of a peak ...
+    clock[0] += 0.3
+    hub.on_current([26.0, 26.0, 40.0, 26.0, 26.0])
+    assert hub.snapshot(True)["current"] == [26.0, 26.0, 260.0, 26.0, 26.0]  # ... stays readable
+    clock[0] += 0.3
+    hub.on_current([26.0, 26.0, 40.0, 26.0, 26.0])
+    assert hub.snapshot(True)["current"] == [26.0, 26.0, 40.0, 26.0, 26.0]
+

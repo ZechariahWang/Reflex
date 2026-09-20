@@ -16,6 +16,7 @@ COMMAND_TOPIC = '/hand/command'  # Float64MultiArray, 5 x [0..1], FINGERS order
 STATE_TOPIC = '/hand/state'      # same layout, measured (or commanded if unknown)
 PASSIVE_TOPIC = '/hand/passive'  # Bool, latched: True while the fingers are backdriven
 BLOCKED_TOPIC = '/hand/blocked'  # 5 values, latched: 1 while the contact stop holds that finger
+CURRENT_TOPIC = '/hand/current'  # 5 values: motor current in mA; only from a backend that measures it
 PASSIVE_SERVICE = '/hand/set_passive'  # std_srvs/SetBool
 
 
@@ -73,6 +74,7 @@ class HandHal(Node):
         self.create_subscription(Float64MultiArray, COMMAND_TOPIC, self.on_command, 10)
         self.command_pub = self.create_publisher(Float64MultiArray, COMMAND_TOPIC, 10)
         self.state_pub = self.create_publisher(Float64MultiArray, STATE_TOPIC, 10)
+        self.current_pub = self.create_publisher(Float64MultiArray, CURRENT_TOPIC, 10)
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.passive_pub = self.create_publisher(Bool, PASSIVE_TOPIC, latched)
         self.create_service(SetBool, PASSIVE_SERVICE, self.on_set_passive)
@@ -208,6 +210,9 @@ class HandHal(Node):
 
     def publish_state(self, state):
         self.state_pub.publish(Float64MultiArray(data=state))
+        currents = self.backend.read_current()
+        if currents is not None:
+            self.current_pub.publish(Float64MultiArray(data=currents))
         if self.joint_state_pub is not None:
             self.publish_joint_states(state)
 

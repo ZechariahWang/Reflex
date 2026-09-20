@@ -43,6 +43,7 @@ def test_state_shape_and_command_override(client):
             "command",
             "passive",
             "blocked",
+            "current",
             "objects",
             "rates",
             "session",

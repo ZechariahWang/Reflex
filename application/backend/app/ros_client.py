@@ -101,6 +101,8 @@ class RosClient:
         self._passive_service = roslibpy.Service(ros, "/hand/set_passive", "std_srvs/SetBool")
         # Latched by the HAL: 1 for a finger its contact stop holds on the low torque
         self._subscribe(ros, "/hand/blocked", MULTI_ARRAY, 0, lambda m: hub.on_blocked(m["data"]))
+        # Not throttled: the peak of one 20 ms cycle is what blocks a finger
+        self._subscribe(ros, "/hand/current", MULTI_ARRAY, 0, lambda m: hub.on_current(m["data"]))
 
         # A Topic replays only one message on reconnect, so publishing gets its own.
         self._command_out = roslibpy.Topic(ros, "/hand/command", MULTI_ARRAY, queue_size=1)

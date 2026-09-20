@@ -70,6 +70,8 @@ export interface StateMessage {
   passive: boolean
   /** Finger order: the HAL's contact stop holds that finger (it met resistance and pushes on softly). */
   blocked: boolean[]
+  /** Finger order, mA: each motor's highest current of the last half second; null without a measurement (sim). */
+  current: number[] | null
   /** The surroundings: objects the backend currently tracks (empty without a detector). */
   objects: TrackedObject[]
   rates: TopicRates

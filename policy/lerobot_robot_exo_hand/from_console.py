@@ -56,7 +56,8 @@ def convert(root: Path, out: Path | None = None) -> Path:
         raise ValueError(f"no camera has frames in every episode of {root}")
     first = cv2.imread(str(folders[0] / usable(episodes[0], cameras)[0][cameras[0]]))
     dataset = LeRobotDataset.create(out.name, fps=meta["fps"], root=out, robot_type="exo_hand",
-                                    features=features(cameras, *first.shape[:2]), use_videos=True)
+                                    features=features(cameras, *first.shape[:2]), use_videos=True,
+                                    image_writer_threads=8)
     for folder, frames in zip(folders, episodes):
         loaded: dict[str, np.ndarray] = {}  # a camera slower than the tick rate repeats its file: decode it once
         for frame in usable(frames, cameras):

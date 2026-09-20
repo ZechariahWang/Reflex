@@ -49,7 +49,12 @@ it sets the grip force on an object.
 | State of a finger | Torque limit (register 48, RAM, written by the HAL) | Setpoint |
 |---|---|---|
 | free | `torque_limit` (high: speed, and the ceiling) | ramps to the target at `max_speed` |
-| blocked | `hold_torque` (low: the force we want) | frozen just past the measured position, in the blocked direction |
+| blocked | `hold_torque` (low: the force we want) | just past the furthest position the finger reached, in the blocked direction |
+
+**Changed on 2026-09-20** (`contact-stop-release-design.md`): blocked = the current rule ONLY,
+the encoder rule below is gone; released by motion = `release_travel` (0.15) past the block, not
+"it moves again" - a finger at speed met that with its own momentum one cycle after the block, so
+on the hand the stop never held. The notes below are the history.
 
 - **Blocked** = the finger must move and does not: the setpoint is more than
   `blocked_error` from the measured position, and the measured position changed
@@ -76,8 +81,9 @@ it sets the grip force on an object.
   finger stopped closer than `blocked_error` to its target and one that creeps into
   something soft; it stays as the fallback, and it is the only rule on a backend without
   a current reading. Free motion at torque limit 600 draws 60 to 110 mA in short peaks
-  (the start of a move), so the margin is small. The index draws up to 290 mA on a free close at
-  max_speed 2.0 and trips on every close: it needs a slower sweep or its own threshold. An earlier measurement (a push by hand against a HOLDING motor: only
+  (the start of a move), so the margin is small. The index drew up to 290 mA on a close at
+  max_speed 2.0 - a person was resisting that move; its free open stayed below 91 mA, so it needs no
+  threshold of its own. An earlier measurement (a push by hand against a HOLDING motor: only
   6.5 to 13 mA, the gear friction carries the load) still stands - the current shows what
   the motor drives into, not what pushes on a finger at rest.
 - Not chosen: the overload protection inside the servo (EEPROM: overload

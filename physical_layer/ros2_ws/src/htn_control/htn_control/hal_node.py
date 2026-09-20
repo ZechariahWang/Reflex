@@ -15,6 +15,7 @@ from htn_control.hand_config import FINGERS, load_hand_params
 COMMAND_TOPIC = '/hand/command'  # Float64MultiArray, 5 x [0..1], FINGERS order
 STATE_TOPIC = '/hand/state'      # same layout, measured (or commanded if unknown)
 PASSIVE_TOPIC = '/hand/passive'  # Bool, latched: True while the fingers are backdriven
+BLOCKED_TOPIC = '/hand/blocked'  # 5 values, latched: 1 while the contact stop holds that finger
 PASSIVE_SERVICE = '/hand/set_passive'  # std_srvs/SetBool
 
 
@@ -33,8 +34,8 @@ class HandHal(Node):
     Nothing is driven blind. The motors get torque only once the first measured
     pose is in, with that pose as their goal; a finger that starts outside its
     calibrated travel is swept into it at the normal speed, it does not jump to
-    the edge. On backends with a torque limit a finger that has to move and does
-    not is put on a low holding torque (hal/contact.py).
+    the edge. On backends with a torque limit a finger that meets resistance is
+    put on a low holding torque (hal/contact.py); /hand/blocked says which.
     """
 
     def __init__(self):
@@ -65,9 +66,8 @@ class HandHal(Node):
         stop = self.hand_params.get('contact_stop', {})
         self.contacts = []
         if self.backend.has_torque_limit and stop.get('enabled', True):
-            self.contacts = [ContactDetector(stop.get('blocked_error', 0.06), stop.get('blocked_motion', 0.004),
-                                             stop.get('blocked_cycles', 10), stop.get('hold_lead', 0.03),
-                                             stop.get('blocked_current'), stop.get('blocked_excess', 150))
+            self.contacts = [ContactDetector(stop.get('hold_lead', 0.03), stop.get('release_travel', 0.15),
+                                             stop['blocked_current'], stop.get('blocked_excess', 150))
                              for _ in FINGERS]
 
         self.create_subscription(Float64MultiArray, COMMAND_TOPIC, self.on_command, 10)
@@ -78,6 +78,8 @@ class HandHal(Node):
         self.create_service(SetBool, PASSIVE_SERVICE, self.on_set_passive)
         self.passive = False
         self.passive_pub.publish(Bool(data=False))
+        self.blocked_pub = self.create_publisher(Float64MultiArray, BLOCKED_TOPIC, latched)
+        self.publish_blocked()
         if start_passive:
             self.set_passive(True)
         self.joint_state_pub = None
@@ -135,10 +137,17 @@ class HandHal(Node):
             self.target = [min(max(p, 0.0), 1.0) for p in state]
 
     def release_contacts(self):
+        was_blocked = any(contact.state == BLOCKED for contact in self.contacts)
         for finger, contact in enumerate(self.contacts):
             if contact.state == BLOCKED:
                 self.backend.set_torque_limit(finger, False)
             contact.reset()
+        if was_blocked:
+            self.publish_blocked()
+
+    def publish_blocked(self):
+        self.blocked_pub.publish(Float64MultiArray(
+            data=[float(contact.state == BLOCKED) for contact in self.contacts] or [0.0] * len(FINGERS)))
 
     def update(self):
         if not self.ready:
@@ -177,8 +186,9 @@ class HandHal(Node):
                                            f'{currents[i] or 0:.0f} mA), holding with low torque')
                 else:
                     self.get_logger().info(f'{FINGERS[i]}: free again')
-                    # pick the sweep up from where the finger is, not from the frozen setpoint
+                    # pick the sweep up from where the finger is, not from the hold setpoint
                     self.setpoint[i], self.velocity[i] = state[i], 0.0
+                self.publish_blocked()
         self.publish_state(state or self.setpoint)
 
     def sweep(self, position, velocity, target):

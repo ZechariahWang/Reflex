@@ -14,8 +14,7 @@ def params_file(tmp_path):
     for n, finger in enumerate(['thumb', 'index', 'middle', 'ring', 'pinky'], start=1):
         params['servos'][finger] = {'id': n, 'open_step': 2048, 'closed_step': 3072}
     params['servos'].update(torque_limit=300, hold_torque=120)
-    params['contact_stop'] = {'enabled': True, 'blocked_error': 0.06, 'blocked_motion': 0.004,
-                              'blocked_cycles': 10, 'hold_lead': 0.03,
+    params['contact_stop'] = {'enabled': True, 'hold_lead': 0.03, 'release_travel': 0.15,
                               'blocked_current': 100, 'blocked_excess': 150}
     path = tmp_path / 'hand_params.yaml'
     path.write_text(yaml.safe_dump(params))

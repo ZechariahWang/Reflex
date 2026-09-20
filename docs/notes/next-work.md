@@ -54,7 +54,8 @@ file at the end of a session; the designs themselves are in `../specs/`.
   again unless the hardware changes (force sensor, elastic link, lower gear
   ratio).
 - Left of the contact stop's work order: the tuning on the hand (the
-  `blocked_*` values, `hold_torque`, then `torque_limit` back up for speed).
+  `blocked_*` values, `release_travel`, `hold_torque`, then `torque_limit` back up for speed).
+  The three steps are in `docs/specs/contact-stop-release-design.md`, "On the hand".
 
 - **Lambda training: built, no rental run yet** (`../specs/lambda-training-design.md`,
   `policy/README.md`, Training on a rented Lambda GPU). Tested here: the split and the error math

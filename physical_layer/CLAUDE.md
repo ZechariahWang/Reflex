@@ -103,8 +103,9 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
     blind: the motors get torque only once the first measured pose is in, with
     that pose as the goal, and a finger outside its travel is swept in, not
     snapped to the edge. Contact stop (`hal/contact.py`, real servos only): a
-    finger that is far from its setpoint AND not moving gets `hold_torque` and a
-    frozen setpoint until the command goes the other way or it moves again. Passive
+    finger whose motor current says it meets resistance gets `hold_torque` and a
+    setpoint just past where it is, until the command goes the other way or it has
+    travelled `release_travel` on; latched `/hand/blocked` says which fingers. Passive
     (backdrive) mode - service `/hand/set_passive`, latched `/hand/passive`,
     launch arg `passive:=true`, button in the control window and the web
     console: torque off, commands ignored, state still read. While passive,

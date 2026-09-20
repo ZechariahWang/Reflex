@@ -13,82 +13,85 @@ OPEN, CLOSED = 2048, 3072  # hand_params.yaml before calibration; any pair works
 
 
 def detector():
-    return ContactDetector(blocked_error=0.06, blocked_motion=0.004, blocked_cycles=10, hold_lead=0.03)
+    return ContactDetector(hold_lead=0.03, release_travel=0.15, blocked_current=100, blocked_excess=150)
 
 
-def test_a_slow_servo_in_free_motion_is_not_blocked():
-    contact, measured = detector(), 0.0
-    for cycle in range(100):  # trails the setpoint by 0.2, but it moves
-        measured += 0.005
-        assert contact.update(measured + 0.2, measured, 1.0) == FREE
+def block(contact, at, direction=1.0, target=None):
+    target = at + 0.5 * direction if target is None else target
+    assert contact.update(at + 0.1 * direction, at, target, current=300) == BLOCKED
+    return target
 
 
-def test_far_from_the_setpoint_and_not_moving_is_blocked_then_held_just_past_the_obstacle():
+def test_far_from_the_setpoint_and_not_moving_at_a_low_current_is_free():
     contact = detector()
-    states = [contact.update(0.6, 0.30, 1.0) for _ in range(12)]
-    assert states[:10] == [FREE] * 10 and states[-1] == BLOCKED  # needs the full window first
-    assert contact.direction == 1.0 and contact.hold_setpoint() == pytest.approx(0.33)
+    assert all(contact.update(0.6, 0.30, 1.0, current=60) == FREE for _ in range(100))
 
 
-def test_a_quick_start_after_a_long_rest_is_not_blocked():
-    """Found on the hand at max_speed 4.0: the setpoint is 0.07 ahead within two cycles, the servo has
-    not started yet, and the 0.2 s of rest BEFORE the command counted as "does not move"."""
+def test_some_cycles_a_little_over_the_threshold_block():
     contact = detector()
-    for _ in range(50):
-        assert contact.update(0.05, 0.05, 0.05) == FREE  # resting on the target
-    measured = 0.05
-    for cycle in range(40):  # the command: the setpoint runs ahead, the finger starts 3 cycles late
-        setpoint = min(0.45, 0.05 + 0.08 * (cycle + 1))
-        measured = min(0.45, measured + (0.03 if cycle >= 3 else 0.0))
-        assert contact.update(setpoint, measured, 0.45) == FREE, f'cycle {cycle}'
-
-
-def test_a_finger_that_turns_around_far_from_its_setpoint_is_not_blocked():
-    contact = detector()
-    up_and_back = [0.50, 0.55, 0.59, 0.62, 0.64, 0.65, 0.64, 0.62, 0.59, 0.55, 0.50, 0.44]
-    for measured in up_and_back:  # asked back to 0.05 while it still coasts up: ends where it began
-        assert contact.update(0.05, measured, 0.05) == FREE
-
-
-def test_at_rest_on_the_target_is_not_blocked():
-    contact = detector()
-    assert all(contact.update(0.5, 0.49, 0.5) == FREE for _ in range(50))
-
-
-@pytest.mark.parametrize('direction', [1.0, -1.0])
-def test_released_by_a_command_the_other_way_or_by_the_obstacle_going_away(direction):
-    blocked_at, target = 0.5, 0.5 + 0.5 * direction
-    contact = detector()
-    for _ in range(12):
-        contact.update(blocked_at + 0.2 * direction, blocked_at, target)
-    assert contact.state == BLOCKED and contact.direction == direction
-    assert contact.update(contact.hold_setpoint(), blocked_at, target) == BLOCKED  # still pushing: stays
-    assert contact.update(contact.hold_setpoint(), blocked_at, blocked_at - 0.3 * direction) == FREE
-
-    for _ in range(12):
-        contact.update(blocked_at + 0.2 * direction, blocked_at, target)
-    assert contact.state == BLOCKED
-    assert contact.update(contact.hold_setpoint(), blocked_at + 0.02 * direction, target) == FREE  # it moves again
-
-
-def test_current_above_the_threshold_blocks_where_the_encoder_rule_is_blind():
-    contact = ContactDetector(0.06, 0.004, 10, 0.03, blocked_current=100, blocked_excess=150)
-    # 0.03 from the setpoint (< blocked_error) and still creeping: the encoder rule never fires
     states = [contact.update(0.53 + 0.003 * n, 0.50 + 0.003 * n, 0.6, current=150) for n in range(3)]
     assert states == [FREE, FREE, BLOCKED] and contact.direction == 1.0
 
 
 def test_one_huge_cycle_blocks_at_once():
-    contact = ContactDetector(0.06, 0.004, 10, 0.03, blocked_current=100, blocked_excess=150)
+    contact = detector()
     assert contact.update(0.52, 0.50, 0.6, current=90) == FREE
     assert contact.update(0.52, 0.50, 0.6, current=260) == BLOCKED
 
 
 def test_the_peak_of_a_free_start_drains_away_and_no_current_reading_does_not_block():
-    contact = ContactDetector(0.06, 0.004, 10, 0.03, blocked_current=100, blocked_excess=150)
+    contact = detector()
     # the middle finger on the hand, a free start, again and again: 34 mA over, then well below
     for current in [91, 110, 104, 110, 110, 78, 65] * 10 + [None] * 10:
         assert contact.update(0.52, 0.50, 0.6, current=current) == FREE
+
+
+@pytest.mark.parametrize('direction', [1.0, -1.0])
+def test_the_hold_setpoint_follows_the_finger_forward_and_never_goes_back(direction):
+    contact = detector()
+    target = block(contact, 0.5, direction)
+    assert contact.hold_setpoint() == pytest.approx(0.5 + 0.03 * direction)
+    contact.update(contact.hold_setpoint(), 0.5 + 0.08 * direction, target)  # it coasts on
+    assert contact.hold_setpoint() == pytest.approx(0.5 + 0.11 * direction)
+    contact.update(contact.hold_setpoint(), 0.5 + 0.06 * direction, target)  # the object pushes it back
+    assert contact.state == BLOCKED and contact.hold_setpoint() == pytest.approx(0.5 + 0.11 * direction)
+
+
+@pytest.mark.parametrize('direction', [1.0, -1.0])
+def test_released_by_a_command_the_other_way_or_by_travel_past_release_travel(direction):
+    contact = detector()
+    target = block(contact, 0.5, direction)
+    assert contact.update(contact.hold_setpoint(), 0.5, target) == BLOCKED  # still pushing: stays
+    assert contact.update(contact.hold_setpoint(), 0.5, 0.5 - 0.3 * direction) == FREE
+
+    block(contact, 0.5, direction)
+    assert contact.update(contact.hold_setpoint(), 0.5 + 0.14 * direction, target) == BLOCKED  # a coast
+    assert contact.update(contact.hold_setpoint(), 0.5 + 0.16 * direction, target) == FREE     # it goes on and on
+
+
+# The index finger on the hand: a close at probe speed 2.0, a person resisting the whole move.
+# (goal step, position step, mA) per 20 ms cycle; open 2028, closed 1213.
+RESISTED_CLOSE = [
+    (1998, 2031, 0), (1966, 2031, 0), (1933, 2031, 20), (1901, 2030, 26), (1868, 2026, 32), (1835, 2019, 58),
+    (1803, 2009, 58), (1770, 1998, 65), (1738, 1984, 91), (1705, 1967, 110), (1672, 1949, 130),
+    (1640, 1929, 169), (1607, 1906, 221), (1575, 1881, 247), (1542, 1855, 286), (1509, 1825, 254),
+    (1477, 1793, 260), (1444, 1761, 266), (1412, 1728, 292), (1379, 1697, 234), (1346, 1663, 247),
+]
+
+
+def test_a_resisted_finger_at_speed_stays_blocked_while_it_coasts():
+    """Found on the hand: 0.04 of the travel per cycle, so its own momentum met the old release
+    (0.015 past the block) in the next cycle - low torque for 20 ms, then the full torque again."""
+    contact, blocked_at = detector(), None
+    for goal, step, current in RESISTED_CLOSE:
+        setpoint, measured = (2028 - goal) / 815, (2028 - step) / 815
+        state = contact.update(setpoint, measured, 1.0, current=current)
+        if blocked_at is None and state == BLOCKED:
+            blocked_at = measured
+        if blocked_at is not None and measured - blocked_at <= 0.15:
+            assert state == BLOCKED, f'let go at {measured:.3f}, blocked at {blocked_at:.3f}'
+            assert contact.hold_setpoint() > measured, 'the servo must keep pushing, not pull back'
+    assert blocked_at == pytest.approx(0.15, abs=0.01)
 
 
 class MovingServos(FakeServos):
@@ -180,12 +183,15 @@ def test_a_blocked_finger_gets_the_low_torque_and_a_frozen_setpoint_and_comes_ba
     for _ in range(3):
         node.update()
     servos.stops[3] = (0, OPEN + 500)  # the middle finger meets something at ~0.49
+    published = []
+    node.blocked_pub.publish = lambda msg: published.append(list(msg.data))
     node.on_command(type('Msg', (), {'data': [0.3, 0.3, 1.0, 0.3, 0.3]})())
     for _ in range(80):
         node.update()
     assert node.contacts[2].state == BLOCKED
     assert servos.limits[3][-1] == low
-    assert node.setpoint[2] == pytest.approx(position(servos, 3) + 0.03, abs=0.01), 'frozen just past the obstacle'
+    assert published == [[0.0, 0.0, 1.0, 0.0, 0.0]], '/hand/blocked: once, when the state changes'
+    assert node.setpoint[2] == pytest.approx(position(servos, 3) + 0.03, abs=0.01), 'just past the obstacle'
     assert [c.state for i, c in enumerate(node.contacts) if i != 2] == [FREE] * 4, 'each finger alone'
     assert node.setpoint[0] == pytest.approx(0.3, abs=1e-6)
 
@@ -193,6 +199,7 @@ def test_a_blocked_finger_gets_the_low_torque_and_a_frozen_setpoint_and_comes_ba
     for _ in range(60):
         node.update()
     assert node.contacts[2].state == FREE and servos.limits[3][-1] == high
+    assert published[-1] == [0.0] * 5
     assert position(servos, 3) == pytest.approx(0.1, abs=0.02)
 
 

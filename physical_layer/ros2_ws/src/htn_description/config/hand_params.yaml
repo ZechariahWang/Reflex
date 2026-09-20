@@ -94,18 +94,17 @@ servos:
   ring:   {id: 4, open_step: 1936, closed_step: 3091}
   pinky:  {id: 5, open_step: 2146, closed_step: 3234}
 
-# Contact stop (hal/contact.py, design in docs/specs/hal-safety-design.md): a finger
-# that meets resistance gets hold_torque and a frozen setpoint. Resistance = the mA above
-# blocked_current, summed over the cycles (a cycle below it takes its shortfall off again),
-# reach blocked_excess, or (encoder rule, the fallback) it has to move and
-# does not. In finger travel (0..1) and HAL cycles (50 Hz). blocked_current was found on the
-# hand with `servo_tool probe`; the encoder values are NOT tuned on the hand yet.
+# Contact stop (hal/contact.py, design in docs/specs/hal-safety-design.md and
+# contact-stop-release-design.md): a finger that meets resistance gets hold_torque and a setpoint
+# just past where it is. Resistance = the mA above blocked_current, summed over the cycles (a cycle
+# below it takes its shortfall off again), reach blocked_excess. In finger travel (0..1) and HAL
+# cycles (50 Hz). blocked_current was found on the hand with `servo_tool probe` at speed 2.0 and
+# torque_limit 600: free motion stayed below 91 mA, a finger resisted by hand drew 230 to 290.
 contact_stop:
   enabled: true
-  blocked_current: 100   # mA; remove the line to use the encoder rule alone
+  blocked_current: 100   # mA
   blocked_excess: 150    # mA: one cycle at 250 mA, or 3 at 150. On the hand a free start of the
                          # middle finger summed to 34, a push against it to 162 in 3 cycles
-  blocked_error: 0.06    # further than this from the setpoint = it has to move
-  blocked_motion: 0.004  # less travel than this over blocked_cycles = it does not
-  blocked_cycles: 10     # 0.2 s
-  hold_lead: 0.03        # the frozen setpoint sits this far past the obstacle
+  hold_lead: 0.03        # the setpoint sits this far past the finger while it is blocked
+  release_travel: 0.15   # a blocked finger that gets this far past the block is free again. More than
+                         # it coasts after the torque drops (estimated 0.04 to 0.08, NOT measured)

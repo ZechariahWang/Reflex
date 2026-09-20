@@ -1,6 +1,7 @@
 # Contact stop: a block that stays, and a sign of it in the console
 
-Status: design, agreed in the discussion of 2026-09-20. Nothing of it is built. It changes the
+Status: design, agreed in the discussion of 2026-09-20. Built the same day, on the fake servo
+bus only: nothing of it has run on the real hand ("On the hand" below). It changes the
 "Blocked" and "Released" rules of `hal-safety-design.md` and adds one topic.
 
 ## The problem
@@ -117,8 +118,9 @@ The sim never publishes a 1: `SimBackend` has no torque limit, so the HAL makes 
 ## Tests
 
 - `test_contact.py`: rows of the resisted log, inline. The finger gets blocked and STAYS blocked
-  to the end of the move (now: it flaps). While blocked, the hold setpoint is never behind the
-  finger. A blocked finger that then travels more than `release_travel` is free. A finger far
+  over the next `release_travel` of travel (before: free one cycle later). The log was recorded
+  at the full torque, so the finger in it goes on to the end; on the hand the low torque stops
+  it. While blocked, the hold setpoint is never behind the finger. A blocked finger that then travels more than `release_travel` is free. A finger far
   from its setpoint that does not move, at a low current, stays free. The tests of the encoder
   rule go; release by command keeps passing.
 - HAL on the fake servo bus: `/hand/blocked` says 1 for a finger driven against a stop, 0 after

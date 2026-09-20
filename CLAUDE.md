@@ -16,6 +16,8 @@ everything else goes in a top-level subfolder per concern.
   reads the ROS topics through rosbridge (`ws://localhost:9090`, started by both
   launch files) and a Next.js + three.js frontend (`frontend/`). A pure consumer
   of the contracts below; interfaces are in `application/CONTRACT.md`.
+- `movements/` - pre-written movements of the hand (hot cross buns on three keys, ...): one small
+  Python file each, listed and played by the web console. Format in `movements/README.md`.
 - `docs/` - design documents. Read `docs/system-design.md` (devices, ROS
   layout, policy, safety, open questions) before design work. Specs for single features go in `docs/specs/`.
   `docs/notes/next-work.md` says where the work stopped: read it at the start of a session.

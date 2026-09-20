@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 from .config import Settings
 from .episodes import EpisodeError, Episodes
+from .movements import MovementError, Movements
 from .hub import CAMERA_STREAMS, Hub, Source, parse_command, parse_passive, ticks
 from .frames import LatestChannel
 from .mirror.session import MirrorSession, Tracker, parse_calibrate
@@ -140,6 +141,10 @@ class ReplayRequest(BaseModel):
     speed: float = 1.0
 
 
+class MovementRequest(BaseModel):
+    name: str
+
+
 class StopRequest(BaseModel):
     keep: bool = True
 
@@ -180,7 +185,9 @@ def create_app(settings: Settings) -> FastAPI:
     # running recording or replay is `session` in /ws/state.
     episodes = Episodes(settings.recordings_dir, hub, source.send_command)
 
-    def refuse(error: EpisodeError) -> HTTPException:
+    movements = Movements(settings.movements_dir, source.send_command)
+
+    def refuse(error: ValueError) -> HTTPException:
         return HTTPException(status.HTTP_409_CONFLICT, str(error))
 
     @app.get("/api/episodes")
@@ -198,10 +205,33 @@ def create_app(settings: Settings) -> FastAPI:
     @app.post("/api/episodes/replay")
     async def replay_episode(request: ReplayRequest) -> dict:
         try:
+            if movements.playing:
+                raise EpisodeError("a movement is playing: stop it first")
             episodes.start_replay(request.dataset, request.episode, request.what, request.speed)
         except EpisodeError as error:
             raise refuse(error) from error
         return episodes.status()
+
+    # Movements: the scripts of the repo's movements/ folder, played on /hand/command. One may play
+    # while an episode is recorded (a way to record demonstrations), not during a replay.
+    @app.get("/api/movements")
+    def list_movements() -> list[dict]:
+        return movements.listing()
+
+    @app.post("/api/movements/play")
+    async def play_movement(request: MovementRequest) -> dict:
+        try:
+            if episodes.status()["mode"] == "replaying":
+                raise MovementError("a replay is running: stop it first")
+            movements.play(request.name)
+        except MovementError as error:
+            raise refuse(error) from error
+        return movements.status() or {}
+
+    @app.post("/api/movements/stop")
+    async def stop_movement() -> dict:
+        await movements.stop()
+        return {}
 
     @app.post("/api/episodes/stop")
     async def stop_episode(request: StopRequest) -> dict:
@@ -236,7 +266,7 @@ def create_app(settings: Settings) -> FastAPI:
     async def ws_state(ws: WebSocket) -> None:
         async def send_state() -> None:
             async for _ in ticks(STATE_PERIOD_S):
-                await ws.send_text(json.dumps({**hub.snapshot(source.connected), "session": episodes.status()}))
+                await ws.send_text(json.dumps({**hub.snapshot(source.connected), "session": episodes.status(), "movement": movements.status()}))
 
         def on_text(text: str) -> None:
             values = parse_command(text)

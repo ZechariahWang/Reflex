@@ -63,6 +63,25 @@ export interface StateMessage {
   rates: TopicRates
   /** A recording or a replay of an episode that the backend runs right now. */
   session?: EpisodeSession
+  /** The pre-written movement that plays right now (the repo's `movements/` folder); null = none. */
+  movement?: MovementStatus | null
+}
+
+export interface MovementStatus {
+  name: string
+  title: string
+  /** Steps sent so far, of `steps`. */
+  step: number
+  steps: number
+}
+
+/** One file of `movements/`; `error` says why a file cannot be played. */
+export interface Movement {
+  name: string
+  title: string
+  description: string
+  seconds: number
+  error: string | null
 }
 
 /** `frames` is the length of the episode being replayed; a recording has no end yet. */

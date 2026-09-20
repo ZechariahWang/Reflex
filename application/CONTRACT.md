@@ -105,6 +105,12 @@ Record what the console sees and play it back, from the Episodes bar of the page
 - The running one is `session` in `/ws/state`: `{"mode": "idle"}` or `{"mode": "recording"|"replaying", "dataset", "episode", "frame", "frames"}` (`frames` null while recording).
 - On disk: `RECORDINGS_DIR` (default `policy/datasets/console/`, ignored by git) `/<dataset>/meta.json` + `episode_NNN/frames.jsonl` + `episode_NNN/camera{1,2}/NNNNNN.jpg`. `python -m lerobot_robot_exo_hand.from_console --root <dataset>` (in `policy/`) turns a dataset into a LeRobot one.
 
+### Movements: `GET /api/movements`, `POST /api/movements/{play|stop}`
+The pre-written movements of the repo's `movements/` folder (`MOVEMENTS_DIR`; format in its README: a Python file with `TITLE` and `steps()` -> `[(pose, seconds), ...]`), in the Movement dropdown of the Episodes bar (`app/movements.py`).
+- `GET` -> `[{"name", "title", "description", "seconds", "error"}]`; a file that does not load is listed with its `error` and cannot be played. Files are read again on every call: an edited movement needs no restart.
+- `play` `{"name": "hot_cross_buns"}`: each pose is published on `/hand/command`, then nothing for that step's seconds. 409 with a `detail` while another movement or a replay runs; a movement MAY play while an episode is recorded (that records a demonstration). `stop` ends it; the hand stays where it is.
+- The running one is `movement` in `/ws/state`: `null` or `{"name", "title", "step", "steps"}`.
+
 ### `WS /ws/mirror`
 Mirror teleop (`docs/specs/mirror-teleop-design.md`): the controller's webcam in, `/hand/command` out. One client at a time: a second one is accepted and closed with 1013 and a reason. The frames are tracked (MediaPipe `HandLandmarker`) and dropped; nothing of them reaches ROS.
 

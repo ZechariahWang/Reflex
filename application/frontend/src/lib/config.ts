@@ -13,6 +13,7 @@ export const API = {
   urdf: `${BACKEND_URL}/api/urdf`,
   linkage: `${BACKEND_URL}/api/linkage`,
   episodes: `${BACKEND_URL}/api/episodes`,
+  movements: `${BACKEND_URL}/api/movements`,
   /** A `package://htn_description/meshes/<name>` visual of the URDF. */
   mesh: (name: string) => `${BACKEND_URL}/api/meshes/${encodeURIComponent(name)}`,
 } as const

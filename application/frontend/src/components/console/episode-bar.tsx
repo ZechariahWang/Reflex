@@ -5,16 +5,16 @@ import { useCallback, useEffect, useState } from "react"
 import { StatusDot } from "@/components/console/status-dot"
 import { Button } from "@/components/ui/button"
 import { API } from "@/lib/config"
-import { selectSession, selectSessionMode, useSimStore } from "@/lib/sim-store"
-import type { EpisodeDataset } from "@/lib/types"
+import { selectMovement, selectMovementName, selectSession, selectSessionMode, useSimStore } from "@/lib/sim-store"
+import type { EpisodeDataset, Movement } from "@/lib/types"
 
 const FIELD =
   "h-6 min-w-0 rounded-[2px] border border-border bg-surface px-1.5 font-mono text-[11px] text-ink outline-none focus:border-ink-mute disabled:opacity-50"
 const ACTION = "label-micro h-6 rounded-[2px] bg-surface"
 
-async function call(path: string, body?: object): Promise<{ ok: boolean; data: unknown }> {
+async function call(path: string, body?: object, base: string = API.episodes): Promise<{ ok: boolean; data: unknown }> {
   try {
-    const response = await fetch(`${API.episodes}${path}`, {
+    const response = await fetch(`${base}${path}`, {
       method: body ? "POST" : "GET",
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
@@ -145,15 +145,84 @@ export function EpisodeBar() {
         </Button>
       )}
 
+      <span className="h-4 w-px bg-border" aria-hidden />
+
+      <MovementPlayer replaying={mode === "replaying"} onError={setError} />
+
       <Progress />
       {error && <span className="label-micro tracking-normal text-signal normal-case">{error}</span>}
     </section>
   )
 }
 
+/**
+ * Pre-written movements: the scripts of the repo's `movements/` folder (hot cross buns on three
+ * keys, ...). One can play while an episode is recorded - that records a demonstration.
+ */
+function MovementPlayer({ replaying, onError }: { replaying: boolean; onError: (error: string | null) => void }) {
+  const playing = useSimStore(selectMovementName)
+  const [movements, setMovements] = useState<Movement[]>([])
+  const [name, setName] = useState("")
+
+  useEffect(() => {
+    void call("", undefined, API.movements).then(({ ok, data }) => {
+      if (ok && Array.isArray(data)) setMovements(data as Movement[])
+    })
+  }, [])
+
+  const chosen = movements.find((movement) => movement.name === name) ?? movements[0]
+  const report = ({ ok, data }: { ok: boolean; data: unknown }) =>
+    onError(ok ? null : ((data as { detail?: string }).detail ?? "request failed"))
+
+  return (
+    <>
+      <select
+        aria-label="Movement"
+        value={chosen?.name ?? ""}
+        disabled={playing !== null || movements.length === 0}
+        onChange={(event) => setName(event.target.value)}
+        title={chosen?.error ?? chosen?.description}
+        className={`${FIELD} w-44`}
+      >
+        {movements.length === 0 && <option value="">no movements</option>}
+        {movements.map((movement) => (
+          <option key={movement.name} value={movement.name} disabled={movement.error !== null}>
+            {movement.title} · {movement.error ? "broken" : `${movement.seconds.toFixed(0)} s`}
+          </option>
+        ))}
+      </select>
+      {playing !== null ? (
+        <Button variant="outline" size="xs" className={ACTION} onClick={() => void call("/stop", {}, API.movements).then(report)}>
+          Stop
+        </Button>
+      ) : (
+        <Button
+          variant="outline"
+          size="xs"
+          className={ACTION}
+          disabled={replaying || !chosen || chosen.error !== null}
+          onClick={() => void call("/play", { name: chosen?.name }, API.movements).then(report)}
+        >
+          Play
+        </Button>
+      )}
+    </>
+  )
+}
+
 /** Its own component: it renders at the snapshot rate, the bar around it does not. */
 function Progress() {
   const session = useSimStore(selectSession)
+  const movement = useSimStore(selectMovement)
+  if (session.mode === "idle" && movement)
+    return (
+      <span className="flex items-center gap-2">
+        <StatusDot status="live" />
+        <span className="label-micro tracking-normal text-ink normal-case">
+          playing {movement.title} · step {movement.step} of {movement.steps}
+        </span>
+      </span>
+    )
   if (session.mode === "idle") return <span className="label-micro tracking-normal normal-case">idle</span>
   const seconds = (session.frame / 30).toFixed(1)
   return (
@@ -162,6 +231,7 @@ function Progress() {
       <span className="label-micro tracking-normal text-ink normal-case">
         {session.mode} {session.dataset} / episode {session.episode} · {seconds} s
         {session.frames !== null && ` of ${(session.frames / 30).toFixed(1)} s`}
+        {movement && ` · playing ${movement.title}`}
       </span>
     </span>
   )

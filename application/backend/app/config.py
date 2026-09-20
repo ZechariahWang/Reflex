@@ -35,6 +35,8 @@ class Settings:
     mock_objects: bool = False
     # Episodes recorded from the console (app/episodes.py). Next to the LeRobot datasets, ignored by git
     recordings_dir: Path = Path(__file__).resolve().parents[3] / "policy" / "datasets" / "console"
+    # Pre-written movements for the Movement dropdown: the repo's movements/ folder (its README has the format)
+    movements_dir: Path = Path(__file__).resolve().parents[3] / "movements"
 
     @property
     def rosbridge_url(self) -> str:
@@ -60,4 +62,5 @@ class Settings:
             detect_threads=int(env.get("DETECT_THREADS", "2")),
             mock_objects=env.get("MOCK_OBJECTS", "0") == "1",
             recordings_dir=Path(env.get("RECORDINGS_DIR", str(cls.recordings_dir))),
+            movements_dir=Path(env.get("MOVEMENTS_DIR", str(cls.movements_dir))),
         )

@@ -216,7 +216,15 @@ for t in policy/lambda/tests/test_*.sh; do bash "$t"; done
 ## Inference loop
 
 Two processes on the GPU laptop. The server stays on localhost; only rosbridge
-crosses the network.
+crosses the network. The ROS side runs first: rosbridge, the two cameras, the HAL.
+
+```bash
+cp .env.example .env     # once: POLICY_CHECKPOINT = the pretrained_model folder of a checkpoint, ROS_HOST
+./run_policy.sh          # the policy server, then the robot client. Ctrl+C stops both
+```
+
+`run_policy.sh` refuses a checkpoint folder with no `model.safetensors`, and gives the client the
+instruction above. The same by hand, in two terminals:
 
 ```bash
 python -m lerobot.async_inference.policy_server --port=8080
@@ -227,11 +235,14 @@ python -m lerobot.async_inference.robot_client \
     --policy_type=smolvla --pretrained_name_or_path=<checkpoint> \
     --policy_device=cuda \
     --task="grasp and put down objects, make a peace sign at a person" \
-    --fps=15 --actions_per_chunk=20 --chunk_size_threshold=0.7 \
+    --fps=30 --actions_per_chunk=20 --chunk_size_threshold=0.7 \
     --debug_visualize_queue_size=True
 ```
 
-`--fps` is the rate of `send_action()`; the camera delivers 15 fps. The HAL must
+`--fps` (`POLICY_FPS`) is the rate of `send_action()`, and it is the tick rate of the dataset: 30
+for a dataset of the web console, the `--dataset.fps` of a `lerobot-record` one. One action of the
+model is one tick, so a lower rate plays every movement too slowly. The cameras deliver 15 fps: two
+ticks see the same picture, as in the recording. The HAL must
 be active: `ExoHand` raises if it is passive, because a passive HAL ignores
 every command. To stop the
 policy and take the hand back with teleop, stop the client: a running policy

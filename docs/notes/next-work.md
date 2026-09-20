@@ -57,15 +57,16 @@ file at the end of a session; the designs themselves are in `../specs/`.
   `blocked_*` values, `release_travel`, `hold_torque`, then `torque_limit` back up for speed).
   The three steps are in `docs/specs/contact-stop-release-design.md`, "On the hand".
 
-- **Lambda training: built, no rental run yet** (`../specs/lambda-training-design.md`,
-  `policy/README.md`, Training on a rented Lambda GPU). Tested here: the split and the error math
-  (`pytest`), the watchdog rules and `run_logged.sh` (shell tests with a fake instance), and one
-  CPU run of generator -> split -> `lerobot-train --dataset.episodes` -> `heldout eval`.
-  `launch.sh`, `setup.sh` and `pull.sh` have run nowhere. Left, in this order: fill
-  `policy/lambda/.env` (Lambda key, ssh key name, `claude setup-token`), `launch.sh --dry-run`,
-  `launch.sh --smoke-scripts`, `launch.sh --smoke`, then a real dataset and `plan.md`. Not
-  verified: that the token gives Fable, the `lerobot-train` option names of the variants, the
-  speed of the evaluation on a GPU.
+- **First policy trained; NOT yet run on the hand.** Rental `RUN-20260920T093202Z`
+  (`training/runs/RUN-20260920T093202Z/notes.md`): `default`, 5000 steps, 49 console episodes of
+  `exo_grasp` (44 train, 5 held out), A100, 1.97 steps/s, 68 min from launch to terminate. Best
+  checkpoint: `policy/outputs/train/RUN-20260920T093202Z/default/checkpoints/005000/pretrained_model`
+  (4000 is the fallback). Held-out error 0.014, near a close or an open 0.059. The base weights
+  with no fine-tune score 0.024 / 0.083 on the same episodes, so the number is a filter and no
+  proof of a grasp: the evaluation is open-loop. Next, on the GPU laptop: `policy/run_policy.sh`
+  (`policy/.env`), then the Policy switch of the console. `--fps=30` for console datasets. Not
+  run yet: `run_policy.sh` with a real model, the Policy switch against a real policy, the
+  `short_chunk` variant, a rental with Fable as the agent (this one ran Opus).
 
 ## Done and working
 

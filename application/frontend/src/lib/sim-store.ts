@@ -2,16 +2,11 @@ import { useEffect } from "react"
 import { create } from "zustand"
 
 import { WS } from "@/lib/config"
-import { FingerHistory } from "@/lib/finger-history"
 import { backoffDelay, closeQuietly } from "@/lib/socket"
 import { FINGERS, type CommandMessage, type FingerValues, type EpisodeSession, type MovementStatus, type StateMessage, type TrackedObject } from "@/lib/types"
 
 /** Rate of /ws/state. */
 export const STATE_HZ = 60
-/** Span of the per-finger history. */
-export const HISTORY_SECONDS = 10
-/** Samples held per finger. */
-export const HISTORY_CAPACITY = STATE_HZ * HISTORY_SECONDS
 /** Rate at which `snapshot` (the React-facing copy of the state) updates. */
 export const SNAPSHOT_HZ = 10
 
@@ -28,7 +23,6 @@ export interface LiveData {
   /** `performance.now()` when `message` arrived. */
   receivedAt: number
   /** Last ~10 s of `state` per finger. */
-  history: FingerHistory
 }
 
 export interface SimStore {
@@ -55,7 +49,7 @@ let lastPublish = 0
 export const useSimStore = create<SimStore>()(() => ({
   status: "connecting",
   snapshot: null,
-  live: { message: null, receivedAt: 0, history: new FingerHistory(HISTORY_CAPACITY) },
+  live: { message: null, receivedAt: 0 },
   sendCommand: (data) => {
     if (data.length !== FINGERS.length || !data.every(Number.isFinite)) return false
     if (socket?.readyState !== WebSocket.OPEN) return false
@@ -101,7 +95,6 @@ function handleMessage(event: MessageEvent): void {
   const now = performance.now()
   live.message = message
   live.receivedAt = now
-  live.history.push(message.t, message.state)
 
   const rosFlipped = snapshot?.ros_connected !== message.ros_connected
   if (rosFlipped || now - lastPublish >= 1000 / SNAPSHOT_HZ) {

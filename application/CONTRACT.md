@@ -146,7 +146,7 @@ No rosbridge connection. Joints: each finger curls on its own smooth, phase-shif
 ### Shared code every component builds on (created by the scaffold step)
 - `src/lib/config.ts` - backend URLs.
 - `src/lib/types.ts` - TypeScript types for every message above.
-- `src/lib/sim-store.ts` - zustand store: latest `/ws/state` message, connection status, a rolling history (last ~10 s) of `state` per finger for sparklines, and `sendCommand(data: number[])`. Owns the `/ws/state` socket with auto-reconnect. three.js code must read it with `useSimStore.getState()` inside `useFrame` (transient), never via React state at 30 Hz.
+- `src/lib/sim-store.ts` - zustand store: latest `/ws/state` message, connection status, and `sendCommand(data: number[])`. Owns the `/ws/state` socket with auto-reconnect. three.js code must read it with `useSimStore.getState()` inside `useFrame` (transient), never via React state at 30 Hz.
 - Per-frame rules for camera code: never put anything that changes every frame into React state (the hook hands React the same state object unless a value changed), and paint decoded frames from `requestAnimationFrame`, newest only.
 - `src/hooks/use-camera-stream.ts` - `useCameraStream(source: 'realsense' | 'iphone', kind: 'color' | 'depth')` (`iphone` has only `color`) -> `{canvasRef, meta, status, fps}`; owns the socket, decodes with `createImageBitmap`, draws to the canvas, auto-reconnects.
 - `src/components/ui/*` - shadcn components.

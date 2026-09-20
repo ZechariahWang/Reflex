@@ -21,7 +21,7 @@ const FOOTER_DELAY_S = 0.75
  */
 export default function ConsolePage() {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[2400px] flex-col gap-3 p-3 console:grid console:h-dvh console:grid-rows-[auto_minmax(0,1fr)_auto_clamp(9rem,21vh,13rem)_auto] console:overflow-hidden">
+    <main className="mx-auto flex min-h-dvh max-w-[2400px] flex-col gap-3 p-3 console:grid console:h-dvh console:grid-rows-[auto_minmax(0,1fr)_auto_clamp(9rem,18vh,11.5rem)_auto] console:overflow-hidden">
       <TopBar />
 
       <ConsoleStage />

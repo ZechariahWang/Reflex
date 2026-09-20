@@ -1,6 +1,5 @@
 "use client"
 
-import { Sparkline } from "@/components/telemetry/sparkline"
 import { TweenedNumber } from "@/components/console/tweened-number"
 import { FINGERS } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -58,7 +57,6 @@ export function FingerColumn({ finger, flow, state, command, radians }: FingerCo
             cmd <TweenedNumber value={target} duration={0.1} delay={COUNT_UP_DELAY_S} className="text-ink-soft" />
           </span>
         </div>
-        <Sparkline finger={finger} dimmed={flow !== "live"} className="h-10 shrink-0 console:h-auto console:flex-1" />
       </div>
 
       {/* No CSS transitions here: a transition restarted at the 10 Hz snapshot rate falls behind on a slow renderer. */}

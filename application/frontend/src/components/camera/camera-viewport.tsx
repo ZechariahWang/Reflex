@@ -24,13 +24,13 @@ import { cn } from "@/lib/utils"
 /** One panel per camera. The RealSense shows either of its two images; the iPhone has colour only. */
 const PANELS: Record<CameraSource, { index: string; title: string; tags: Partial<Record<CameraKind, string>>; lost: string }> = {
   realsense: {
-    index: "03",
+    index: "02",
     title: "RealSense",
     tags: { color: "/camera/color", depth: "/camera/aligned_depth" },
     lost: "camera:=none or unplugged",
   },
   iphone: {
-    index: "04",
+    index: "03",
     title: "iPhone",
     tags: { color: "/head_camera/color" },
     lost: "no frames: start `head_camera:=iphone`, see the node log",

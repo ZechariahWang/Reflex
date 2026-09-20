@@ -52,7 +52,7 @@ const CAPTURE_ERRORS: Record<string, string> = {
   range: "a finger moved too little between fist and open: start again",
 }
 
-/** Panel 02 while Mirror is on (`MirrorPanel`): the controller's webcam, what the backend sees in it, and what it sends. */
+/** Panel 04, on the page only while Mirror is on (`ConsoleStage`): the controller's webcam, what the backend sees in it, and what it sends. */
 export function MirrorViewport() {
   const overlayRef = useRef<HTMLCanvasElement | null>(null)
   const barRefs = useRef<(HTMLSpanElement | null)[]>([])
@@ -112,7 +112,7 @@ export function MirrorViewport() {
 
   return (
     <Panel
-      index="02"
+      index="04"
       title="Mirror"
       tag="/ws/mirror"
       status={shown.status}

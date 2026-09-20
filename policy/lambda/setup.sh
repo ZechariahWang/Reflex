@@ -11,6 +11,21 @@ REPO="$(cd "$DIR/../.." && pwd)"
 source "$DIR/rental.env"
 step() { printf '\n=== %s ===\n' "$1"; }
 
+# The scripts smoke level has no agent: whatever fails, it asks for the pull and the terminate
+if [[ "$MODE" == smoke-scripts ]]; then
+  finish() {
+    step "Fetch, check the receipt, terminate"
+    touch "$DIR/.watchdog-fetch"
+    for _ in $(seq 1 60); do
+      [[ "$DIR/.pull-receipt" -nt "$DIR/.watchdog-fetch" ]] && break
+      sleep 10
+    done
+    grep -E 'pretrained_model/model.safetensors|results.jsonl' "$DIR/.pull-receipt" || echo "SMOKE FAILED: no checkpoint or no results.jsonl in the receipt"
+    touch "$DIR/.watchdog-terminate"
+  }
+  trap finish EXIT
+fi
+
 step "Python environment (uv, FFmpeg, lerobot)"
 # The untouched code: the agent makes its patch files with `diff -ru` against this copy
 mkdir -p ~/pristine && cp -a "$REPO/policy/lerobot_robot_exo_hand" "$REPO/policy/lambda" ~/pristine/
@@ -21,7 +36,10 @@ command -v uv >/dev/null 2>&1 || curl -LsSf https://astral.sh/uv/install.sh | sh
 command -v ffmpeg >/dev/null 2>&1 || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg
 cd "$REPO/policy"
 uv venv --python 3.12 --allow-existing
-uv pip install --python .venv/bin/python -e . "lerobot[smolvla,training]==0.6.1"
+# auto: the torch build for the CUDA version of this driver. The default wheel is for a newer
+# CUDA than the driver of a Lambda image has, and torch then sees no GPU.
+uv pip install --python .venv/bin/python --torch-backend=auto --reinstall-package torch --reinstall-package torchvision \
+  -e . "lerobot[smolvla,training]==0.6.1"
 .venv/bin/python -c "import torch, sys; ok = torch.cuda.is_available(); print('torch', torch.__version__, 'cuda', ok); sys.exit(0 if ok else 1)" \
   || { echo "error: torch sees no CUDA GPU" >&2; exit 1; }
 
@@ -36,17 +54,6 @@ if [[ "$MODE" == smoke-scripts ]]; then
   run="RUN-$(date -u +%Y%m%dT%H%M%SZ)"
   notes="$REPO/docs/notes/training/runs/$run"
   mkdir -p "$notes"
-  finish() {
-    step "Fetch, check the receipt, terminate"
-    touch "$DIR/.watchdog-fetch"
-    for _ in $(seq 1 60); do
-      [[ "$DIR/.pull-receipt" -nt "$DIR/.watchdog-fetch" ]] && break
-      sleep 10
-    done
-    grep -E 'pretrained_model/model.safetensors|results.jsonl' "$DIR/.pull-receipt" || echo "SMOKE FAILED: no checkpoint or no results.jsonl in the receipt"
-    touch "$DIR/.watchdog-terminate"
-  }
-  trap finish EXIT
   step "Split, 50 training steps, one evaluation"
   .venv/bin/python -m lerobot_robot_exo_hand.heldout split --root "datasets/$DATASET" | tee "$notes/notes.md"
   train="$(sed -n 's/^train=//p' "$notes/notes.md")"

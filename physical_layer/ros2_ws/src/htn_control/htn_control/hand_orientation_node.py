@@ -39,6 +39,14 @@ class HandOrientation(Node):
         self.create_subscription(Imu, '/camera/imu', self.on_imu, qos_profile_sensor_data)
         self.create_service(Trigger, '/hand/reset_yaw', self.on_reset)
         self.create_timer(1.0 / rate, self.publish)
+        self.silence_check = self.create_timer(8.0, self.on_silence)
+
+    def on_silence(self):
+        self.silence_check.cancel()  # once
+        if self.filter.r is None:
+            self.get_logger().warning(
+                'No samples on /camera/imu: no /hand/orientation, the 3D hand will not turn. A RealSense D435 '
+                '(USB id 8086:0b07) has no IMU - it takes a D435i (8086:0b3a). Check with `lsusb`.')
 
     def on_imu(self, message):
         stamp = message.header.stamp.sec + message.header.stamp.nanosec * 1e-9

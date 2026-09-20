@@ -128,7 +128,9 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
     `camera.launch.py`) -> `/hand/orientation`. A complementary filter: gyro integrated,
     tilt pulled to gravity, gyro bias learnt while the hand lies still. The samples are
     turned into `base_link` with `camera.rpy` of `hand_params.yaml`. Started with the
-    RealSense; with a camera that has no IMU it publishes nothing.
+    RealSense; with a camera that has no IMU it publishes nothing and says so once in the
+    log. The camera on the hand on 2026-09-19 is a plain D435 (`lsusb`: 8086:0b07), which
+    has NO IMU; a D435i is 8086:0b3a.
   - `iphone_camera_node.py` + `iphone_worker.py`: the forehead iPhone (Record3D
     app in USB Streaming mode) as `/head_camera/color/image_raw/compressed` +
     `camera_info`, and its LiDAR depth on the same pixels as

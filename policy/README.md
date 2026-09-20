@@ -58,7 +58,24 @@ lerobot-record \
 Right arrow = save the episode, left arrow = record it again, Esc = stop (the keys
 may not work on Wayland; `episode_time_s` is the upper limit then).
 
-## Replay of a recording
+## Data collection from the web console
+
+The Episodes bar of the console (under the 3D hand) records without LeRobot on the ROS machine:
+type a dataset name and the task, **Record**, move the hand (mirror, sliders, keys), **Save** or
+**Discard**; **Replay** plays an episode back on the hand and in the camera panels. The episodes are
+in `policy/datasets/console/<name>/` in the console's own format
+(`application/CONTRACT.md`, Episodes). On the machine that trains:
+
+```bash
+python -m lerobot_robot_exo_hand.from_console --root policy/datasets/console/exo_grasp
+```
+
+writes `policy/datasets/exo_grasp`, a LeRobot dataset with the same columns as `lerobot-record`
+below (`observation.state`, `action` = the last command, `camera1`, `camera2`). Not run against
+lerobot yet when it was written: check the first conversion with `lerobot-dataset-viz` or the
+replay below.
+
+## Replay of a LeRobot dataset
 
 ```bash
 python -m lerobot_robot_exo_hand.replay --root policy/datasets/exo_grasp --episode 0 --host <ros-ip>

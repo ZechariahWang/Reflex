@@ -33,6 +33,8 @@ class Settings:
     detect_threads: int = 2
     # Live ROS, but synthetic objects: a sim has no camera, and the map view still needs something to show
     mock_objects: bool = False
+    # Episodes recorded from the console (app/episodes.py). Next to the LeRobot datasets, ignored by git
+    recordings_dir: Path = Path(__file__).resolve().parents[3] / "policy" / "datasets" / "console"
 
     @property
     def rosbridge_url(self) -> str:
@@ -57,4 +59,5 @@ class Settings:
             detect_hz=float(env.get("DETECT_HZ", "4")),
             detect_threads=int(env.get("DETECT_THREADS", "2")),
             mock_objects=env.get("MOCK_OBJECTS", "0") == "1",
+            recordings_dir=Path(env.get("RECORDINGS_DIR", str(cls.recordings_dir))),
         )

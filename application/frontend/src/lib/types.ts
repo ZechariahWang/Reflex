@@ -61,6 +61,21 @@ export interface StateMessage {
   /** The surroundings: objects the backend currently tracks (empty without a detector). */
   objects: TrackedObject[]
   rates: TopicRates
+  /** A recording or a replay of an episode that the backend runs right now. */
+  session?: EpisodeSession
+}
+
+/** `frames` is the length of the episode being replayed; a recording has no end yet. */
+export type EpisodeSession =
+  | { mode: "idle" }
+  | { mode: "recording" | "replaying"; dataset: string; episode: number; frame: number; frames: number | null }
+
+/** One recorded dataset: `episodes[i]` is the number of frames of episode i. */
+export interface EpisodeDataset {
+  name: string
+  task: string
+  fps: number
+  episodes: number[]
 }
 
 /** Client -> server on /ws/state. */

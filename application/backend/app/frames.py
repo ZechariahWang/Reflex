@@ -49,6 +49,11 @@ class LatestChannel(Generic[T]):
                 waiter.set_result(None)
         self._waiters.clear()
 
+    @property
+    def version(self) -> int:
+        """Goes up with every publish: whoever polls `latest` sees whether it is a new item."""
+        return self._seq
+
     async def next(self, seen: int) -> tuple[int, T]:
         """Wait for an item newer than sequence number `seen` (0 = any)."""
         while self._seq == seen or self.latest is None:

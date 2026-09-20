@@ -15,7 +15,10 @@ from fastapi import FastAPI, HTTPException, Response, WebSocket, WebSocketDiscon
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from pydantic import BaseModel
+
 from .config import Settings
+from .episodes import EpisodeError, Episodes
 from .hub import CAMERA_STREAMS, Hub, Source, parse_command, parse_passive, ticks
 from .frames import LatestChannel
 from .mirror.session import MirrorSession, Tracker, parse_calibrate
@@ -125,6 +128,22 @@ class Readiness:
         self._ready.clear()
 
 
+class RecordRequest(BaseModel):
+    dataset: str
+    task: str = ""
+
+
+class ReplayRequest(BaseModel):
+    dataset: str
+    episode: int
+    what: str = "action"
+    speed: float = 1.0
+
+
+class StopRequest(BaseModel):
+    keep: bool = True
+
+
 def create_app(settings: Settings) -> FastAPI:
     hub = Hub(settings)
     source: Source = MockSource(hub) if settings.mock else RosClient(settings, hub)
@@ -157,6 +176,38 @@ def create_app(settings: Settings) -> FastAPI:
     def health() -> dict:
         return hub.health(source.connected)
 
+    # Episodes: record what the console sees and play it back (app/episodes.py). The status of a
+    # running recording or replay is `session` in /ws/state.
+    episodes = Episodes(settings.recordings_dir, hub, source.send_command)
+
+    def refuse(error: EpisodeError) -> HTTPException:
+        return HTTPException(status.HTTP_409_CONFLICT, str(error))
+
+    @app.get("/api/episodes")
+    def list_episodes() -> dict:
+        return {"session": episodes.status(), "datasets": episodes.datasets()}
+
+    @app.post("/api/episodes/record")
+    async def record_episode(request: RecordRequest) -> dict:
+        try:
+            episodes.start_recording(request.dataset, request.task)
+        except EpisodeError as error:
+            raise refuse(error) from error
+        return episodes.status()
+
+    @app.post("/api/episodes/replay")
+    async def replay_episode(request: ReplayRequest) -> dict:
+        try:
+            episodes.start_replay(request.dataset, request.episode, request.what, request.speed)
+        except EpisodeError as error:
+            raise refuse(error) from error
+        return episodes.status()
+
+    @app.post("/api/episodes/stop")
+    async def stop_episode(request: StopRequest) -> dict:
+        await episodes.stop(request.keep)
+        return {"session": episodes.status(), "datasets": episodes.datasets()}
+
     @app.get("/api/urdf")
     def urdf() -> Response:
         xml = hub.urdf
@@ -185,7 +236,7 @@ def create_app(settings: Settings) -> FastAPI:
     async def ws_state(ws: WebSocket) -> None:
         async def send_state() -> None:
             async for _ in ticks(STATE_PERIOD_S):
-                await ws.send_text(json.dumps(hub.snapshot(source.connected)))
+                await ws.send_text(json.dumps({**hub.snapshot(source.connected), "session": episodes.status()}))
 
         def on_text(text: str) -> None:
             values = parse_command(text)

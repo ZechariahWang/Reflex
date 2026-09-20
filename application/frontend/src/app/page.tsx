@@ -1,6 +1,7 @@
 import * as motion from "motion/react-client"
 
 import { CameraViewport } from "@/components/camera/camera-viewport"
+import { EpisodeBar } from "@/components/console/episode-bar"
 import { TopBar } from "@/components/console/top-bar"
 import { HandViewport } from "@/components/hand/hand-viewport"
 import { MirrorPanel } from "@/components/mirror/mirror-panel"
@@ -23,7 +24,7 @@ const FOOTER_DELAY_S = 0.75
  */
 export default function ConsolePage() {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[2400px] flex-col gap-3 p-3 console:grid console:h-dvh console:grid-rows-[auto_minmax(0,1fr)_clamp(9rem,21vh,13rem)_auto] console:overflow-hidden">
+    <main className="mx-auto flex min-h-dvh max-w-[2400px] flex-col gap-3 p-3 console:grid console:h-dvh console:grid-rows-[auto_minmax(0,1fr)_auto_clamp(9rem,21vh,13rem)_auto] console:overflow-hidden">
       <TopBar />
 
       <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] gap-3 console:grid-cols-[minmax(0,46fr)_minmax(0,27fr)_minmax(0,27fr)]">
@@ -42,6 +43,8 @@ export default function ConsolePage() {
           </div>
         </div>
       </div>
+
+      <EpisodeBar />
 
       <div className="min-h-0">
         <TelemetryStrip />

@@ -97,6 +97,14 @@ Right after connect, and whenever it changes, the server also sends a JSON **tex
 ```
 (`min_mm`/`max_mm` only on depth.) `available: false` = no frame received in the last 2 s.
 
+### Episodes: `GET /api/episodes`, `POST /api/episodes/{record|replay|stop}`
+Record what the console sees and play it back, from the Episodes bar of the page (`app/episodes.py`; one recording or replay at a time, anything else is a 409 with a `detail` text).
+- `GET` -> `{"session": {...}, "datasets": [{"name", "task", "fps", "episodes": [<frames of episode 0>, ...]}]}`.
+- `record` `{"dataset": "exo_grasp", "task": "grasp the bottle"}`: a new episode of that dataset at 30 ticks a second - `/hand/state`, the last `/hand/command` as the action (the state until somebody commands), and the newest colour JPEG of the head camera (`camera1`) and the wrist camera (`camera2`), each written once. `stop` `{"keep": true|false}` saves or discards it and answers like `GET`.
+- `replay` `{"dataset", "episode", "what": "action"|"state", "speed": 0.1 .. 4}`: the recorded values are published on `/hand/command` again and the recorded JPEGs take the colour panels (live colour frames are dropped meanwhile, the rates still count them). `stop` ends it.
+- The running one is `session` in `/ws/state`: `{"mode": "idle"}` or `{"mode": "recording"|"replaying", "dataset", "episode", "frame", "frames"}` (`frames` null while recording).
+- On disk: `RECORDINGS_DIR` (default `policy/datasets/console/`, ignored by git) `/<dataset>/meta.json` + `episode_NNN/frames.jsonl` + `episode_NNN/camera{1,2}/NNNNNN.jpg`. `python -m lerobot_robot_exo_hand.from_console --root <dataset>` (in `policy/`) turns a dataset into a LeRobot one.
+
 ### `WS /ws/mirror`
 Mirror teleop (`docs/specs/mirror-teleop-design.md`): the controller's webcam in, `/hand/command` out. One client at a time: a second one is accepted and closed with 1013 and a reason. The frames are tracked (MediaPipe `HandLandmarker`) and dropped; nothing of them reaches ROS.
 

@@ -12,6 +12,7 @@ export const API = {
   health: `${BACKEND_URL}/api/health`,
   urdf: `${BACKEND_URL}/api/urdf`,
   linkage: `${BACKEND_URL}/api/linkage`,
+  episodes: `${BACKEND_URL}/api/episodes`,
   /** A `package://htn_description/meshes/<name>` visual of the URDF. */
   mesh: (name: string) => `${BACKEND_URL}/api/meshes/${encodeURIComponent(name)}`,
 } as const

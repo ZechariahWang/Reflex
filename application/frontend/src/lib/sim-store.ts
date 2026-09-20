@@ -4,7 +4,7 @@ import { create } from "zustand"
 import { WS } from "@/lib/config"
 import { FingerHistory } from "@/lib/finger-history"
 import { backoffDelay, closeQuietly } from "@/lib/socket"
-import { FINGERS, type CommandMessage, type FingerValues, type StateMessage, type TrackedObject } from "@/lib/types"
+import { FINGERS, type CommandMessage, type FingerValues, type EpisodeSession, type StateMessage, type TrackedObject } from "@/lib/types"
 
 /** Rate of /ws/state. */
 export const STATE_HZ = 60
@@ -162,6 +162,9 @@ const NO_OBJECTS: TrackedObject[] = []
 export const selectObjects = (s: SimStore): TrackedObject[] => s.snapshot?.objects ?? NO_OBJECTS
 /** Which objects exist, as one string: components that key children by id re-render only when the set changes. */
 export const selectObjectIds = (s: SimStore): string => (s.snapshot?.objects ?? NO_OBJECTS).map((o) => o.id).join(",")
+const IDLE: EpisodeSession = { mode: "idle" }
+export const selectSessionMode = (s: SimStore): EpisodeSession["mode"] => (s.snapshot?.session ?? IDLE).mode
+export const selectSession = (s: SimStore): EpisodeSession => s.snapshot?.session ?? IDLE
 export const selectRosConnected = (s: SimStore): boolean => s.snapshot?.ros_connected ?? false
 /** Socket open and ROS reachable: hand data is flowing. */
 export const selectIsLive = (s: SimStore): boolean => s.status === "open" && selectRosConnected(s)

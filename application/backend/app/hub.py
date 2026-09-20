@@ -148,6 +148,7 @@ class Hub:
         self._realsense_seen = -math.inf
         self._head_depth: bytes | None = None
         self._head_intrinsics: Intrinsics | None = None
+        self.replaying = False  # a recorded episode owns the colour panels: live frames are dropped
         self.frames: dict[str, dict[str, LatestChannel[Frame]]] = {
             source: {kind: LatestChannel() for kind in kinds} for source, kinds in CAMERA_STREAMS.items()
         }
@@ -223,6 +224,8 @@ class Hub:
 
     def on_color(self, jpeg: bytes) -> None:
         self._tick("color")
+        if self.replaying:
+            return
         width, height = jpeg_size(jpeg)
         self._to_loop(self.frames["realsense"]["color"].publish, Frame(jpeg, width, height))
         self._realsense_seen = time.monotonic()
@@ -235,6 +238,8 @@ class Hub:
     def on_head_color(self, jpeg: bytes) -> None:
         """The head camera (the iPhone node): already rotated and sized, so the JPEG passes through."""
         self._tick("iphone")
+        if self.replaying:
+            return
         width, height = jpeg_size(jpeg)
         self._to_loop(self.frames["iphone"]["color"].publish, Frame(jpeg, width, height))
         if time.monotonic() - self._realsense_seen > DETECT_FALLBACK_S:
@@ -317,6 +322,16 @@ class Hub:
     def hand_state(self) -> list[float]:
         with self._lock:
             return list(self._state)
+
+    @property
+    def hand_command(self) -> list[float] | None:
+        with self._lock:
+            return None if self._command is None else list(self._command)
+
+    def show_recorded(self, source: str, jpeg: bytes) -> None:
+        """A colour frame of a replayed episode, in the place of the live camera's. Event-loop thread."""
+        width, height = jpeg_size(jpeg)
+        self.frames[source]["color"].publish(Frame(jpeg, width, height))
 
     @property
     def urdf(self) -> str | None:

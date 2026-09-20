@@ -110,6 +110,10 @@ The pre-written movements of the repo's `movements/` folder (`MOVEMENTS_DIR`; fo
 - `GET` -> `[{"name", "title", "description", "seconds", "error"}]`; a file that does not load is listed with its `error` and cannot be played. Files are read again on every call: an edited movement needs no restart.
 - `play` `{"name": "hot_cross_buns"}`: each pose is published on `/hand/command`, then nothing for that step's seconds. 409 with a `detail` while another movement or a replay runs; a movement MAY play while an episode is recorded (that records a demonstration). `stop` ends it; the hand stays where it is.
 - The running one is `movement` in `/ws/state`: `null` or `{"name", "title", "step", "steps"}`.
+- Teaching (what `mcp_server/` uses; no page for it): `PUT /api/movements/{name}` `{"title", "description", "steps": [{"pose": [5 values], "seconds"}]}` writes `movements/<name>.py`, a readable file with the path as a literal list and a first line that marks it as taught; `GET /api/movements/{name}` gives the steps back with `taught`; `DELETE` removes it. A name is `[a-z][a-z0-9_]*`. A file WITHOUT that first line was written by a person: it is listed, read and played, and a `PUT` or `DELETE` on it is a 409.
+
+### For clients that are not a page: `GET /api/state`, `POST /api/command`
+`GET /api/state` is one `/ws/state` message. `POST /api/command` `{"values": [thumb, index, middle, ring, pinky]}` publishes one `/hand/command` (clamped to 0..1, 422 if it is not 5 finite numbers) and answers `{"sent": [...]}`. Unlike the page there is no ARM switch in front of it: whoever can reach the backend can move the hand.
 
 ### `WS /ws/mirror`
 Mirror teleop (`docs/specs/mirror-teleop-design.md`): the controller's webcam in, `/hand/command` out. One client at a time: a second one is accepted and closed with 1013 and a reason. The frames are tracked (MediaPipe `HandLandmarker`) and dropped; nothing of them reaches ROS.

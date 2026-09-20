@@ -18,6 +18,9 @@ everything else goes in a top-level subfolder per concern.
   of the contracts below; interfaces are in `application/CONTRACT.md`.
 - `movements/` - pre-written movements of the hand (hot cross buns on three keys, ...): one small
   Python file each, listed and played by the web console. Format in `movements/README.md`.
+- `mcp_server/` - an MCP server (Python, its own venv, no ROS): any MCP client can read the hand,
+  move it, run skills and teach new ones. A skill is a taught movement = a hard-coded path saved
+  into `movements/`. A thin client of the web backend's HTTP API. See `mcp_server/README.md`.
 - `docs/` - design documents. Read `docs/system-design.md` (devices, ROS
   layout, policy, safety, open questions) before design work. Specs for single features go in `docs/specs/`.
   `docs/notes/next-work.md` says where the work stopped: read it at the start of a session.

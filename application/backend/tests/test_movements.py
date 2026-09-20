@@ -78,3 +78,54 @@ def test_stop_ends_a_movement_at_once(tmp_path):
         return sent, movements.status(), movements.playing
 
     assert asyncio.run(scenario()) == ([[0.0] * 5], None, False)
+
+
+def test_a_taught_path_becomes_a_readable_file_that_plays_and_can_be_taught_again(tmp_path):
+    movements = Movements(tmp_path, print)
+    steps = [{"pose": [0, 0, 0, 0, 0], "seconds": 0.5}, {"pose": [0.2, 1, 1.4, 0, 0], "seconds": 1}]
+
+    taught = movements.teach("peace_sign", "Peace", "two fingers", steps)
+
+    assert taught["taught"] and taught["title"] == "Peace"
+    assert taught["steps"][1] == {"pose": [0.2, 1.0, 1.0, 0.0, 0.0], "seconds": 1.0}, "clamped like any command"
+    text = (tmp_path / "peace_sign.py").read_text()
+    assert "STEPS = [" in text and "([0.2, 1.0, 1.0, 0.0, 0.0], 1.0)," in text
+    assert [m["name"] for m in movements.listing()] == ["peace_sign"]
+    movements.teach("peace_sign", "Peace 2", "", steps[:1])  # teaching it again replaces it
+    assert movements.read("peace_sign")["title"] == "Peace 2"
+    movements.forget("peace_sign")
+    assert movements.listing() == []
+
+
+def test_a_movement_written_by_hand_is_never_replaced_or_deleted_through_the_api(tmp_path):
+    script(tmp_path, "mine", "def steps():\n    return [([0] * 5, 1.0)]\n")
+    movements = Movements(tmp_path, print)
+
+    for attempt in (lambda: movements.teach("mine", "", "", [([1] * 5, 1.0)]), lambda: movements.forget("mine")):
+        with pytest.raises(MovementError, match="by hand"):
+            attempt()
+    assert not movements.read("mine")["taught"]
+    for bad in ("../x", "Caps", "", "a" * 60):
+        with pytest.raises(MovementError):
+            movements.teach(bad, "", "", [([0] * 5, 1.0)])
+    with pytest.raises(MovementError):
+        movements.teach("empty", "", "", [])
+
+
+def test_teach_run_and_command_over_http(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    with TestClient(create_app(Settings(mock=True, movements_dir=tmp_path))) as client:
+        body = {"title": "Fist", "steps": [{"pose": [1, 1, 1, 1, 1], "seconds": 0.2}]}
+        assert client.put("/api/movements/fist", json=body).json()["taught"] is True
+        assert client.put("/api/movements/Bad Name", json=body).status_code == 409
+        assert client.get("/api/movements/fist").json()["steps"] == [{"pose": [1.0] * 5, "seconds": 0.2}]
+        assert client.get("/api/movements/nothing").status_code == 404
+        assert client.post("/api/movements/play", json={"name": "fist"}).json()["title"] == "Fist"
+        assert client.get("/api/state").json()["movement"]["name"] == "fist"
+        assert client.post("/api/command", json={"values": [0, 0.5, 2, 0, 0]}).json() == {"sent": [0.0, 0.5, 1.0, 0.0, 0.0]}
+        assert client.post("/api/command", json={"values": [0, 0]}).status_code == 422
+        client.post("/api/movements/stop")
+        assert client.delete("/api/movements/fist").status_code == 200

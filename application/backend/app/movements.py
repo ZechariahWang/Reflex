@@ -7,6 +7,7 @@ import asyncio
 import importlib.util
 import logging
 import math
+import re
 from pathlib import Path
 from typing import Callable
 
@@ -17,6 +18,10 @@ MAX_STEP_S = 30.0
 FINGER_COUNT = 5
 
 Step = tuple[list[float], float]
+NAME = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
+# First line of a file that was written through the API (teach). Only such a file may be
+# overwritten or deleted through it: a movement somebody wrote by hand is never touched.
+TAUGHT = "# Taught through the console API (PUT /api/movements/<name>): a hard-coded path."
 
 
 class MovementError(ValueError):
@@ -32,25 +37,41 @@ def load(path: Path) -> dict:
         raw = list(module.steps())
     except Exception as error:
         raise MovementError(f"{path.name}: {type(error).__name__}: {error}") from error
-    if not 0 < len(raw) <= MAX_STEPS:
-        raise MovementError(f"{path.name}: steps() gave {len(raw)} steps, it must be 1 .. {MAX_STEPS}")
-    steps: list[Step] = []
-    for number, step in enumerate(raw):
-        try:
-            pose, seconds = step
-            values = [min(1.0, max(0.0, float(v))) for v in pose]
-            seconds = float(seconds)
-        except (TypeError, ValueError) as error:
-            raise MovementError(f"{path.name}: step {number} is not (pose, seconds)") from error
-        if len(values) != FINGER_COUNT or not all(map(math.isfinite, values)) or not 0.0 < seconds <= MAX_STEP_S:
-            raise MovementError(f"{path.name}: step {number} needs {FINGER_COUNT} values and 0 < seconds <= {MAX_STEP_S:g}")
-        steps.append((values, seconds))
+    steps = check(raw, path.name)
     return {
         "name": path.stem,
         "title": str(getattr(module, "TITLE", path.stem)),
         "description": str(getattr(module, "DESCRIPTION", "")),
         "steps": steps,
     }
+
+
+def check(steps: list, where: str) -> list[Step]:
+    """(pose, seconds) pairs as they come -> clean steps; MovementError says what is wrong."""
+    if not 0 < len(steps) <= MAX_STEPS:
+        raise MovementError(f"{where}: {len(steps)} steps, it must be 1 .. {MAX_STEPS}")
+    out: list[Step] = []
+    for number, step in enumerate(steps):
+        try:
+            pose, seconds = step
+            values = [min(1.0, max(0.0, float(v))) for v in pose]
+            seconds = float(seconds)
+        except (TypeError, ValueError) as error:
+            raise MovementError(f"{where}: step {number} is not (pose, seconds)") from error
+        if len(values) != FINGER_COUNT or not all(map(math.isfinite, values)) or not 0.0 < seconds <= MAX_STEP_S:
+            raise MovementError(f"{where}: step {number} needs {FINGER_COUNT} values and 0 < seconds <= {MAX_STEP_S:g}")
+        out.append((values, seconds))
+    return out
+
+
+def source_of(title: str, description: str, steps: list[Step]) -> str:
+    """The Python file of a taught movement: the path as a literal list, readable and editable by hand."""
+    rows = "".join(f"    ({[round(v, 3) for v in pose]}, {round(seconds, 3)}),\n" for pose, seconds in steps)
+    return (
+        f"{TAUGHT}\n"
+        f"# Pose order: thumb, index, middle, ring, pinky; 0 = open .. 1 = closed. (pose, seconds to wait after it)\n\n"
+        f"TITLE = {title!r}\nDESCRIPTION = {description!r}\n\nSTEPS = [\n{rows}]\n\n\ndef steps():\n    return STEPS\n"
+    )
 
 
 class Movements:
@@ -100,6 +121,43 @@ class Movements:
                 await asyncio.sleep(seconds)
         finally:
             self._status = None
+
+    def read(self, name: str) -> dict:
+        """One movement with its steps, e.g. to change it and teach it again."""
+        path = self._path(name)
+        if not path.is_file():
+            raise MovementError(f"no movement called {name}")
+        movement = load(path)
+        return {**movement, "steps": [{"pose": pose, "seconds": seconds} for pose, seconds in movement["steps"]],
+                "taught": self._taught(path)}
+
+    def teach(self, name: str, title: str, description: str, steps: list) -> dict:
+        """Write (or replace) a taught movement. A file somebody wrote by hand is refused."""
+        path = self._path(name)
+        if path.is_file() and not self._taught(path):
+            raise MovementError(f"{name} was written by hand: it is not replaced through the API, choose another name")
+        clean = check([(step["pose"], step["seconds"]) if isinstance(step, dict) else step for step in steps], name)
+        self._folder.mkdir(parents=True, exist_ok=True)
+        path.write_text(source_of(title or name, description, clean))
+        return self.read(name)
+
+    def forget(self, name: str) -> None:
+        path = self._path(name)
+        if not path.is_file():
+            raise MovementError(f"no movement called {name}")
+        if not self._taught(path):
+            raise MovementError(f"{name} was written by hand: delete the file yourself")
+        path.unlink()
+
+    def _path(self, name: str) -> Path:
+        if not NAME.fullmatch(name):
+            raise MovementError("a movement name is lower case letters, digits and _, starting with a letter")
+        return self._folder / f"{name}.py"
+
+    @staticmethod
+    def _taught(path: Path) -> bool:
+        with open(path) as f:
+            return f.readline().rstrip("\n") == TAUGHT
 
     async def stop(self) -> None:
         task, self._task = self._task, None

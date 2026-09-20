@@ -145,6 +145,21 @@ class MovementRequest(BaseModel):
     name: str
 
 
+class StepModel(BaseModel):
+    pose: list[float]
+    seconds: float
+
+
+class TeachRequest(BaseModel):
+    title: str = ""
+    description: str = ""
+    steps: list[StepModel]
+
+
+class CommandRequest(BaseModel):
+    values: list[float]
+
+
 class StopRequest(BaseModel):
     keep: bool = True
 
@@ -217,6 +232,42 @@ def create_app(settings: Settings) -> FastAPI:
     @app.get("/api/movements")
     def list_movements() -> list[dict]:
         return movements.listing()
+
+    @app.get("/api/movements/{name}")
+    def read_movement(name: str) -> dict:
+        try:
+            return movements.read(name)
+        except MovementError as error:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
+
+    @app.put("/api/movements/{name}")
+    def teach_movement(name: str, request: TeachRequest) -> dict:
+        """A hard-coded path from whoever teaches (the MCP server, a script): saved as movements/<name>.py."""
+        try:
+            return movements.teach(name, request.title, request.description, [s.model_dump() for s in request.steps])
+        except MovementError as error:
+            raise refuse(error) from error
+
+    @app.delete("/api/movements/{name}")
+    def forget_movement(name: str) -> dict:
+        try:
+            movements.forget(name)
+        except MovementError as error:
+            raise refuse(error) from error
+        return {}
+
+    # The same over plain HTTP as /ws/state gives and takes: for clients that are not a page
+    @app.get("/api/state")
+    def state() -> dict:
+        return {**hub.snapshot(source.connected), "session": episodes.status(), "movement": movements.status()}
+
+    @app.post("/api/command")
+    def command(request: CommandRequest) -> dict:
+        values = parse_command(json.dumps({"type": "command", "data": request.values}))
+        if values is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "values: 5 numbers, thumb .. pinky, 0 = open .. 1 = closed")
+        source.send_command(values)
+        return {"sent": values}
 
     @app.post("/api/movements/play")
     async def play_movement(request: MovementRequest) -> dict:

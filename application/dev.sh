@@ -13,8 +13,10 @@ export MOCK="${MOCK:-0}"
 export CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:$FRONTEND_PORT,http://127.0.0.1:$FRONTEND_PORT}"
 export NEXT_PUBLIC_BACKEND_URL="${NEXT_PUBLIC_BACKEND_URL:-http://localhost:$BACKEND_PORT}"
 
+# Only a listener on every address or on localhost is in our way: `tailscale serve --tcp 8000`
+# listens on the tailnet address of the same port to forward to us, and that is fine.
 for port in "$BACKEND_PORT" "$FRONTEND_PORT"; do
-  if ss -ltnH "sport = :$port" | grep -q .; then
+  if ss -ltnH "sport = :$port" | awk '{print $4}' | grep -qE '^(0\.0\.0\.0|\*|\[::\]|127\.0\.0\.1|\[::1\]):'; then
     echo "dev.sh: port $port is already in use" >&2
     exit 1
   fi

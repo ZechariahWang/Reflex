@@ -25,7 +25,8 @@ export const VIEW_ANGLES: Record<ViewPreset, ViewAngles> = {
   front: { azimuth: 0, polar: LEVEL },
 }
 
-/** The idle orbit would walk the camera off an orthographic-style preset (or off the map), so only these drift. */
+/** The camera never moves on its own: no idle orbit on any preset (the user asked for a still view). */
 export function allowsAutoOrbit(view: ViewPreset | null): boolean {
-  return view === null || view === "iso"
+  void view
+  return false
 }

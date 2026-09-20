@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
-import { ContactShadows, Environment, Grid, Lightformer, OrbitControls } from "@react-three/drei"
+import { ContactShadows, Environment, Lightformer, OrbitControls } from "@react-three/drei"
 import { MathUtils, NeutralToneMapping, Quaternion, Spherical, Vector3 } from "three"
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib"
 
@@ -110,18 +110,7 @@ function Studio({ model, moving }: { model: HandModel; moving: boolean }) {
         opacity={0.55}
         color="#242424"
       />
-      <Grid
-        position={[0, -0.0005, 0]}
-        infiniteGrid
-        cellSize={0.01}
-        cellThickness={0.6}
-        cellColor="#dcdcdc"
-        sectionSize={0.05}
-        sectionThickness={1.1}
-        sectionColor="#bdbdbd"
-        fadeDistance={radius * 24}
-        fadeStrength={1.4}
-      />
+      {/* No ground grid: the contact shadow and the range rings are all the floor needs. */}
     </>
   )
 }

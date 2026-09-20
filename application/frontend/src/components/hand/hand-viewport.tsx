@@ -67,13 +67,7 @@ export function HandViewport() {
   const [view, setView] = useState<ViewPreset | null>("iso")
   const [ghost, setGhost] = useState(true)
   const freeLook = useCallback(() => setView(null), [])
-  // The first objects to appear pull the camera back into the map view, once; after that the
-  // presets are the user's. (State derived during render, as React recommends over an effect.)
-  const [mapShown, setMapShown] = useState(false)
-  if (!mapShown && objects.length > 0) {
-    setMapShown(true)
-    if (view === "iso") setView("chase")
-  }
+  // The camera only moves when the user picks a preset or drags: objects appearing do not switch views.
 
   const ready = webgl && !failed && urdf !== null
   const linked = socket === "open"
@@ -111,7 +105,7 @@ export function HandViewport() {
           </span>
           <span className="flex shrink-0 items-center gap-4">
             {ready && <CameraReadout readoutRef={hud.readout} />}
-            <span>Grid 10 mm · Rings 25 cm</span>
+            <span>Rings 25 cm</span>
           </span>
         </>
       }

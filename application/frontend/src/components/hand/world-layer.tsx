@@ -48,8 +48,11 @@ const RING_TICKS = 24
 
 const INK = new Color("#242424")
 const INK_MUTE = new Color("#727272")
-const RING_COLOR = "#b9b9b9"
-const TICK_COLOR = "#9a9a9a"
+// Faint: the rings give scale without competing with the hand or the objects
+const RING_COLOR = "#c8c8c8"
+const TICK_COLOR = "#b4b4b4"
+const RING_OPACITY = 0.35
+const TICK_OPACITY = 0.4
 const BOX_OPACITY = 0.7
 const DROP_OPACITY = 0.4
 const FOOT_OPACITY = 0.55
@@ -97,8 +100,8 @@ class RingParts {
   private readonly disposables: { dispose: () => void }[] = []
 
   constructor() {
-    const ringMaterial = new LineBasicMaterial({ color: RING_COLOR, transparent: true, opacity: 0.8, depthWrite: false })
-    const tickMaterial = new LineBasicMaterial({ color: TICK_COLOR, transparent: true, opacity: 0.9, depthWrite: false })
+    const ringMaterial = new LineBasicMaterial({ color: RING_COLOR, transparent: true, opacity: RING_OPACITY, depthWrite: false })
+    const tickMaterial = new LineBasicMaterial({ color: TICK_COLOR, transparent: true, opacity: TICK_OPACITY, depthWrite: false })
     const rings = RANGE_RINGS_M.map((radius) => new LineLoop(circle(radius, RING_SEGMENTS), ringMaterial))
     const outer = RANGE_RINGS_M[RANGE_RINGS_M.length - 1]
     const marks = new LineSegments(ticks(outer, RING_TICKS, 0.012), tickMaterial)

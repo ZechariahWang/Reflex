@@ -60,5 +60,17 @@ serves streamable HTTP on `http://127.0.0.1:8765/mcp` (`--host 0.0.0.0` to open 
 network - there is no authentication, so only on a network you trust: it moves a hand that
 somebody may be wearing).
 
+A client that insists on HTTPS: keep the server on localhost and let Tailscale put a certificate
+in front of it, for the devices of the tailnet only (never `tailscale funnel`: that is the whole
+internet, and there is no authentication):
+
+```bash
+python server.py --http --port 8770 --public-host <machine>.<tailnet>.ts.net
+sudo tailscale serve --bg --https 8771 http://127.0.0.1:8770   # -> https://<machine>.<tailnet>.ts.net:8771/mcp
+```
+
+`--public-host` is needed because on localhost the MCP SDK answers 421 to any other `Host` header
+(DNS rebinding protection), and the proxy forwards the public name.
+
 Then ask for things: "what can the hand do?", "make a peace sign", "teach it to count to
 three on its fingers and show me".

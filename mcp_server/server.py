@@ -21,6 +21,7 @@ import time
 import httpx
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.transport_security import TransportSecuritySettings
 
 BACKEND_URL = os.environ.get("HTN_BACKEND_URL", "http://localhost:8000").rstrip("/")
 FINGERS = ["thumb", "index", "middle", "ring", "pinky"]
@@ -155,8 +156,18 @@ if __name__ == "__main__":
     parser.add_argument("--http", action="store_true", help="streamable HTTP instead of stdio")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--public-host", help="the name an HTTPS proxy in front serves this under (e.g. "
+                        "tailscale serve: <machine>.<tailnet>.ts.net); on localhost the SDK refuses any other Host")
     args = parser.parse_args()
     if args.http:
-        mcp.run("streamable-http", host=args.host, port=args.port)
+        security = None  # the SDK's default: on localhost, only localhost as Host (DNS rebinding protection)
+        if args.public_host:
+            names = ["127.0.0.1", "localhost", args.public_host]
+            security = TransportSecuritySettings(
+                enable_dns_rebinding_protection=True,
+                allowed_hosts=[entry for name in names for entry in (name, name + ":*")],
+                allowed_origins=[f"{scheme}://{entry}" for scheme in ("http", "https")
+                                 for name in names for entry in (name, name + ":*")])
+        mcp.run("streamable-http", host=args.host, port=args.port, transport_security=security)
     else:
         mcp.run("stdio")

@@ -147,7 +147,7 @@ function Hand({ solid, ghost, ghostEnabled, hud, onMovingChange }: HandProps) {
   useEffect(() => {
     baseOrientation.current.solidRest.copy(solid.root.quaternion)
     baseOrientation.current.ghostRest.copy(ghost.root.quaternion)
-    baseOrientation.current.map.copy(solid.root.quaternion)
+    baseOrientation.current.map.copy(solid.orientationFrame)
     baseOrientation.current.mapInverse.copy(baseOrientation.current.map).invert()
     motion.current.moving = true
     motion.current.stillFor = 0
@@ -300,7 +300,7 @@ function CameraRig({
   const controls = useRef<OrbitControlsImpl>(null)
   const aspect = useThree((state) => state.size.width / Math.max(1, state.size.height))
   const fit = fitDistance(model.bounds.radius, aspect)
-  const target = model.bounds.center
+  const target = useMemo(() => new Vector3(0, 0, 0), [model])
 
   const rig = useRef({
     goal: null as Spherical | null,

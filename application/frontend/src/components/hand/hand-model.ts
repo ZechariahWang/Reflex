@@ -8,6 +8,7 @@ import {
   MeshBasicMaterial,
   MeshPhysicalMaterial,
   Object3D,
+  Quaternion,
   Sphere,
   Vector3,
   type BufferGeometry,
@@ -77,8 +78,10 @@ export interface FingerRig {
 }
 
 export interface HandModel {
-  /** Y-up wrapper, positioned so the ground is y = 0 and the hand is centred over the origin. */
+  /** Y-up pivot at the displayed centre of the hand. IMU rotation is applied here. */
   root: Group
+  /** CAD/ROS base_link -> three.js Y-up rest orientation. */
+  orientationFrame: Quaternion
   /** The wrist camera's frame (`camera_link`, ROS style: x forward, y left, z up); tracked objects hang here. */
   cameraLink: Object3D | null
   fingers: FingerRig[]
@@ -249,15 +252,15 @@ export function buildHandModel(description: HandDescription, variant: HandVarian
   // the fingers point along +Y and curl towards -Z. base_link +Z becomes three.js +Y, so the
   // hand hovers palm down. The sim bolts it to `world` through a mount, which must not show.
   // Turned about the vertical as well, so the fingers point at the default camera (+Z).
-  const root = new Group()
-  root.rotation.set(-Math.PI / 2, 0, Math.PI)
-  root.add(robot.links[HAND_ROOT_LINK] ?? robot)
+  const assembly = new Group()
+  assembly.rotation.set(-Math.PI / 2, 0, Math.PI)
+  assembly.add(robot.links[HAND_ROOT_LINK] ?? robot)
 
   // Frame on the hand itself (whatever the URDF root is), over its whole travel.
   const box = new Box3()
   for (const curl of [0, 1]) {
     fingers.forEach((rig) => rig.setAngle(rig.lower + rig.travel * curl))
-    root.updateMatrixWorld(true)
+    assembly.updateMatrixWorld(true)
     // The camera frames the machine; the mannequin's forearm would push it into a corner.
     parts.forEach((mesh) => backdrop.has(mesh) || box.expandByObject(mesh))
   }
@@ -266,12 +269,18 @@ export function buildHandModel(description: HandDescription, variant: HandVarian
   const size = box.getSize(new Vector3())
   const centre = box.getCenter(new Vector3())
   const clearance = size.y * GROUND_CLEARANCE_RATIO
-  root.position.set(-centre.x, clearance - box.min.y, -centre.z)
+  assembly.position.set(-centre.x, -centre.y, -centre.z)
+
+  const root = new Group()
+  root.position.y = centre.y + clearance - box.min.y
+  root.add(assembly)
   root.updateMatrixWorld(true)
+  box.translate(assembly.position)
   box.translate(root.position)
 
   return {
     root,
+    orientationFrame: assembly.quaternion.clone(),
     cameraLink: robot.links[CAMERA_LINK] ?? null,
     fingers,
     bounds: box.getBoundingSphere(new Sphere()),

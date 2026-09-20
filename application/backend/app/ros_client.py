@@ -75,7 +75,7 @@ class RosClient:
         self._subscribe(
             ros, DEPTH_TOPIC, COMPRESSED_IMAGE, IMAGE_THROTTLE_MS, lambda m: hub.on_depth(base64.b64decode(m["data"]))
         )
-        self._subscribe(ros, IMU_TOPIC, IMU, STATE_THROTTLE_MS, lambda m: hub.on_orientation(m["orientation"]))
+        self._subscribe(ros, IMU_TOPIC, IMU, STATE_THROTTLE_MS, hub.on_imu)
         self._subscribe(
             ros,
             HEAD_COLOR_TOPIC,

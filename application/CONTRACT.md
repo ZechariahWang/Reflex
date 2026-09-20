@@ -30,6 +30,7 @@ Finger order everywhere: `thumb, index, middle, ring, pinky`.
 | `/camera/color/image_raw/compressed` | `sensor_msgs/CompressedImage` | JPEG, 640x480, 15 Hz, ~55 KB. `data` is base64 over rosbridge. |
 | `/camera/aligned_depth_to_color/camera_info` | `sensor_msgs/CameraInfo` | Intrinsics of the aligned depth (= the colour stream). ROS 2 spells the matrix `k`. Subscribed at 1 Hz; the object placement needs `fx fy cx cy`. |
 | `/camera/aligned_depth_to_color/image_raw/compressedDepth` | `sensor_msgs/CompressedImage` | format `16UC1; compressedDepth`. `data` = **12-byte header, then a 16-bit grayscale PNG** (PNG magic `89 50 4E 47` at offset 12). Pixel value = depth in millimetres, 0 = no reading. 640x480, pixel-aligned to the color image, 15 Hz, ~20 KB. |
+| `/camera/imu` | `sensor_msgs/Imu` | D435i IMU. The web hand uses a valid fused orientation quaternion when present; if the driver leaves orientation empty, the backend falls back to accelerometer tilt. Absent or malformed samples leave the hand in its static CAD pose. |
 | `/head_camera/color/image_raw/compressed` | `sensor_msgs/CompressedImage` | The head camera (an iPhone, `head_camera:=iphone`; default `none`). JPEG, 640x480, landscape, max 15 Hz. The node fixes rotation and size. No depth. |
 | `/head_camera/aligned_depth_to_color/image_raw/compressedDepth` + `/head_camera/color/camera_info` | `sensor_msgs/CompressedImage`, `sensor_msgs/CameraInfo` | The iPhone's LiDAR depth on the pixels of its colour picture (16UC1 mm), throttled to 5 Hz. Not shown: the object detector takes the head camera (colour + this depth) while the wrist camera has been silent for 2 s, so a bench with only the phone still gets a map. The objects are then where the head sees them, drawn around the hand all the same. |
 
@@ -64,9 +65,10 @@ Server -> client, JSON text, one message every 16.7 ms (60 Hz, one per display f
  "fingers": ["thumb","index","middle","ring","pinky"],
  "objects": [],
  "joints":  {"thumb_joint": 1.57, "index_joint": 0.0, "middle_joint": 0.0, "ring_joint": 0.0, "pinky_joint": 0.0},
+ "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
  "state":   [1.0, 0.0, 0.0, 0.0, 0.0],
  "command": [1.0, 0.0, 0.0, 0.0, 0.0],
- "rates":   {"joint_states": 99.8, "hand_state": 50.0, "hand_command": 0.0, "color": 15.0, "depth": 15.0, "iphone": 15.0, "objects": 8.0}}
+ "rates":   {"joint_states": 99.8, "hand_state": 50.0, "hand_command": 0.0, "color": 15.0, "depth": 15.0, "iphone": 15.0, "imu": 60.0, "objects": 8.0}}
 ```
 `passive` (bool, also in the JSON above as `"passive": false`) mirrors the HAL's latched `/hand/passive`: torque off, a person moves the fingers, `/hand/command` is ignored.
 
@@ -74,7 +76,7 @@ Server -> client, JSON text, one message every 16.7 ms (60 Hz, one per display f
 ```json
 "objects": [{"id": 3, "label": "bottle", "xyz": [0.42, 0.11, -0.03], "size": [0.07, 0.07, 0.22], "confidence": 0.86, "age": 0.0, "hits": 41}]
 ```
-`xyz` and `size` are metres in the wrist camera's frame, `camera_link` of the URDF (x forward, y left, z up). The camera is fixed to the hand, so this is a position relative to the hand, and the viewer hangs the objects under that link. `age` is seconds since the last detection: `0` = in view; a track that is not detected any more is dropped after `MEMORY_S` = 1 s (`app/objects.py`), which is the time the page takes to fade it out (`world-layer.tsx`: from 0.4 s to 1.0 s of `age`). The pipeline: `DETECT_MODEL` (Ultralytics YOLO on the CPU, told to look only for the labels of `DETECT_LABELS` in `app/objects.py` - `bottle` so far) on the colour JPEG -> median aligned depth under the middle of each box -> pinhole projection with the `camera_info` intrinsics (a D435 default until it arrives) -> a nearest-neighbour tracker with a 20 cm gate per label; `rates.objects` is the detector's pass rate. `MOCK=1` and `MOCK_OBJECTS=1` feed the same tracker with a synthetic table of objects, one of which leaves the view for a few seconds of every cycle. `joints` are radians by joint name; `state`/`command` are 0..1 in finger order (`command` is `null` until someone has published one). When ROS is down, keep sending with `ros_connected: false` and the last known values.
+`xyz` and `size` are metres in the wrist camera's frame, `camera_link` of the URDF (x forward, y left, z up). The camera is fixed to the hand, so this is a position relative to the hand, and the viewer hangs the objects under that link. `orientation` is `null` until a valid `/camera/imu` sample arrives; it is the fused quaternion if the driver provides one, otherwise the gravity tilt estimated from `linear_acceleration`. `age` is seconds since the last detection: `0` = in view; a track that is not detected any more is dropped after `MEMORY_S` = 1 s (`app/objects.py`), which is the time the page takes to fade it out (`world-layer.tsx`: from 0.4 s to 1.0 s of `age`). The pipeline: `DETECT_MODEL` (Ultralytics YOLO on the CPU, told to look only for the labels of `DETECT_LABELS` in `app/objects.py` - `bottle` so far) on the colour JPEG -> median aligned depth under the middle of each box -> pinhole projection with the `camera_info` intrinsics (a D435 default until it arrives) -> a nearest-neighbour tracker with a 20 cm gate per label; `rates.objects` is the detector's pass rate. `MOCK=1` and `MOCK_OBJECTS=1` feed the same tracker with a synthetic table of objects, one of which leaves the view for a few seconds of every cycle. `joints` are radians by joint name; `state`/`command` are 0..1 in finger order (`command` is `null` until someone has published one). When ROS is down, keep sending with `ros_connected: false` and the last known values.
 
 Client -> server, JSON text:
 ```json

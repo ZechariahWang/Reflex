@@ -57,6 +57,33 @@ def finger_vector(values: Sequence[object]) -> list[float] | None:
     return [float(value) for value in values]
 
 
+def finite_quaternion(value: dict) -> dict[str, float] | None:
+    try:
+        quat = {axis: float(value[axis]) for axis in ("x", "y", "z", "w")}
+    except (KeyError, TypeError, ValueError):
+        return None
+    return quat if all(math.isfinite(component) for component in quat.values()) else None
+
+
+def accelerometer_tilt(value: dict) -> dict[str, float] | None:
+    """Quaternion that rotates the upright gravity vector onto the measured acceleration."""
+    try:
+        x, y, z = (float(value[axis]) for axis in ("x", "y", "z"))
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not all(math.isfinite(component) for component in (x, y, z)):
+        return None
+    length = math.sqrt(x * x + y * y + z * z)
+    if length <= 1e-6:
+        return None
+    bx, by, bz = x / length, y / length, z / length
+    if bz < -0.999999:
+        return {"x": 1.0, "y": 0.0, "z": 0.0, "w": 0.0}
+    quat = {"x": -by, "y": bx, "z": 0.0, "w": 1.0 + bz}
+    qlen = math.sqrt(sum(component * component for component in quat.values()))
+    return {axis: component / qlen for axis, component in quat.items()}
+
+
 class RateMeter:
     def __init__(self) -> None:
         self._stamps: deque[float] = deque()
@@ -183,12 +210,22 @@ class Hub:
 
     def on_orientation(self, value: dict) -> None:
         """Quaternion from sensor_msgs/Imu.orientation, or ignored if malformed."""
-        try:
-            quat = {axis: float(value[axis]) for axis in ("x", "y", "z", "w")}
-        except (KeyError, TypeError, ValueError):
+        quat = finite_quaternion(value)
+        if quat is None:
             return
-        if not all(math.isfinite(component) for component in quat.values()):
+        self._set_orientation(quat)
+
+    def on_imu(self, message: dict) -> None:
+        """Use a fused IMU quaternion when present, otherwise fall back to accelerometer tilt."""
+        quat = finite_quaternion(message.get("orientation", {}))
+        if quat is not None and math.sqrt(sum(component * component for component in quat.values())) > 1e-6:
+            self._set_orientation(quat)
             return
+        quat = accelerometer_tilt(message.get("linear_acceleration", {}))
+        if quat is not None:
+            self._set_orientation(quat)
+
+    def _set_orientation(self, quat: dict[str, float]) -> None:
         with self._lock:
             self._meters["imu"].tick(time.monotonic())
             self._orientation = quat

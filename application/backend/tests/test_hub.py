@@ -39,6 +39,15 @@ def test_orientation_keeps_only_finite_imu_quaternions():
     assert hub.snapshot(True)["orientation"] == {"x": 0.1, "y": 0.2, "z": 0.3, "w": 0.9}
 
 
+def test_imu_without_orientation_falls_back_to_accelerometer_tilt():
+    hub = Hub(Settings())
+    hub.on_imu({
+        "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 0.0},
+        "linear_acceleration": {"x": 0.0, "y": 0.0, "z": 9.81},
+    })
+    assert hub.snapshot(True)["orientation"] == {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}
+
+
 def test_head_jpeg_reaches_the_iphone_color_channel_untouched():
     async def scenario() -> Hub:
         hub = Hub(Settings())

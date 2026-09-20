@@ -54,9 +54,10 @@ class RateCap:
         return True
 
 
-def run(conn, max_fps, make_stream=record3d_stream):
+def run(conn, max_fps, make_stream=record3d_stream, with_depth=True):
     """Messages to the parent: ("error", text) | ("connected",) | ("stopped",) |
-    ("frame", rgb, (fx, fy, cx, cy)) - the picture as the sensor gives it, with its intrinsics."""
+    ("frame", rgb, (fx, fy, cx, cy), depth) - the picture as the sensor gives it, its intrinsics, and
+    the LiDAR depth in metres (float32, same view, fewer pixels) or None if `with_depth` is off."""
     parent = os.getppid()
 
     def exit_with_parent():  # a SIGKILLed node must not leave us holding the phone
@@ -82,7 +83,8 @@ def run(conn, max_fps, make_stream=record3d_stream):
         try:
             if cap.accept():
                 k = stream.get_intrinsic_mat()  # here and not before connect(): valid with a frame for sure
-                conn.send(('frame', np.array(stream.get_rgb_frame()), (k.fx, k.fy, k.tx, k.ty)))
+                depth = np.array(stream.get_depth_frame(), dtype=np.float32) if with_depth else None
+                conn.send(('frame', np.array(stream.get_rgb_frame()), (k.fx, k.fy, k.tx, k.ty), depth))
         except OSError:
             os._exit(0)  # the parent is gone
         finally:

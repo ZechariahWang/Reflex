@@ -122,7 +122,9 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
   - `hand_config.py`: `FINGERS` order and the YAML loader.
   - `iphone_camera_node.py` + `iphone_worker.py`: the forehead iPhone (Record3D
     app in USB Streaming mode) as `/head_camera/color/image_raw/compressed` +
-    `camera_info` (design: `docs/specs/iphone-camera-design.md`). The record3d
+    `camera_info`, and its LiDAR depth on the same pixels as
+    `/head_camera/aligned_depth_to_color/image_raw/compressedDepth` (`depth:=false`
+    turns that off; design: `docs/specs/iphone-camera-design.md`). The record3d
     library runs in a child process that the node kills to disconnect (the
     library never closes its socket; the docstring of the worker has the rest);
     the node turns, shrinks and JPEG-encodes each frame and starts a new worker

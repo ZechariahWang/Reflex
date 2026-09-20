@@ -17,9 +17,13 @@ scope: iPhone depth, the recording console, training.
   of ROS.
 - **USB only.** The phone is on the wearer, and the wearable machine is too. The
   Wi-Fi / WebRTC transport of Record3D is deleted, not moved.
-- **Colour only.** The policy does not use iPhone depth. The console loses its
-  iPhone depth view. If depth is necessary later: 16UC1 millimetres as
-  `compressedDepth`, the same as the RealSense path.
+- **Colour only for the policy.** The policy does not use iPhone depth, and the console has no
+  iPhone depth view. The depth became necessary the same day, for the console's object map on a
+  bench with only the phone: the node publishes it as 16UC1 millimetres `compressedDepth` on
+  `/head_camera/aligned_depth_to_color/image_raw/compressedDepth`, turned and sized as the colour
+  picture (node parameter `depth`, default true). The backend's detector takes the head camera
+  while the wrist camera is silent; the objects are then where the HEAD sees them, drawn around
+  the hand all the same (nothing knows where the head is).
 - **Only `/compressed` and `camera_info`.** All consumers are on rosbridge, where
   a raw image is base64 JSON. No `image_raw`.
 - **The node fixes the rotation and the size.** They are part of the dataset: a

@@ -9,7 +9,7 @@ import pytest
 
 from fake_phone import COLUMNS, ROWS, NoPhone, Refuses, FakeStream, Streams, portrait_frame
 from htn_control import iphone_worker
-from htn_control.iphone_camera_node import camera_matrix, prepare, supervise
+from htn_control.iphone_camera_node import camera_matrix, compressed_depth, prepare, prepare_depth, supervise
 
 # Where the red top left corner of the portrait frame is after the turn (row, column of 480 x 640)
 CORNER = {0: (20, 20), 90: (20, 620), 180: (460, 620), 270: (460, 20)}
@@ -32,6 +32,16 @@ def test_the_principal_point_follows_the_picture(rotation):
     turned = rotation in (90, 270)  # fx / fy swap; then the shrink of that axis
     assert fx == pytest.approx((710.0 if turned else 700.0) * 640 / (ROWS if turned else COLUMNS))
     assert fy == pytest.approx((700.0 if turned else 710.0) * 480 / (COLUMNS if turned else ROWS))
+
+
+@pytest.mark.parametrize('rotation', [0, 90, 180, 270])
+def test_the_depth_lands_on_the_pixels_of_the_picture_in_millimetres(rotation):
+    mm = prepare_depth(FakeStream().get_depth_frame(), rotation, 640, 480)
+    assert mm.shape == (480, 640) and mm.dtype == np.uint16
+    near = {corner: int(mm[corner]) for corner in CORNER.values()}
+    assert near == {corner: 500 if corner == CORNER[rotation] else 1500 for corner in CORNER.values()}
+    payload = compressed_depth(mm)  # what the backend's depth.decode() does with it
+    assert np.array_equal(cv2.imdecode(np.frombuffer(payload, np.uint8, offset=12), cv2.IMREAD_UNCHANGED), mm)
 
 
 def test_the_middle_stays_the_middle():
@@ -67,6 +77,7 @@ def test_the_worker_sends_the_frame_with_its_intrinsics():
     frame, connected = worker_messages(FakeStream, 2)
     assert connected == ('connected',)
     assert frame[0] == 'frame' and frame[2] == (700.0, 710.0, 359.5, 479.5)
+    assert frame[3].dtype == np.float32 and frame[3].shape == (ROWS // 4, COLUMNS // 4)
     assert np.array_equal(frame[1], portrait_frame())
 
 
@@ -88,13 +99,15 @@ def test_the_node_publishes_the_turned_jpeg_and_its_camera_info(monkeypatch):
     monkeypatch.setattr(IphoneCamera, 'make_stream', staticmethod(Streams))
     rclpy.init()
     node = IphoneCamera()
-    images, infos = [], []
+    images, infos, depths = [], [], []
+    node.create_subscription(CompressedImage, '/head_camera/aligned_depth_to_color/image_raw/compressedDepth',
+                             depths.append, 1)
     node.create_subscription(CompressedImage, '/head_camera/color/image_raw/compressed', images.append, 1)
     node.create_subscription(CameraInfo, '/head_camera/color/camera_info', infos.append, 1)
     try:
         for _ in range(200):
             rclpy.spin_once(node, timeout_sec=0.1)
-            if len(images) >= 3 and infos:
+            if len(images) >= 3 and infos and depths:
                 break
         assert len(images) >= 3, 'no frames from the fake phone'
         picture = cv2.imdecode(np.frombuffer(bytes(images[0].data), np.uint8), cv2.IMREAD_COLOR)
@@ -103,6 +116,9 @@ def test_the_node_publishes_the_turned_jpeg_and_its_camera_info(monkeypatch):
         assert picture[20, 620, 2] > 200 and picture[20, 620, 0] < 60, 'rotation 90: the red corner is top right (BGR)'
         assert (infos[0].width, infos[0].height) == (640, 480) and infos[0].header.frame_id == FRAME_ID
         assert infos[0].k[0] == pytest.approx(710.0 * 640 / ROWS)
+        mm = cv2.imdecode(np.frombuffer(bytes(depths[0].data), np.uint8, offset=12), cv2.IMREAD_UNCHANGED)
+        assert depths[0].format == '16UC1; compressedDepth png' and mm.shape == (480, 640)
+        assert (mm[20, 620], mm[240, 320]) == (500, 1500), 'the near corner is where the red corner is'
     finally:
         node.close()
         node.destroy_node()

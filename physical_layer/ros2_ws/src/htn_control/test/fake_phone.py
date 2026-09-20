@@ -33,6 +33,12 @@ class FakeStream:
     def get_rgb_frame(self):
         return portrait_frame()
 
+    def get_depth_frame(self):
+        """1.5 m everywhere, 0.5 m under the red corner, as the LiDAR: a quarter of the pixels."""
+        depth = np.full((ROWS // 4, COLUMNS // 4), 1.5, np.float32)
+        depth[:25, :25] = 0.5
+        return depth
+
     def get_intrinsic_mat(self):
         return SimpleNamespace(fx=700.0, fy=710.0, tx=359.5, ty=479.5)
 

@@ -1,18 +1,19 @@
-"""Mary had a little lamb on four keys, one finger per note.
+"""Mary had a little lamb, the short version, on three keys, one finger per note.
 
-The tune has four notes, C D E G. The hand lies on the keys C D E F G as a right hand does on a
-piano: thumb on C, index on D, middle on E, (ring on F, never played), pinky on G. A note is a
-key press: the finger goes down to PRESS and comes back to REST before the next note, so the
-repeated notes (E E E) are separate strokes.
+Only "Mary had a little lamb, its fleece was white as snow": that line needs three notes, C D E
+(the G of "little lamb, little lamb" is in the part that is left out). Index on C, middle on D,
+ring on E, side by side on the keys; the thumb and the pinky stay at REST. A note is a key press:
+the finger goes down to PRESS and comes back to REST before the next note, so the repeated notes
+(E E E E) are separate strokes.
 
-    E D C D | E E E - | D D D - | E G G - | E D C D | E E E E | D D E D | C - - -
+    E D C D | E E E E | D D E D | C - - -
 """
 
 TITLE = "Mary had a little lamb"
-DESCRIPTION = "C D E G on thumb, index, middle, pinky: the whole tune, quarter notes at ~86 bpm"
+DESCRIPTION = "short version, C D E on index, middle, ring: no thumb, quarter notes at ~86 bpm"
 
 FINGERS = ["thumb", "index", "middle", "ring", "pinky"]
-NOTE_FINGER = {"C": "thumb", "D": "index", "E": "middle", "G": "pinky"}
+NOTE_FINGER = {"C": "index", "D": "middle", "E": "ring"}
 
 REST = 0.05        # fingers hover over the keys, nearly open
 PRESS = 0.95       # a key is down: nearly the whole travel
@@ -23,10 +24,6 @@ RELEASE_S = BEAT_S * (1.0 - DOWN_SHARE)  # a long note holds the key and still c
 
 # (note, beats); "-" is a rest
 TUNE = [
-    ("E", 1), ("D", 1), ("C", 1), ("D", 1),
-    ("E", 1), ("E", 1), ("E", 2),
-    ("D", 1), ("D", 1), ("D", 2),
-    ("E", 1), ("G", 1), ("G", 2),
     ("E", 1), ("D", 1), ("C", 1), ("D", 1),
     ("E", 1), ("E", 1), ("E", 1), ("E", 1),
     ("D", 1), ("D", 1), ("E", 1), ("D", 1),

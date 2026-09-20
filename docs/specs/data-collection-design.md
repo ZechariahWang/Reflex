@@ -142,7 +142,7 @@ lerobot-record \
     --teleop.type=exo_hand_leader --teleop.host=<ros-ip> --teleop.id=exo \
     --dataset.repo_id=<user>/exo_grasp_raw --dataset.push_to_hub=false \
     --dataset.root=policy/datasets/exo_grasp_raw \
-    --dataset.single_task="<the constant instruction>" \
+    --dataset.single_task="grasp and put down objects, make a peace sign at a person" \
     --dataset.fps=15 --dataset.num_episodes=50 \
     --dataset.episode_time_s=20 --dataset.reset_time_s=5
 

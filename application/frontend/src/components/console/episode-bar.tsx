@@ -34,7 +34,8 @@ export function EpisodeBar() {
   const mode = useSimStore(selectSessionMode)
   const [datasets, setDatasets] = useState<EpisodeDataset[]>([])
   const [name, setName] = useState("exo_grasp")
-  const [task, setTask] = useState("grasp the bottle")
+  // The constant instruction of the policy (policy/README.md): every dataset and the inference use this string
+  const [task, setTask] = useState("grasp and put down objects, make a peace sign at a person")
   const [episode, setEpisode] = useState(0)
   const [what, setWhat] = useState<"action" | "state">("action")
   const [error, setError] = useState<string | null>(null)

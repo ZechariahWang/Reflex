@@ -31,6 +31,23 @@ iPhone, and `camera2`, the wrist RealSense), closes the hand, opens it again, an
 fails if `/hand/state` does not follow. With no phone: `--head-topic ""`, and
 `--robot.head_topic=""` in the commands below.
 
+## The instruction
+
+One constant string, in every episode and at inference, character for character:
+
+    grasp and put down objects, make a peace sign at a person
+
+It is the default of the console's Task field. The model sees the same words in every sample, so
+they tell it nothing: WHICH of the two it does, and when, it learns from the cameras in the
+episodes. A different string at inference is an input it was never trained on. So the data has to
+tell the two apart:
+
+- grasp episodes with people in the background (or every person in view means "peace sign");
+- peace sign episodes with one clear cue: the hand up, palm away, a person close and centred;
+- idle episodes: a person in view, or an object out of reach, and the hand does nothing;
+- every grasp episode is the whole cycle: approach, grasp, hold, put down, release;
+- about as many episodes of the one as of the other.
+
 ## Data collection: mirror teleop (torque on)
 
 Design: `../docs/specs/mirror-teleop-design.md`. A second person (the controller)
@@ -50,7 +67,7 @@ lerobot-record \
     --teleop.type=exo_hand_command --teleop.host=<ros-ip> --teleop.id=exo \
     --dataset.repo_id=<user>/exo_grasp --dataset.push_to_hub=false \
     --dataset.root=policy/datasets/exo_grasp \
-    --dataset.single_task="<the constant instruction>" \
+    --dataset.single_task="grasp and put down objects, make a peace sign at a person" \
     --dataset.fps=30 --dataset.num_episodes=50 \
     --dataset.episode_time_s=20 --dataset.reset_time_s=5
 ```
@@ -117,7 +134,7 @@ lerobot-record \
     --teleop.type=exo_hand_leader --teleop.host=<ros-ip> --teleop.id=exo \
     --dataset.repo_id=<user>/exo_grasp_raw --dataset.push_to_hub=false \
     --dataset.root=policy/datasets/exo_grasp_raw \
-    --dataset.single_task="<the constant instruction>" \
+    --dataset.single_task="grasp and put down objects, make a peace sign at a person" \
     --dataset.fps=15 --dataset.num_episodes=50 \
     --dataset.episode_time_s=20 --dataset.reset_time_s=5
 
@@ -209,7 +226,7 @@ python -m lerobot.async_inference.robot_client \
     --server_address=localhost:8080 \
     --policy_type=smolvla --pretrained_name_or_path=<checkpoint> \
     --policy_device=cuda \
-    --task="<the constant instruction of the dataset>" \
+    --task="grasp and put down objects, make a peace sign at a person" \
     --fps=15 --actions_per_chunk=20 --chunk_size_threshold=0.7 \
     --debug_visualize_queue_size=True
 ```

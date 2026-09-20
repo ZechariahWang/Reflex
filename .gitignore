@@ -9,3 +9,6 @@ __pycache__/
 
 # recorded demonstrations: video of people, not reproducible, keep a copy outside the repo
 policy/datasets/
+
+# secrets (API keys, tokens)
+.env

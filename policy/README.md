@@ -183,7 +183,7 @@ video with `pyav`. It works, and it is slower: install an FFmpeg that
 
 Design: `../docs/specs/lambda-training-design.md`. `lambda/launch.sh` rents one instance, uploads
 `policy/`, one dataset, the `exo-trainer` skill and `docs/notes/training/`, and starts Claude Code
-(Opus) there. The agent runs the variants of `docs/notes/training/plan.md`, evaluates each
+(Fable 5.1) there. The agent runs the variants of `docs/notes/training/plan.md`, evaluates each
 checkpoint on held-out episodes (`heldout.py`), writes `docs/notes/training/runs/RUN-<UTC>/` and
 ends the rental. `lambda/watchdog.sh` on the laptop pulls `policy/outputs/`, `policy/logs/` and the
 run notes every 5 minutes and terminates the instance: 30 minutes after the last sign of life, at

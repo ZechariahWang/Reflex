@@ -86,15 +86,15 @@ d["hasCompletedOnboarding"] = True
 d.setdefault("projects", {}).setdefault(os.environ["REPO"], {})["hasTrustDialogAccepted"] = True
 state.write_text(json.dumps(d, indent=2) + "\n")
 PY
-answer="$(cd "$REPO" && claude --model opus -p "Reply with the one word: ready" --output-format json)" || {
-  echo "error: the token gives no Opus answer (rate limit, plan with no Opus, or a revoked token). No agent starts, and the watchdog terminates the instance in 30 min." >&2
+answer="$(cd "$REPO" && claude --model claude-fable-5-1 -p "Reply with the one word: ready" --output-format json)" || {
+  echo "error: the token gives no Fable answer (rate limit, plan with no Fable, or a revoked token). No agent starts, and the watchdog terminates the instance in 30 min." >&2
   exit 1
 }
-grep -qi opus <<< "$answer" || echo "warning: the answer does not name an Opus model; read it: ${answer:0:400}" >&2
+grep -qi fable <<< "$answer" || echo "warning: the answer does not name a Fable model; read it: ${answer:0:400}" >&2
 
 step "The agent, in tmux 'experimenter'"
 tmux has-session -t work 2>/dev/null || tmux new-session -d -s work -c "$REPO"
 # A tmux pane is a child of the tmux server: it gets the token and the PATH only if they are passed
 tmux new-session -d -s experimenter -c "$REPO" -e CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" -e PATH="$PATH" \
-  "claude --model opus --dangerously-skip-permissions '/exo-trainer You were started by setup.sh on a new instance. Nobody is at the keyboard.'"
+  "claude --model claude-fable-5-1 --dangerously-skip-permissions '/exo-trainer You were started by setup.sh on a new instance. Nobody is at the keyboard.'"
 echo "Setup complete. The agent runs in tmux 'experimenter'; this session ('train') is for the training."

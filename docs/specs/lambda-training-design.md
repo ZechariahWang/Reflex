@@ -22,7 +22,7 @@ reads only files.
   pretraining distribution (`camera2`), and the new part of the task is the
   action space. π0.5 is rejected: ~3.3B parameters do not fit the 8 GB GPU
   laptop.
-- **Agent:** Claude Code (Opus) runs on the instance with the `exo-trainer`
+- **Agent:** Claude Code (Fable 5.1) runs on the instance with the `exo-trainer`
   skill. It is a variant runner: it executes the variants of `plan.md` in
   order, keeps each run healthy, evaluates each checkpoint, applies the stop
   rule of the plan, and writes the run notes. It can skip or reorder a variant
@@ -276,10 +276,10 @@ branch. On the cap warning the agent stops training, evaluates the newest
 checkpoint, and runs the shutdown checklist.
 
 `setup.sh` starts the agent as
-`claude --model opus --dangerously-skip-permissions` in tmux `experimenter`
+`claude --model claude-fable-5-1 --dangerously-skip-permissions` in tmux `experimenter`
 with `/exo-trainer` as the first prompt. The instance is disposable and holds
 one secret, so skipped prompts are acceptable there. Before that, `setup.sh`
-checks that the token gives an Opus answer and fails with a clear message if
+checks that the token gives a Fable answer and fails with a clear message if
 not.
 
 ## Smoke test
@@ -317,7 +317,7 @@ The cap for a smoke run is 1 hour.
   bounds a rental to `LAMBDA_MAX_HOURS` only while the watchdog runs.
 - **A subscription rate limit stops the agent.** The run in progress finishes
   and comes home; the later variants do not run.
-- **Whether the OAuth token permits Opus is not verified.** `setup.sh` checks
+- **Whether the OAuth token permits Fable is not verified on the instance.** `setup.sh` checks
   it in the first minutes.
 - **`lerobot-train` option names for the variants (`chunk_size`,
   `n_action_steps`, `train_expert_only`) are not run yet.** The agent smoke

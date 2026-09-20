@@ -64,7 +64,7 @@ file at the end of a session; the designs themselves are in `../specs/`.
   `launch.sh`, `setup.sh` and `pull.sh` have run nowhere. Left, in this order: fill
   `policy/lambda/.env` (Lambda key, ssh key name, `claude setup-token`), `launch.sh --dry-run`,
   `launch.sh --smoke-scripts`, `launch.sh --smoke`, then a real dataset and `plan.md`. Not
-  verified: that the token gives Opus, the `lerobot-train` option names of the variants, the
+  verified: that the token gives Fable, the `lerobot-train` option names of the variants, the
   speed of the evaluation on a GPU.
 
 ## Done and working

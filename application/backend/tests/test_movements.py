@@ -25,7 +25,7 @@ def test_hot_cross_buns_presses_index_middle_ring_and_nothing_else():
     assert pressed == [index, middle, ring] * 2 + [ring] * 4 + [middle] * 4 + [index, middle, ring]
     assert all(pose[0] == pose[4] == min(pose) for pose, _ in movement["steps"]), "thumb and pinky never press"
     presses = [(max(pose) - min(pose), seconds) for pose, seconds in movement["steps"] if max(pose) > min(pose)]
-    assert max(depth for depth, _ in presses) >= 0.8, "a quarter note asks for nearly the whole travel"
+    assert 0.4 <= max(depth for depth, _ in presses) <= 0.6, "a key press is about half the travel: the whole travel bends too far"
     for depth, seconds in presses:
         # at the HAL's defaults (max_speed 4.0, max_accel 60) a stroke must ARRIVE in its time, or the
         # quick notes turn around in mid-air and blur into one wobble

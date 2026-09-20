@@ -14,8 +14,8 @@ FINGERS = ["thumb", "index", "middle", "ring", "pinky"]
 NOTE_FINGER = {"B": "index", "A": "middle", "G": "ring"}
 
 REST = 0.05        # fingers hover over the keys, nearly open
-PRESS = 0.95       # a key is down: nearly the whole travel (quarter notes)
-FAST_PRESS = 0.45  # the quick notes ("one a penny, two a penny"): a shorter stroke, so that the finger
+PRESS = 0.5        # a key is down (quarter notes): half the travel is enough for a key, the whole travel bends too far
+FAST_PRESS = 0.25  # the quick notes ("one a penny, two a penny"): a shorter stroke, so that the finger
                    # ARRIVES and stands still at the bottom and again at the top before the next one.
                    # Asked for the whole travel in an eighth note, a finger never gets there, turns
                    # around in mid-air and four strokes blur into one wobble

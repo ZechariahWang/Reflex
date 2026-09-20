@@ -16,7 +16,7 @@ FINGERS = ["thumb", "index", "middle", "ring", "pinky"]
 NOTE_FINGER = {"C": "ring", "D": "middle", "E": "index"}
 
 REST = 0.05        # fingers hover over the keys, nearly open
-PRESS = 0.95       # a key is down: nearly the whole travel
+PRESS = 0.5        # a key is down: half the travel is enough for a key, the whole travel bends too far
 BEAT_S = 0.7       # one quarter note (~86 bpm): the tempo at which hot_cross_buns' quarter notes
                    # reach the full PRESS and are back at REST before the next one (HAL max_speed 4.0)
 DOWN_SHARE = 0.5   # of a quarter note's time the finger goes down and stays; the rest of it, it comes back up

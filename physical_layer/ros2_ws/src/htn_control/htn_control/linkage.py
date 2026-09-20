@@ -105,20 +105,29 @@ class Linkage:
             near, horn = solution, horn + self.closing * step
         return out
 
-    def table(self, closed, samples=181):
-        """Passive joint angles at `samples` even steps of the actuated joint q in [0, closed]
-        (q >= 0 closes, whatever the sense of the horn). Row i belongs to q = closed * i / (samples - 1)."""
-        rows, near = [], None
-        for i in range(samples):
-            q = closed * i / (samples - 1)
-            solution = self.solve(self.closing * q, near)
-            if solution is None:
-                raise ValueError(f'the linkage binds at q = {q:.3f} rad, before closed = {closed:.3f}')
-            near = solution
-            row = relative(solution)
-            if rows:  # keep each column continuous: interpolating across a +-pi wrap would spin a part
-                row = tuple(prev + _wrap(value - prev) for prev, value in zip(rows[-1], row))
-            rows.append(row)
+    def table(self, closed, samples=181, opened=0.0):
+        """Passive joint angles at `samples` even steps of the actuated joint q in [opened, closed]
+        (q >= 0 closes, whatever the sense of the horn; opened < 0 = a hand that opens past the CAD
+        pose). Row i belongs to q = opened + (closed - opened) * i / (samples - 1)."""
+        qs = [opened + (closed - opened) * i / (samples - 1) for i in range(samples)]
+        start = min(range(samples), key=lambda i: abs(qs[i]))  # the CAD pose: the one known assembly
+        rows = [None] * samples
+        # Out from the CAD pose both ways, each solution the starting guess of the next
+        for order in (range(start, samples), range(start - 1, -1, -1)):
+            near = previous = None
+            for i in order:
+                if previous is None and i != start:
+                    near, previous = first, rows[start]
+                solution = self.solve(self.closing * qs[i], near)
+                if solution is None:
+                    raise ValueError(f'the linkage binds at q = {qs[i]:.3f} rad, inside [{opened:.3f}, {closed:.3f}]')
+                if i == start:
+                    first = solution
+                near = solution
+                row = relative(solution)
+                if previous is not None:  # keep each column continuous: interpolating across a +-pi wrap would spin a part
+                    row = tuple(prev + _wrap(value - prev) for prev, value in zip(previous, row))
+                rows[i] = previous = row
         return rows
 
 
@@ -134,12 +143,12 @@ def relative(solution):
 class PassiveJoints:
     """Interpolated lookup q -> passive joint angles; built once, cheap at 100 Hz."""
 
-    def __init__(self, linkage, closed, samples=181):
-        self.closed = closed
-        self.rows = linkage.table(closed, samples)
+    def __init__(self, linkage, closed, samples=181, opened=0.0):
+        self.opened, self.closed = opened, closed
+        self.rows = linkage.table(closed, samples, opened)
 
     def __call__(self, q):
-        x = min(max(q / self.closed, 0.0), 1.0) * (len(self.rows) - 1)
+        x = min(max((q - self.opened) / (self.closed - self.opened), 0.0), 1.0) * (len(self.rows) - 1)
         i = min(int(x), len(self.rows) - 2)
         f = x - i
         return tuple(a + (b - a) * f for a, b in zip(self.rows[i], self.rows[i + 1]))

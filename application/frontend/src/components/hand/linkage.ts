@@ -94,26 +94,41 @@ function assemble(p: Record<PivotName, Point>, horn: number, near: Pick<Assembly
 }
 
 /**
- * Lookup `q -> passive joint angles` over the driven joint's travel `[0, closed]` (q >= 0 closes,
- * whichever way the horn really turns). Built once per finger; a call is one interpolation.
+ * Lookup `q -> passive joint angles` over the driven joint's travel `[opened, closed]` (q >= 0
+ * closes, whichever way the horn really turns; `opened` < 0 = a finger that opens past the CAD
+ * pose). Built once per finger; a call is one interpolation.
  */
-export function passiveJointSolver(linkage: FingerLinkage, closed: number): (q: number, out: PassiveAngles) => PassiveAngles {
-  const rows: PassiveAngles[] = []
-  let near: Pick<Assembly, "A" | "M" | "U"> = linkage.pivots
-  for (let i = 0; i < SAMPLES; i++) {
-    const solution = assemble(linkage.pivots, linkage.closing * closed * (i / (SAMPLES - 1)), near)
-    // Past where the mechanism binds (a travel beyond lock_rad): hold the last pose that assembles.
-    if (!solution) {
-      rows.push(rows[rows.length - 1] ?? [0, 0, 0, 0, 0, 0])
-      continue
+export function passiveJointSolver(
+  linkage: FingerLinkage,
+  closed: number,
+  opened = 0,
+): (q: number, out: PassiveAngles) => PassiveAngles {
+  const at = (i: number) => opened + (closed - opened) * (i / (SAMPLES - 1))
+  let start = 0 // the sample next to the CAD pose: the one assembly that is known
+  for (let i = 1; i < SAMPLES; i++) if (Math.abs(at(i)) < Math.abs(at(start))) start = i
+  const rows = new Array<PassiveAngles>(SAMPLES)
+  // Out from the CAD pose both ways, each solution the starting guess of the next.
+  const fill = (from: number, step: 1 | -1) => {
+    let near: Pick<Assembly, "A" | "M" | "U"> = linkage.pivots
+    let previous: PassiveAngles | undefined = step === -1 ? rows[start] : undefined
+    for (let i = from; i >= 0 && i < SAMPLES; i += step) {
+      const solution = assemble(linkage.pivots, linkage.closing * at(i), near)
+      // Past where the mechanism binds (a travel beyond a lock): hold the last pose that assembles.
+      if (!solution) {
+        rows[i] = previous ?? [0, 0, 0, 0, 0, 0]
+        continue
+      }
+      near = solution
+      // Keep every column continuous: interpolating across a +-pi wrap would spin a part around.
+      const last = previous
+      rows[i] = last ? (solution.angles.map((a, k) => last[k] + wrap(a - last[k])) as PassiveAngles) : solution.angles
+      previous = rows[i]
     }
-    near = solution
-    const previous = rows[rows.length - 1]
-    // Keep every column continuous: interpolating across a +-pi wrap would spin a part around.
-    rows.push(previous ? (solution.angles.map((a, k) => previous[k] + wrap(a - previous[k])) as PassiveAngles) : solution.angles)
   }
+  fill(start, 1)
+  fill(start - 1, -1)
   return (q, out) => {
-    const x = Math.min(Math.max(closed > 0 ? q / closed : 0, 0), 1) * (SAMPLES - 1)
+    const x = Math.min(Math.max(closed > opened ? (q - opened) / (closed - opened) : 0, 0), 1) * (SAMPLES - 1)
     const i = Math.min(Math.floor(x), SAMPLES - 2)
     const f = x - i
     for (let k = 0; k < out.length; k++) out[k] = rows[i][k] + (rows[i + 1][k] - rows[i][k]) * f

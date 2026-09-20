@@ -197,7 +197,7 @@ function Hand({ solid, ghost, ghostEnabled, hud, onMovingChange }: HandProps) {
     if (command) {
       for (const rig of ghost.fingers) {
         const i = rig.index
-        const target = command[i] * rig.travel
+        const target = rig.lower + command[i] * rig.travel
         // A ghost that fades in should already be at the command, not sweep there from zero.
         ghostAngles[i] = wasHidden ? target : ghostAngles[i] + (target - ghostAngles[i]) * follow
         rig.setAngle(ghostAngles[i])

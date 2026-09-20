@@ -20,13 +20,20 @@ base:
 #              closed_rad = a 90 deg curl of the contact pad. It must stay below
 #              lock_rad there (the linkage binds at 84 deg for middle/ring, 98-100
 #              deg for the others) - linkage_publisher refuses to start otherwise.
+#   min_angle: horn angle at "fully open" (normalized 0.0). 0 = the hand opens to the CAD pose.
+#              Negative = it opens PAST it (room: linkage.yaml's open_lock_rad). The calibration
+#              only knows the travel (max - min); where it lies is set here by hand. ring and
+#              pinky travel more than fits between the CAD pose and lock_rad, so they must open
+#              past it. ESTIMATES, not measured: ring is centred between its two binds (its
+#              travel of 101.5 deg leaves only 7.9 deg at each end - too much travel, see
+#              docs/notes/next-work.md), pinky closes at closed_rad.
 #   mass     : inertia of the horn in the simulation only
 fingers:
   thumb:  {min_angle: 0.0, max_angle: 1.0140, mass: 0.020}
   index:  {min_angle: 0.0, max_angle: 1.2502, mass: 0.020}
   middle: {min_angle: 0.0, max_angle: 1.2747, mass: 0.020}
-  ring:   {min_angle: 0.0, max_angle: 1.7717, mass: 0.020}
-  pinky:  {min_angle: 0.0, max_angle: 1.6690, mass: 0.020}
+  ring:   {min_angle: -0.4387, max_angle: 1.3330, mass: 0.020}
+  pinky:  {min_angle: -0.3862, max_angle: 1.2828, mass: 0.020}
 
 # Looks only (RGB 0..1). No effect on collisions, masses or control.
 appearance:

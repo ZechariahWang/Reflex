@@ -107,7 +107,7 @@
     <child link="thumb_horn"/>
     <origin xyz="0.12789 -0.02186 -0.026760000000000003"/>
     <axis xyz="0 0 1"/>
-    <limit effort="1.0" lower="0.0" upper="1.0692" velocity="3.0"/>
+    <limit effort="1.0" lower="0.0" upper="1.014" velocity="3.0"/>
     <dynamics damping="0.01" friction="0.0"/>
   </joint>
   <link name="thumb_rod">
@@ -228,7 +228,7 @@
     <child link="index_horn"/>
     <origin xyz="0.078 0.03188 0.04446"/>
     <axis xyz="-1 0 0"/>
-    <limit effort="1.0" lower="0.0" upper="1.2828" velocity="3.0"/>
+    <limit effort="1.0" lower="0.0" upper="1.2502" velocity="3.0"/>
     <dynamics damping="0.01" friction="0.0"/>
   </joint>
   <link name="index_rod">
@@ -349,7 +349,7 @@
     <child link="middle_horn"/>
     <origin xyz="0.055 0.00588 0.04446"/>
     <axis xyz="-1 0 0"/>
-    <limit effort="1.0" lower="0.0" upper="1.2523" velocity="3.0"/>
+    <limit effort="1.0" lower="0.0" upper="1.2747" velocity="3.0"/>
     <dynamics damping="0.01" friction="0.0"/>
   </joint>
   <link name="middle_rod">
@@ -470,7 +470,7 @@
     <child link="ring_horn"/>
     <origin xyz="0.033 0.00588 0.04446"/>
     <axis xyz="-1 0 0"/>
-    <limit effort="1.0" lower="0.0" upper="1.2523" velocity="3.0"/>
+    <limit effort="1.0" lower="-0.4387" upper="1.333" velocity="3.0"/>
     <dynamics damping="0.01" friction="0.0"/>
   </joint>
   <link name="ring_rod">
@@ -591,7 +591,7 @@
     <child link="pinky_horn"/>
     <origin xyz="0.01 0.03188 0.04446"/>
     <axis xyz="-1 0 0"/>
-    <limit effort="1.0" lower="0.0" upper="1.2828" velocity="3.0"/>
+    <limit effort="1.0" lower="-0.3862" upper="1.2828" velocity="3.0"/>
     <dynamics damping="0.01" friction="0.0"/>
   </joint>
   <link name="pinky_rod">

@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from htn_control.hand_config import FINGERS
+from htn_control.linkage_publisher import LOCK_MARGIN
 from htn_control.linkage import PASSIVE, Linkage, PassiveJoints
 
 DESCRIPTION = Path(__file__).resolve().parents[2] / 'htn_description'
@@ -78,9 +79,9 @@ def test_contract_joints_and_links(urdf):
 @pytest.mark.parametrize('finger', FINGERS)
 @pytest.mark.parametrize('fraction', [0.0, 0.1, 0.5, 0.9, 1.0])
 def test_the_three_loops_close(urdf, finger, fraction):
-    l, closed = LINKAGE[finger], PARAMS['fingers'][finger]['max_angle']
-    q = closed * fraction
-    passive = PassiveJoints(Linkage(l['pivots'], l['closing']), closed)(q)
+    l, closed, opened = LINKAGE[finger], PARAMS['fingers'][finger]['max_angle'], PARAMS['fingers'][finger]['min_angle']
+    q = opened + (closed - opened) * fraction  # ring and pinky open past the CAD pose: opened < 0
+    passive = PassiveJoints(Linkage(l['pivots'], l['closing']), closed, opened=opened)(q)
     angles = {f'{finger}_joint': q, **{f'{finger}_{role}_joint': a for role, a in zip(PASSIVE, passive)}}
     poses = link_poses(urdf, angles)
     for pivot, link_a, hangs_a, link_b, hangs_b in LOOPS:
@@ -93,8 +94,9 @@ def test_the_three_loops_close(urdf, finger, fraction):
 def test_closed_stays_clear_of_where_the_linkage_binds(finger):
     """max_angle is the travel a person set on the hand (or, before that, the CAD's 90 deg curl).
     Either way it must end well before the mechanism locks up."""
-    l, closed = LINKAGE[finger], PARAMS['fingers'][finger]['max_angle']
-    assert 0.3 < closed < l['lock_rad'] - math.radians(8.0)
+    l, closed, opened = LINKAGE[finger], PARAMS['fingers'][finger]['max_angle'], PARAMS['fingers'][finger]['min_angle']
+    assert 0.3 < closed < l['lock_rad'] - LOCK_MARGIN
+    assert -(l['open_lock_rad'] - LOCK_MARGIN) < opened <= 0.0, 'and the same when it opens past the CAD pose'
     if closed == pytest.approx(l['closed_rad'], abs=1e-3):  # still the CAD value: that is a 90 deg curl
         at_closed = min(Linkage(l['pivots'], l['closing']).sweep(), key=lambda s: abs(abs(s['horn']) - closed))
         assert abs(math.degrees(at_closed['curl'])) == pytest.approx(90.0, abs=1.0)

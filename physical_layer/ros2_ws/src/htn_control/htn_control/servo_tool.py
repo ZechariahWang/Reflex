@@ -127,8 +127,9 @@ def rewrite_yaml(text, lines):
             raise ValueError(f'no single "  {finger}: {{id: ...}}" line in the parameter file')
         open_step, closed = (int(v) for v in re.search(r'open_step: (\d+), closed_step: (\d+)', line).groups())
         travel = abs(closed - open_step) * 2 * math.pi / 4096
-        text, count = re.subn(rf'^(  {finger}:\s*\{{min_angle: [^,]*, max_angle: )[^,]*(,[^\n]*\}})[^\n]*$',
-                              rf'\g<1>{travel:.4f}\g<2>', text, flags=re.MULTILINE)
+        # max = min + travel: a min_angle set by hand (a finger that opens past the CAD pose) stays
+        text, count = re.subn(rf'^(  {finger}:\s*\{{min_angle: )([^,]*)(, max_angle: )[^,]*(,[^\n]*\}})[^\n]*$',
+                              lambda m: f'{m[1]}{m[2]}{m[3]}{float(m[2]) + travel:.4f}{m[4]}', text, flags=re.MULTILINE)
         if count != 1:
             raise ValueError(f'no single "  {finger}: {{min_angle: ..., max_angle: ...}}" line in the parameter file')
     return text

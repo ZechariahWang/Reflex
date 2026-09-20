@@ -11,7 +11,7 @@ from htn_control.linkage import PASSIVE, Linkage, PassiveJoints
 
 # The linkage must not be driven close to where it binds: there the pad barely
 # moves any more and the pins take the whole servo torque
-LOCK_MARGIN = math.radians(8.0)
+LOCK_MARGIN = math.radians(5.0)
 # Of the driven-joint messages (100 Hz in sim) every Nth gets the full hand published next to
 # it: 50 Hz is plenty for TF, and (de)serializing 35 joints per message is what costs in rclpy.
 EVERY_NTH = 2
@@ -44,11 +44,17 @@ class LinkagePublisher(Node):
         self.solvers = []
         for finger in FINGERS:
             geometry, closed = linkage[finger], params['fingers'][finger]['max_angle']
+            opened = params['fingers'][finger]['min_angle']
             if closed > geometry['lock_rad'] - LOCK_MARGIN:
                 raise ValueError(
                     f"{finger}: max_angle {closed:.3f} rad is within {math.degrees(LOCK_MARGIN):.0f} deg of "
                     f"where the linkage binds ({geometry['lock_rad']:.3f} rad). Lower it in hand_params.yaml")
-            self.solvers.append(PassiveJoints(Linkage(geometry['pivots'], geometry['closing']), closed))
+            if -opened > geometry['open_lock_rad'] - LOCK_MARGIN:
+                raise ValueError(
+                    f"{finger}: min_angle {opened:.3f} rad is within {math.degrees(LOCK_MARGIN):.0f} deg of "
+                    f"where the linkage binds when it opens (-{geometry['open_lock_rad']:.3f} rad). "
+                    'Raise it in hand_params.yaml')
+            self.solvers.append(PassiveJoints(Linkage(geometry['pivots'], geometry['closing']), closed, opened=opened))
 
         self.publisher = self.create_publisher(JointState, '/joint_states', 10)
         # Raw: half of what arrives is our own output, and a byte search turns that away without

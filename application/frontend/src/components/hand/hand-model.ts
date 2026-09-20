@@ -64,7 +64,9 @@ export interface FingerRig {
   finger: Finger
   /** Position in the system-wide finger order. */
   index: number
-  /** Travel of the driven joint (the servo horn) in radians for a curl of 1. */
+  /** Driven-joint angle (the servo horn, radians) at a curl of 0; below zero = opens past the CAD pose. */
+  lower: number
+  /** Travel of the driven joint in radians from a curl of 0 to a curl of 1. */
   travel: number
   /** Poses the whole finger for a driven-joint angle: the horn, and the linkage that follows it. */
   setAngle: (angle: number) => void
@@ -216,18 +218,21 @@ export function buildHandModel(description: HandDescription, variant: HandVarian
     const joint: URDFJoint | undefined = robot.joints[`${finger}_joint`]
     const tip = tips.get(finger)
     if (!joint || !tip) continue
-    const upper = Number(joint.limit?.upper)
-    const travel = upper > 0 ? upper : JOINT_MAX_RAD
+    const upper = Number(joint.limit?.upper) > 0 ? Number(joint.limit?.upper) : JOINT_MAX_RAD
+    // Below zero for a finger that opens past the CAD pose (hand_params.yaml `min_angle`)
+    const lower = Math.min(Number(joint.limit?.lower) || 0, 0)
+    const travel = upper - lower
 
     // The loops of the linkage close only if its passive joints follow the horn.
     const geometry = description.linkage?.[finger]
     const passive = PASSIVE_ROLES.map((role) => robot.joints[`${finger}_${role}_joint`])
-    const solve = geometry && passive.every(Boolean) ? passiveJointSolver(geometry, travel) : null
+    const solve = geometry && passive.every(Boolean) ? passiveJointSolver(geometry, upper, lower) : null
     const angles: PassiveAngles = [0, 0, 0, 0, 0, 0]
 
     fingers.push({
       finger,
       index: FINGERS.indexOf(finger),
+      lower,
       travel,
       setAngle: (angle) => {
         joint.setJointValue(angle)
@@ -251,12 +256,12 @@ export function buildHandModel(description: HandDescription, variant: HandVarian
   // Frame on the hand itself (whatever the URDF root is), over its whole travel.
   const box = new Box3()
   for (const curl of [0, 1]) {
-    fingers.forEach((rig) => rig.setAngle(rig.travel * curl))
+    fingers.forEach((rig) => rig.setAngle(rig.lower + rig.travel * curl))
     root.updateMatrixWorld(true)
     // The camera frames the machine; the mannequin's forearm would push it into a corner.
     parts.forEach((mesh) => backdrop.has(mesh) || box.expandByObject(mesh))
   }
-  fingers.forEach((rig) => rig.setAngle(0))
+  fingers.forEach((rig) => rig.setAngle(rig.lower))
 
   const size = box.getSize(new Vector3())
   const centre = box.getCenter(new Vector3())

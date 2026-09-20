@@ -1,19 +1,19 @@
 """Mary had a little lamb, the short version, on three keys, one finger per note.
 
 Only "Mary had a little lamb, its fleece was white as snow": that line needs three notes, C D E
-(the G of "little lamb, little lamb" is in the part that is left out). Index on C, middle on D,
-ring on E, side by side on the keys; the thumb and the pinky stay at REST. A note is a key press:
-the finger goes down to PRESS and comes back to REST before the next note, so the repeated notes
-(E E E E) are separate strokes.
+(the G of "little lamb, little lamb" is in the part that is left out). It is a LEFT hand, so the
+higher note is nearer the thumb: ring on C, middle on D, index on E, side by side on the keys; the
+thumb and the pinky stay at REST. A note is a key press: the finger goes down to PRESS and comes
+back to REST before the next note, so the repeated notes (E E E E) are separate strokes.
 
     E D C D | E E E E | D D E D | C - - -
 """
 
 TITLE = "Mary had a little lamb"
-DESCRIPTION = "short version, C D E on index, middle, ring: no thumb, quarter notes at ~86 bpm"
+DESCRIPTION = "short version, C D E on ring, middle, index (left hand): no thumb, quarter notes at ~86 bpm"
 
 FINGERS = ["thumb", "index", "middle", "ring", "pinky"]
-NOTE_FINGER = {"C": "index", "D": "middle", "E": "ring"}
+NOTE_FINGER = {"C": "ring", "D": "middle", "E": "index"}
 
 REST = 0.05        # fingers hover over the keys, nearly open
 PRESS = 0.95       # a key is down: nearly the whole travel

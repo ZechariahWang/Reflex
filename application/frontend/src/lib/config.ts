@@ -14,7 +14,6 @@ export const API = {
   linkage: `${BACKEND_URL}/api/linkage`,
   /** A `package://htn_description/meshes/<name>` visual of the URDF. */
   mesh: (name: string) => `${BACKEND_URL}/api/meshes/${encodeURIComponent(name)}`,
-  iphone: `${BACKEND_URL}/api/iphone`,
 } as const
 
 export const WS = {

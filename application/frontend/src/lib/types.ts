@@ -20,7 +20,7 @@ export const TOPIC_NAMES: Record<TopicKey, string> = {
   hand_command: "/hand/command",
   color: "/camera/color/image_raw/compressed",
   depth: "/camera/aligned_depth_to_color/image_raw/compressedDepth",
-  iphone: "record3d wi-fi stream",
+  iphone: "/head_camera/color/image_raw/compressed",
   objects: "detector",
 }
 
@@ -69,20 +69,9 @@ export interface CommandMessage {
   data: FingerValues
 }
 
-/** realsense comes through ROS; iphone is the Record3D app's Wi-Fi stream, read by the backend. */
+/** Both come through ROS; iphone is the head camera (`/head_camera`) and has colour only. */
 export type CameraSource = "realsense" | "iphone"
 export type CameraKind = "color" | "depth"
-
-/** GET / POST /api/iphone. */
-export interface PhoneStatus {
-  /** Address the backend is pointed at; "" = none. */
-  host: string
-  state: "off" | "connecting" | "streaming" | "error"
-  /** Why `state` is "error". */
-  detail: string
-  /** Degrees the image is turned clockwise; the sensor is portrait, 90 / 270 show it landscape. */
-  rotation: 0 | 90 | 180 | 270
-}
 
 /** JSON text frame on /ws/camera/*; binary frames on the same socket are JPEGs. */
 export interface CameraMeta {

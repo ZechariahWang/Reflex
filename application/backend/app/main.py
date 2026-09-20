@@ -14,15 +14,13 @@ import yaml
 from fastapi import FastAPI, HTTPException, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 
 from .config import Settings
-from .hub import CAMERA_KINDS, CAMERA_SOURCES, Hub, Source, parse_command, parse_passive, ticks
+from .hub import CAMERA_STREAMS, Hub, Source, parse_command, parse_passive, ticks
 from .frames import LatestChannel
 from .mirror.session import MirrorSession, Tracker, parse_calibrate
 from .mirror.synthetic import MockTracker
 from .mock import MockSource, run_mock_objects
-from .record3d import ROTATIONS, Record3DClient, normalize_host
 from .ros_client import RosClient
 
 STATE_PERIOD_S = 1 / 60  # one /ws/state message per display frame
@@ -33,18 +31,10 @@ MAX_MIRROR_FRAME_BYTES = 1_000_000  # a 320x240 JPEG is ~15 kB
 READY_TIMEOUT_S = 3.0
 
 MESH_NAME = re.compile(r"^[a-z0-9_]+\.stl$")
-MOCK_PHONE = {"host": "mock", "state": "streaming", "detail": ""}
 
 LOGGER = logging.getLogger(__name__)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-
-
-class PhoneSettings(BaseModel):
-    """Either field may be left out: the address form sends `host`, the rotate button `rotation`."""
-
-    host: str | None = None
-    rotation: int | None = None
 
 
 async def admit(ws: WebSocket, allowed_origins: Sequence[str]) -> bool:
@@ -138,12 +128,11 @@ class Readiness:
 def create_app(settings: Settings) -> FastAPI:
     hub = Hub(settings)
     source: Source = MockSource(hub) if settings.mock else RosClient(settings, hub)
-    phone = Record3DClient(hub.on_iphone_frame, normalize_host(settings.record3d_host) or "")
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         hub.bind(asyncio.get_running_loop())
-        workers = [asyncio.create_task(hub.run_depth_worker()), asyncio.create_task(hub.run_iphone_worker())]
+        workers = [asyncio.create_task(hub.run_depth_worker())]
         if not settings.mock:
             workers.append(
                 asyncio.create_task(
@@ -153,10 +142,7 @@ def create_app(settings: Settings) -> FastAPI:
             if settings.mock_objects:
                 workers.append(asyncio.create_task(run_mock_objects(hub)))
         source.start()
-        if not settings.mock:
-            phone.start()
         yield
-        await phone.stop()
         await source.stop()
         for worker in workers:
             worker.cancel()
@@ -194,28 +180,6 @@ def create_app(settings: Settings) -> FastAPI:
         if not path.is_file():
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no linkage.yaml in the description package")
         return yaml.safe_load(path.read_text())["fingers"]
-
-    def phone_status() -> dict:
-        return {**(MOCK_PHONE if settings.mock else phone.status()), "rotation": hub.iphone_rotation}
-
-    @app.get("/api/iphone")
-    def iphone() -> dict:
-        return phone_status()
-
-    @app.post("/api/iphone")
-    async def set_iphone(update: PhoneSettings) -> dict:
-        """Point the Record3D client at a phone (an empty host disconnects) and / or turn its image."""
-        if update.rotation is not None:
-            if update.rotation not in ROTATIONS:
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "rotation must be 0, 90, 180 or 270")
-            hub.iphone_rotation = update.rotation
-        if update.host is not None and not settings.mock:
-            host = normalize_host(update.host) if update.host.strip() else ""
-            if host is None:
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "expected an address like 192.168.1.23")
-            if host != phone.host:
-                await phone.set_host(host)
-        return phone_status()
 
     @app.websocket("/ws/state")
     async def ws_state(ws: WebSocket) -> None:
@@ -265,7 +229,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.websocket("/ws/camera/{camera}/{kind}")
     async def ws_camera(ws: WebSocket, camera: str, kind: str) -> None:
-        if camera not in CAMERA_SOURCES or kind not in CAMERA_KINDS:
+        if kind not in CAMERA_STREAMS.get(camera, ()):
             await ws.close(code=status.WS_1008_POLICY_VIOLATION)
             return
         readiness = Readiness()

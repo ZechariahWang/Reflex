@@ -21,9 +21,7 @@ class Settings:
     cors_origins: tuple[str, ...] = DEFAULT_CORS_ORIGINS
     depth_min_mm: int = 150
     depth_max_mm: int = 2000
-    record3d_host: str = ""
     description_dir: Path = REPO_DESCRIPTION_DIR
-    record3d_rotation: int = 90  # the phone's sensor is portrait; 90 / 270 show it landscape
     mirror_command_tolerance: float = 0.01
     mirror_min_cutoff: float = 1.5  # Hz: lower = calmer at rest
     mirror_beta: float = 1.0  # higher = less lag in a fast move
@@ -51,9 +49,7 @@ class Settings:
             cors_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
             depth_min_mm=int(env.get("DEPTH_MIN_MM", "150")),
             depth_max_mm=int(env.get("DEPTH_MAX_MM", "2000")),
-            record3d_host=env.get("RECORD3D_HOST", "").strip(),
             description_dir=Path(env.get("DESCRIPTION_DIR", str(REPO_DESCRIPTION_DIR))),
-            record3d_rotation=int(env.get("RECORD3D_ROTATION", "90")),
             mirror_command_tolerance=float(env.get("MIRROR_COMMAND_TOLERANCE", "0.01")),
             mirror_min_cutoff=float(env.get("MIRROR_MIN_CUTOFF", "1.5")),
             mirror_beta=float(env.get("MIRROR_BETA", "1.0")),

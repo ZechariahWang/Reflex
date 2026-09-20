@@ -24,6 +24,7 @@ RECONNECT_INITIAL_S = 1.0
 RECONNECT_MAX_S = 5.0
 
 COLOR_TOPIC = "/camera/color/image_raw/compressed"
+HEAD_COLOR_TOPIC = "/head_camera/color/image_raw/compressed"
 DEPTH_TOPIC = "/camera/aligned_depth_to_color/image_raw/compressedDepth"
 CAMERA_INFO_TOPIC = "/camera/aligned_depth_to_color/camera_info"
 CAMERA_INFO_THROTTLE_MS = 1000  # intrinsics do not change; one a second is plenty
@@ -68,6 +69,13 @@ class RosClient:
         )
         self._subscribe(
             ros, DEPTH_TOPIC, COMPRESSED_IMAGE, IMAGE_THROTTLE_MS, lambda m: hub.on_depth(base64.b64decode(m["data"]))
+        )
+        self._subscribe(
+            ros,
+            HEAD_COLOR_TOPIC,
+            COMPRESSED_IMAGE,
+            IMAGE_THROTTLE_MS,
+            lambda m: hub.on_head_color(base64.b64decode(m["data"])),
         )
 
         self._subscribe(ros, CAMERA_INFO_TOPIC, "sensor_msgs/CameraInfo", CAMERA_INFO_THROTTLE_MS, hub.on_camera_info)

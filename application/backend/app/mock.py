@@ -13,7 +13,6 @@ from .config import MOCK_URDF_PATH
 from .depth import HEADER_BYTES
 from .hub import FINGERS, Hub, ticks
 from .objects import MockObjects
-from .record3d import encode_hue_depth
 
 JOINT_MAX_RAD = 1.25  # within every finger's max_angle in hand_params.yaml
 JOINT_RATE_HZ = 100
@@ -95,10 +94,6 @@ class Scene:
     def depth_payload(self, t: float) -> bytes:
         return encode_compressed_depth(self.depth_mm(t))
 
-    def record3d_frame(self, t: float) -> np.ndarray:
-        """What the Record3D app streams: hue-encoded depth on the left, RGB on the right."""
-        return np.hstack((encode_hue_depth(self.depth_mm(t)), self.color_bgr(t)))
-
 
 async def run_mock_objects(hub: Hub) -> None:
     """Synthetic surroundings through the real tracker (MOCK=1, or MOCK_OBJECTS=1 next to a camera-less sim)."""
@@ -119,7 +114,6 @@ class MockSource:
 
     def start(self) -> None:
         self._hub.on_urdf(MOCK_URDF_PATH.read_text())
-        self._hub.iphone_rotation = 0  # the mock phone is already landscape
         self._tasks = [
             asyncio.create_task(self._run_joints()),
             asyncio.create_task(self._run_camera()),
@@ -166,8 +160,8 @@ class MockSource:
             color, depth, phone = await asyncio.gather(
                 asyncio.to_thread(self._scene.color_jpeg, t),
                 asyncio.to_thread(self._scene.depth_payload, t),
-                asyncio.to_thread(self._scene.record3d_frame, t + PHONE_TIME_OFFSET_S),
+                asyncio.to_thread(self._scene.color_jpeg, t + PHONE_TIME_OFFSET_S),
             )
             self._hub.on_color(color)
             self._hub.on_depth(depth)
-            self._hub.on_iphone_frame(phone)
+            self._hub.on_head_color(phone)

@@ -48,8 +48,7 @@ def test_state_shape_and_command_override(client):
         assert message["state"][1] > 0.95 and message["state"][3] < 0.05
 
 
-@pytest.mark.parametrize("camera", ["realsense", "iphone"])
-@pytest.mark.parametrize("kind", ["color", "depth"])
+@pytest.mark.parametrize(("camera", "kind"), [("realsense", "color"), ("realsense", "depth"), ("iphone", "color")])
 def test_camera_sends_meta_then_jpeg(client, camera, kind):
     with client.websocket_connect(f"/ws/camera/{camera}/{kind}") as ws:
         meta = ws.receive_json()
@@ -62,7 +61,7 @@ def test_camera_sends_meta_then_jpeg(client, camera, kind):
                 break
 
 
-@pytest.mark.parametrize("path", ["/ws/state", "/ws/camera/realsense/color", "/ws/camera/iphone/depth"])
+@pytest.mark.parametrize("path", ["/ws/state", "/ws/camera/realsense/color", "/ws/camera/iphone/color"])
 def test_foreign_origin_is_refused(client, path):
     with pytest.raises(WebSocketDisconnect) as refusal:
         with client.websocket_connect(path, headers={"origin": "http://evil.example"}):
@@ -75,22 +74,16 @@ def test_configured_origin_is_accepted(client):
         assert ws.receive_json()["fingers"] == list(FINGERS)
 
 
-def test_unknown_camera_is_refused(client):
+@pytest.mark.parametrize("path", ["/ws/camera/webcam/color", "/ws/camera/iphone/depth"])
+def test_unknown_camera_is_refused(client, path):
     with pytest.raises(WebSocketDisconnect):
-        with client.websocket_connect("/ws/camera/webcam/color"):
+        with client.websocket_connect(path):
             pass
 
 
-def test_mock_phone_status(client):
-    assert client.get("/api/iphone").json()["state"] == "streaming"
-    assert client.post("/api/iphone", json={"host": "192.168.1.23"}).json()["host"] == "mock"
-
-
-def test_phone_rotation_is_settable_and_validated(client):
-    assert client.get("/api/iphone").json()["rotation"] == 0  # live default is 90; the mock phone is landscape
-    assert client.post("/api/iphone", json={"rotation": 270}).json()["rotation"] == 270
-    assert client.post("/api/iphone", json={"rotation": 45}).status_code == 422
-    assert client.post("/api/iphone", json={"rotation": 0}).json()["rotation"] == 0
+def test_the_phone_endpoints_are_gone(client):
+    assert client.get("/api/iphone").status_code == 404
+    assert client.post("/api/iphone", json={"host": "usb"}).status_code == 404
 
 
 def test_passive_request_round_trips_through_the_state(client):

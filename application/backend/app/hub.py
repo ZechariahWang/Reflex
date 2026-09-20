@@ -17,9 +17,7 @@ from typing import AsyncIterator, Protocol, Sequence
 
 import cv2
 import numpy as np
-from av import VideoFrame
 
-from . import record3d
 from .config import Settings
 from .depth import Colorizer, decode
 from .frames import Frame, LatestChannel, jpeg_size
@@ -29,8 +27,8 @@ LOGGER = logging.getLogger(__name__)
 
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 TOPICS = ("joint_states", "hand_state", "hand_command", "color", "depth", "iphone", "objects")
-CAMERA_SOURCES = ("realsense", "iphone")
-CAMERA_KINDS = ("color", "depth")
+# The source keeps the name `iphone` in the API; on the ROS side it is the head camera, colour only.
+CAMERA_STREAMS = {"realsense": ("color", "depth"), "iphone": ("color",)}
 RATE_WINDOW_S = 2.0
 STALE_AFTER_MS = 2000
 MAX_COMMAND_CHARS = 512  # a valid command is under 150
@@ -143,10 +141,8 @@ class Hub:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._colorizer = Colorizer(settings.depth_min_mm, settings.depth_max_mm)
         self._depth_payloads: LatestChannel[bytes] = LatestChannel()
-        self.iphone_rotation = settings.record3d_rotation
-        self._iphone_frames: LatestChannel[VideoFrame | np.ndarray | record3d.RgbdFrame] = LatestChannel()
         self.frames: dict[str, dict[str, LatestChannel[Frame]]] = {
-            source: {kind: LatestChannel() for kind in CAMERA_KINDS} for source in CAMERA_SOURCES
+            source: {kind: LatestChannel() for kind in kinds} for source, kinds in CAMERA_STREAMS.items()
         }
 
     def bind(self, loop: asyncio.AbstractEventLoop) -> None:
@@ -214,10 +210,11 @@ class Hub:
         self._tick("depth")
         self._to_loop(self._depth_payloads.publish, payload)
 
-    def on_iphone_frame(self, frame: VideoFrame | np.ndarray | record3d.RgbdFrame) -> None:
-        """One Record3D frame, still undecoded: Wi-Fi (depth | RGB side by side) or USB (RGB + metres)."""
+    def on_head_color(self, jpeg: bytes) -> None:
+        """The head camera (the iPhone node): already rotated and sized, so the JPEG passes through."""
         self._tick("iphone")
-        self._to_loop(self._iphone_frames.publish, frame)
+        width, height = jpeg_size(jpeg)
+        self._to_loop(self.frames["iphone"]["color"].publish, Frame(jpeg, width, height))
 
     def _tick(self, topic: str) -> None:
         with self._lock:
@@ -245,33 +242,6 @@ class Hub:
                 LOGGER.exception("dropping depth frame")
                 continue
             self.frames["realsense"]["depth"].publish(frame)
-
-    def _render_iphone(
-        self, frame: VideoFrame | np.ndarray | record3d.RgbdFrame, want: tuple[bool, bool]
-    ) -> tuple[Frame | None, Frame | None]:
-        if isinstance(frame, record3d.RgbdFrame):
-            return record3d.render_rgbd(frame, self._colorizer, self.iphone_rotation, want)
-        bgr = frame if isinstance(frame, np.ndarray) else frame.to_ndarray(format="bgr24")
-        return record3d.render(bgr, self._colorizer, self.iphone_rotation, want)
-
-    async def run_iphone_worker(self) -> None:
-        """Split, decode and re-encode the newest iPhone frame in a worker thread."""
-        seen = 0
-        while True:
-            seen, raw = await self._iphone_frames.next(seen)
-            channels = self.frames["iphone"]
-            want = (channels["color"].viewers > 0, channels["depth"].viewers > 0)
-            if not any(want):
-                continue
-            try:
-                color, depth = await asyncio.to_thread(self._render_iphone, raw, want)
-            except Exception:  # no single frame may end the loop
-                LOGGER.exception("dropping iPhone frame")
-                continue
-            if color is not None:
-                channels["color"].publish(color)
-            if depth is not None:
-                channels["depth"].publish(depth)
 
     async def run_object_worker(self, model: str, max_hz: float = 4.0, threads: int = 2) -> None:
         """Detect in the newest colour frame, place with the newest depth, in a worker thread.

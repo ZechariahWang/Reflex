@@ -1,14 +1,13 @@
 "use client"
 
 import { useRef, useState, type ReactNode } from "react"
-import { Grid3x3, ImageDown, Maximize2, Minimize2, Pause, Play, RotateCw, Smartphone } from "lucide-react"
+import { Grid3x3, ImageDown, Maximize2, Minimize2, Pause, Play } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 
 import { CameraHud } from "@/components/camera/camera-hud"
 import { DepthLegend } from "@/components/camera/depth-legend"
 import { DepthProbe } from "@/components/camera/depth-probe"
 import { LumaRail } from "@/components/camera/luma-rail"
-import { PhoneConnect } from "@/components/camera/phone-connect"
 import { SignalNotice } from "@/components/camera/signal-notice"
 import { useExpandable } from "@/components/camera/use-expandable"
 import { useFitRect } from "@/components/camera/use-fit-rect"
@@ -18,13 +17,12 @@ import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useCameraStream, type CameraStreamStatus } from "@/hooks/use-camera-stream"
-import { rotatePhone, usePhone } from "@/hooks/use-phone"
 import { selectRosConnected, useSimStore } from "@/lib/sim-store"
-import { TOPIC_NAMES, type CameraKind, type CameraSource, type PhoneStatus } from "@/lib/types"
+import { TOPIC_NAMES, type CameraKind, type CameraSource } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-/** One panel per camera; each shows either of its two images. */
-const PANELS: Record<CameraSource, { index: string; title: string; tags: Record<CameraKind, string>; lost: string }> = {
+/** One panel per camera. The RealSense shows either of its two images; the iPhone has colour only. */
+const PANELS: Record<CameraSource, { index: string; title: string; tags: Partial<Record<CameraKind, string>>; lost: string }> = {
   realsense: {
     index: "03",
     title: "RealSense",
@@ -34,16 +32,9 @@ const PANELS: Record<CameraSource, { index: string; title: string; tags: Record<
   iphone: {
     index: "04",
     title: "iPhone",
-    tags: { color: "/record3d/rgb", depth: "/record3d/depth" },
-    lost: "stream stalled, reconnecting",
+    tags: { color: "/head_camera/color" },
+    lost: "no frames: start `head_camera:=iphone`, see the node log",
   },
-}
-
-const PHONE_IDLE: Record<PhoneStatus["state"], { status: Status; label: string }> = {
-  off: { status: "offline", label: "No phone" },
-  connecting: { status: "waiting", label: "Connecting" },
-  streaming: { status: "waiting", label: "Connecting" },
-  error: { status: "offline", label: "Retrying" },
 }
 
 const KINDS: readonly { kind: CameraKind; label: string }[] = [
@@ -145,8 +136,6 @@ export function CameraViewport({ source }: { source: CameraSource }) {
   const { index, title, tags, lost } = PANELS[source]
   const [kind, setKind] = useState<CameraKind>("color")
   const { canvasRef, meta, status, fps } = useCameraStream(source, kind)
-  const phoneState = usePhone()
-  const [configuring, setConfiguring] = useState(false)
   const holdRef = useRef<HTMLCanvasElement | null>(null)
   const [held, setHeld] = useState(false)
   const [grid, setGrid] = useState(false)
@@ -160,23 +149,16 @@ export function CameraViewport({ source }: { source: CameraSource }) {
   const showImage = streaming || held
   const rosConnected = useSimStore(selectRosConnected)
   const base = NOTICES[status === "live" ? "no-signal" : status]
-  const lostHint = source === "realsense" && !rosConnected ? "ros disconnected" : lost
+  const lostHint = rosConnected ? lost : "ros disconnected"
   const notice = base === NOTICES["no-signal"] ? { ...base, hint: lostHint } : base
-  // The phone is not a ROS topic: until it streams, its panel asks where it is.
-  const askForPhone =
-    source === "iphone" && status !== "offline" && (configuring || (!showImage && phoneState.phone?.state !== "streaming"))
-
-  // While the card is up the header speaks for the phone, not for the (idle) socket.
-  const idle = askForPhone && !configuring ? PHONE_IDLE[phoneState.phone?.state ?? "off"] : notice
-  const panelStatus: Status = held ? "offline" : streaming ? "live" : idle.status
-  const statusLabel = held ? "Hold" : streaming ? "Live" : idle.label
+  const panelStatus: Status = held ? "offline" : streaming ? "live" : notice.status
+  const statusLabel = held ? "Hold" : streaming ? "Live" : notice.label
 
   const switchKind = (next: CameraKind) => {
     setHeld(false)
     setProbing(false)
     setKind(next)
   }
-
 
   const toggleHold = () => {
     const live = canvasRef.current
@@ -231,17 +213,7 @@ export function CameraViewport({ source }: { source: CameraSource }) {
           contentClassName="@container flex bg-page/50"
           actions={
             <div className="flex items-center gap-0.5">
-              <KindToggle kind={kind} onChange={switchKind} />
-              {source === "iphone" && (
-                <HeaderAction label="Phone address" pressed={configuring} onClick={() => setConfiguring(!configuring)}>
-                  <Smartphone />
-                </HeaderAction>
-              )}
-              {source === "iphone" && (
-                <HeaderAction label="Rotate 90°" disabled={!showImage} onClick={() => void rotatePhone()}>
-                  <RotateCw />
-                </HeaderAction>
-              )}
+              {tags.depth !== undefined && <KindToggle kind={kind} onChange={switchKind} />}
               {kind === "color" && (
                 <HeaderAction label="Thirds grid" pressed={grid} onClick={() => setGrid(!grid)}>
                   <Grid3x3 />
@@ -296,14 +268,13 @@ export function CameraViewport({ source }: { source: CameraSource }) {
             </motion.div>
 
             <AnimatePresence>
-              {!showImage && !askForPhone && (
+              {!showImage && (
                 <SignalNotice
                   key={notice.label + notice.hint}
                   detail={source === "realsense" ? TOPIC_NAMES[kind] : TOPIC_NAMES.iphone}
                   {...notice}
                 />
               )}
-              {askForPhone && <PhoneConnect key="phone" {...phoneState} onDone={() => setConfiguring(false)} />}
             </AnimatePresence>
           </div>
 

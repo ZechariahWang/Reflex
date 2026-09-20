@@ -1,8 +1,8 @@
 # application/ - web simulator
 
 A web console for the exoskeleton hand: a three.js viewport of the hand moving
-live, plus two camera panels - the RealSense and an iPhone (Record3D) - each
-switchable between its RGB image and its colorized depth image. It is a pure
+live, plus two camera panels - the RealSense, switchable between its RGB image
+and its colorized depth image, and the iPhone head camera (colour only). It is a pure
 consumer of the ROS topics in `physical_layer/`; it works identically whether
 the hand is simulated (`sim.launch.py`) or real (`hardware.launch.py`).
 
@@ -10,48 +10,11 @@ the hand is simulated (`sim.launch.py`) or real (`hardware.launch.py`).
 physical_layer (ROS 2)  --rosbridge ws://localhost:9090-->  backend (FastAPI :8000)  --ws/http-->  frontend (Next.js :3000)
 ```
 
-- `backend/`  - FastAPI + `roslibpy` + `aiortc`. The only thing that talks to ROS and to the phone.
+- `backend/`  - FastAPI + `roslibpy`. The only thing that talks to ROS.
 - `frontend/` - Next.js (App Router, TypeScript), Tailwind, shadcn/ui, framer-motion (`motion`), three.js via `@react-three/fiber` + `drei`, `urdf-loader`.
 
-The browser never talks to rosbridge or to the phone directly.
-
-## iPhone side (Record3D, not ROS)
-
-The iPhone's depth camera comes from the Record3D app, over either of its two
-live-streaming transports. `backend/app/record3d.py` is the only client, because
-the phone serves ONE viewer at a time and the page may be open in several tabs.
-
-**USB** (address `usb`) - the official `record3d` Python library over the cable
-(usbmuxd). No network involved, so it is the one that works on eduroam / venue
-Wi-Fi. Frames are an RGB image plus depth as float32 metres (lower resolution,
-upscaled nearest-neighbour to the colour image; NaN = no reading).
-The library runs in a **child process** (`backend/app/usb_worker.py`), and a
-session ends by killing it. Do not "simplify" this back into a thread: the
-library's `disconnect()` never closes its socket (the phone then keeps a ghost
-client and refuses the next connection until someone presses stop on the phone),
-it can deadlock against the GIL when the stream ends at the same moment (the
-whole backend freezes and survives Ctrl-C as an orphan holding port 8000), and
-`get_connected_devices()` blocks forever on a wedged usbmuxd. Once connected the
-client holds the connection and waits for frames instead of reconnecting.
-**What the phone does** (measured by probing usbmux port 1337 on a real
-iPhone; the library README's "connect, then press record" is not how it behaves):
-the app serves USB only while it is NOT recording - the red record button
-pauses the USB stream, stopping the recording resumes it (confirmed by the user
-on the device; easy to get backwards). It streams to its NEWEST connection and
-silently abandons the older one without closing it. So: refused = recording or
-app closed (retry every 2 s, tell the user to stop recording); connected but
-silent for 5 s = abandoned or recording, reconnect.
-Never probe port 1337 while debugging - every probe steals the stream.
-
-**Wi-Fi** (address = the IP the app shows) - the way
-github.com/ZechariahWang/record_3d does it in the browser. Needs phone and backend
-as clients of the same non-isolating network: eduroam blocks client-to-client
-traffic, and the app does not serve at all while the phone is the hotspot.
-
-- `GET http://<phone>/getOffer` -> `{"type": "offer", "sdp": ...}`; answer with `POST /answer` `{"type": "answer", "data": <sdp with ICE candidates gathered>}`. LAN only: no STUN servers.
-- One video track; every frame is two images side by side: **left = depth encoded as HSV hue (`depth_m = 3 * hue`), right = RGB**. Grey / dark pixels carry no hue = no reading.
-- The backend splits the frame, turns hue into millimetres and runs it through the same colorizer as the RealSense, so both depth views share one ramp and legend. Depth beyond 3 m wraps around (a limit of the encoding).
-- `tests/fake_record3d.py` is a stand-in phone speaking the same protocol (`.venv/bin/python -m tests.fake_record3d --port 8099`, then connect to `localhost:8099`).
+The browser never talks to rosbridge directly. The iPhone is a ROS camera (`iphone_camera_node` in
+`physical_layer/`, `docs/specs/iphone-camera-design.md`); nothing here knows Record3D.
 
 ## ROS side (verified facts - do not re-derive)
 
@@ -67,14 +30,15 @@ Finger order everywhere: `thumb, index, middle, ring, pinky`.
 | `/camera/color/image_raw/compressed` | `sensor_msgs/CompressedImage` | JPEG, 640x480, 15 Hz, ~55 KB. `data` is base64 over rosbridge. |
 | `/camera/aligned_depth_to_color/camera_info` | `sensor_msgs/CameraInfo` | Intrinsics of the aligned depth (= the colour stream). ROS 2 spells the matrix `k`. Subscribed at 1 Hz; the object placement needs `fx fy cx cy`. |
 | `/camera/aligned_depth_to_color/image_raw/compressedDepth` | `sensor_msgs/CompressedImage` | format `16UC1; compressedDepth`. `data` = **12-byte header, then a 16-bit grayscale PNG** (PNG magic `89 50 4E 47` at offset 12). Pixel value = depth in millimetres, 0 = no reading. 640x480, pixel-aligned to the color image, 15 Hz, ~20 KB. |
+| `/head_camera/color/image_raw/compressed` | `sensor_msgs/CompressedImage` | The head camera (an iPhone, `head_camera:=iphone`; default `none`). JPEG, 640x480, landscape, max 15 Hz. The node fixes rotation and size. No depth. |
 
 rosbridge subscribe rules: **always pass `queue_length=1` together with `throttle_rate`** (throttle without a queue length silently drops to ~1.6 Hz). Measured fine: joint states at 30-100 Hz alongside both image streams at 15 Hz, rosbridge at ~12 % CPU. Use `throttle_rate=16` for joint/hand state (the viewer animates from them) and `66` for images.
 
-The camera may be absent (`camera:=none`) and ROS may be down entirely; both are normal states the UI must show gracefully, never crash on.
+Either camera may be absent (`camera:=none`, `head_camera:=none`) and ROS may be down entirely; both are normal states the UI must show gracefully, never crash on.
 
 ## Backend API (port 8000)
 
-Env: `ROSBRIDGE_HOST` (default `localhost`), `ROSBRIDGE_PORT` (`9090`), `RECORD3D_HOST` (an address or `usb`; default empty = wait for the UI to set one), `MOCK` (`0`; `1` = no ROS at all, synthesize everything, for UI work and tests), `DETECT_MODEL` (`yolov8n.pt`; an Ultralytics model for the objects around the hand, `""` = off; needs `requirements-detect.txt`, otherwise one warning and no objects), `DETECT_HZ` (`4`, passes per second at most) and `DETECT_THREADS` (`2`, torch threads: the detector shares the machine with the sim and the browser), `MOCK_OBJECTS` (`0`; `1` = live ROS but synthetic objects, for a sim that has no camera), `CORS_ORIGINS` (default `http://localhost:3000,http://127.0.0.1:3000`; also the allow-list for websocket `Origin` headers - a browser page from anywhere else is closed with 1008, clients that send no Origin are accepted).
+Env: `ROSBRIDGE_HOST` (default `localhost`), `ROSBRIDGE_PORT` (`9090`), `MOCK` (`0`; `1` = no ROS at all, synthesize everything, for UI work and tests), `DETECT_MODEL` (`yolov8n.pt`; an Ultralytics model for the objects around the hand, `""` = off; needs `requirements-detect.txt`, otherwise one warning and no objects), `DETECT_HZ` (`4`, passes per second at most) and `DETECT_THREADS` (`2`, torch threads: the detector shares the machine with the sim and the browser), `MOCK_OBJECTS` (`0`; `1` = live ROS but synthetic objects, for a sim that has no camera), `CORS_ORIGINS` (default `http://localhost:3000,http://127.0.0.1:3000`; also the allow-list for websocket `Origin` headers - a browser page from anywhere else is closed with 1008, clients that send no Origin are accepted).
 
 The backend reconnects to rosbridge forever with backoff and never exits because ROS is down.
 
@@ -91,12 +55,6 @@ The hand's meshes and linkage geometry are files of `htn_description` (env `DESC
 ### `GET /api/urdf`
 `200 text/xml` - the latest `/robot_description`. `503` until one has arrived. In mock mode serve a bundled copy (`backend/mock/hand.urdf`, generated once from the real xacro).
 
-### `GET /api/iphone`, `POST /api/iphone`
-```json
-{"host": "192.168.1.23", "state": "streaming", "detail": "", "rotation": 90}
-```
-`state`: `off` (no address) | `connecting` | `streaming` | `error` (`detail` says why; it keeps retrying with backoff). `POST {"host": "192.168.1.23"}` points the backend at a phone (`host[:port]`, or `"usb"` for the cable, `""` disconnects, anything else is a 422). The frontend remembers the address in localStorage and re-sends it once after a backend restart. `POST {"rotation": 0|90|180|270}` turns the image clockwise (the phone's sensor is portrait; default 90 = landscape, `RECORD3D_ROTATION`); the panel's rotate button steps it by 90. Both fields are optional in one POST. Mock mode always reports `{"host": "mock", "state": "streaming"}` with rotation 0.
-
 ### `WS /ws/state`
 Server -> client, JSON text, one message every 16.7 ms (60 Hz, one per display frame) regardless of ROS rates (latest-value sampling):
 ```json
@@ -107,7 +65,7 @@ Server -> client, JSON text, one message every 16.7 ms (60 Hz, one per display f
  "joints":  {"thumb_joint": 1.57, "index_joint": 0.0, "middle_joint": 0.0, "ring_joint": 0.0, "pinky_joint": 0.0},
  "state":   [1.0, 0.0, 0.0, 0.0, 0.0],
  "command": [1.0, 0.0, 0.0, 0.0, 0.0],
- "rates":   {"joint_states": 99.8, "hand_state": 50.0, "hand_command": 0.0, "color": 15.0, "depth": 15.0, "iphone": 30.0, "objects": 8.0}}
+ "rates":   {"joint_states": 99.8, "hand_state": 50.0, "hand_command": 0.0, "color": 15.0, "depth": 15.0, "iphone": 15.0, "objects": 8.0}}
 ```
 `passive` (bool, also in the JSON above as `"passive": false`) mirrors the HAL's latched `/hand/passive`: torque off, a person moves the fingers, `/hand/command` is ignored.
 
@@ -127,10 +85,10 @@ Client -> server, JSON text:
 ```
 -> calls `/hand/set_passive` (`std_srvs/SetBool`); the result comes back as `passive` in the state. The Backdrive switch in the command block sends it (only while armed) and locks the sliders and presets while it is on.
 
-### `WS /ws/camera/{realsense|iphone}/{color|depth}`
-Four streams, same protocol. The page opens only the one each panel is showing, and the backend only renders streams that have a viewer (`LatestChannel.viewers`). Client -> server, text `ready`: the server sends the next (newest) frame only after it, so a slow page is one frame behind at most and never watches a backlog; a client that never sends it is streamed as fast as frames come (a websocket's send buffer is unbounded, and on a busy laptop that backlog reached minutes). The page sends it on open and on every frame received. iPhone frames are capped at 30 fps (the phone sends 60; dropped before they are copied) and shrunk to 640 px on the long side: the browser decodes every frame on its main thread, next to the 3D hand. Server -> client, **binary** messages, each one complete JPEG. Latest-frame only: if the client is slow, drop frames, never queue.
-- `color`: RealSense - the ROS JPEG bytes passed through untouched; iPhone - the right half of the Record3D frame, JPEG-encoded.
-- `depth`: decoded (RealSense: the 16-bit PNG; iPhone: hue -> mm), colorized server-side and re-encoded as JPEG (quality ~80). Colormap: near = warm, far = cool (a desaturated two-hue ramp, far `#2f4a63` `#7f9bb3` `#d9dde0` `#e9c9a8` `#c2410c` near, mirrored in `frontend/src/lib/depth-ramp.ts`), over `DEPTH_MIN_MM=150 .. DEPTH_MAX_MM=2000` (env-overridable); pixels with value 0 (no reading) are rendered as the light UI background `#f6f6f6` so holes look intentional on a white page rather than black.
+### `WS /ws/camera/realsense/{color|depth}`, `WS /ws/camera/iphone/color`
+Three streams, same protocol (`iphone` is the head camera: the source keeps that name in the API; it has no depth, and any other pair is closed with 1008). The page opens only the one each panel is showing, and the backend only renders streams that have a viewer (`LatestChannel.viewers`). Client -> server, text `ready`: the server sends the next (newest) frame only after it, so a slow page is one frame behind at most and never watches a backlog; a client that never sends it is streamed as fast as frames come (a websocket's send buffer is unbounded, and on a busy laptop that backlog reached minutes). The page sends it on open and on every frame received. Server -> client, **binary** messages, each one complete JPEG. Latest-frame only: if the client is slow, drop frames, never queue.
+- `color`: the ROS JPEG bytes passed through untouched, for both cameras (the head camera node has already rotated, shrunk and rate-capped the iPhone image).
+- `depth`: decoded (the 16-bit PNG), colorized server-side and re-encoded as JPEG (quality ~80). Colormap: near = warm, far = cool (a desaturated two-hue ramp, far `#2f4a63` `#7f9bb3` `#d9dde0` `#e9c9a8` `#c2410c` near, mirrored in `frontend/src/lib/depth-ramp.ts`), over `DEPTH_MIN_MM=150 .. DEPTH_MAX_MM=2000` (env-overridable); pixels with value 0 (no reading) are rendered as the light UI background `#f6f6f6` so holes look intentional on a white page rather than black.
 
 Right after connect, and whenever it changes, the server also sends a JSON **text** message on the same socket:
 ```json
@@ -159,7 +117,7 @@ Server -> client, one text message for each processed frame:
 Env: `MIRROR_COMMAND_TOLERANCE` (`0.01`), one-euro filter `MIRROR_MIN_CUTOFF` (`1.5` Hz) and `MIRROR_BETA` (`1.0`).
 
 ### Mock mode (`MOCK=1`)
-No rosbridge connection. Joints: each finger curls on its own smooth, phase-shifted sine so the hand looks alive. Color: a generated moving test image. Depth: a generated moving depth field run through the real colorize path. iPhone: the same scene a few seconds later, packed as a real Record3D side-by-side hue frame and run through the real split/decode path. `/ws/state` commands are accepted and override the animation for 3 s. The 5-vector overrides all fingers; when the 3 s hold expires the mock sets `command` back to `null` (live mode never does). `/ws/mirror` ignores the content of the frames and tracks a synthetic hand that makes the same wave as the mock joints and holds the pose of a running capture; MediaPipe is not loaded. Everything above behaves identically otherwise.
+No rosbridge connection. Joints: each finger curls on its own smooth, phase-shifted sine so the hand looks alive. Color: a generated moving test image. Depth: a generated moving depth field run through the real colorize path. iPhone: the colour image of the same scene a few seconds later. `/ws/state` commands are accepted and override the animation for 3 s. The 5-vector overrides all fingers; when the 3 s hold expires the mock sets `command` back to `null` (live mode never does). `/ws/mirror` ignores the content of the frames and tracks a synthetic hand that makes the same wave as the mock joints and holds the pose of a running capture; MediaPipe is not loaded. Everything above behaves identically otherwise.
 
 ## Frontend
 
@@ -170,15 +128,14 @@ No rosbridge connection. Joints: each finger curls on its own smooth, phase-shif
 - `src/lib/config.ts` - backend URLs.
 - `src/lib/types.ts` - TypeScript types for every message above.
 - `src/lib/sim-store.ts` - zustand store: latest `/ws/state` message, connection status, a rolling history (last ~10 s) of `state` per finger for sparklines, and `sendCommand(data: number[])`. Owns the `/ws/state` socket with auto-reconnect. three.js code must read it with `useSimStore.getState()` inside `useFrame` (transient), never via React state at 30 Hz.
-- `src/hooks/use-phone.ts` - `usePhone()` polls `/api/iphone`; `connectPhone(host)`.
 - Per-frame rules for camera code: never put anything that changes every frame into React state (the hook hands React the same state object unless a value changed), and paint decoded frames from `requestAnimationFrame`, newest only.
-- `src/hooks/use-camera-stream.ts` - `useCameraStream(source: 'realsense' | 'iphone', kind: 'color' | 'depth')` -> `{canvasRef, meta, status, fps}`; owns the socket, decodes with `createImageBitmap`, draws to the canvas, auto-reconnects.
+- `src/hooks/use-camera-stream.ts` - `useCameraStream(source: 'realsense' | 'iphone', kind: 'color' | 'depth')` (`iphone` has only `color`) -> `{canvasRef, meta, status, fps}`; owns the socket, decodes with `createImageBitmap`, draws to the canvas, auto-reconnects.
 - `src/components/ui/*` - shadcn components.
 - `src/components/console/panel.tsx` - `<Panel index="01" title="Hand" tag="/joint_states" status=... actions=...>`: the framed viewport chrome every panel uses.
 
 ### Components (each owned by exactly one build agent)
 - `src/components/hand/hand-viewport.tsx` -> `export function HandViewport()`. The map: `world-layer.tsx` draws range rings (25 cm, 50 cm, 1 m) on the ground and, per tracked object, an outline box portalled under the model's `camera_link`, a drop line and footprint on the ground, a label chip and a dot on the radar (`hand-hud.tsx`); an object in view carries the accent, a remembered one fades with `age`. The `chase` preset sits over the wrist looking past the fingers, and the first objects to appear switch to it once.
-- `src/components/camera/camera-viewport.tsx` -> `export function CameraViewport({source}: {source: 'realsense' | 'iphone'})`; the RGB / DEPTH toggle lives in the panel header
+- `src/components/camera/camera-viewport.tsx` -> `export function CameraViewport({source}: {source: 'realsense' | 'iphone'})`; the RealSense's RGB / DEPTH toggle lives in the panel header; the iPhone panel with no frames says to start `head_camera:=iphone`
 - `src/components/telemetry/telemetry-strip.tsx` -> `export function TelemetryStrip()`; its command block has the Arm, Backdrive and Mirror switches
 - `src/components/mirror/mirror-panel.tsx` -> `export function MirrorPanel()`: panel 02, ALWAYS on the page next to the 3D hand, so the controller sees their tracked hand and the robot hand's answer together. While the Mirror switch is on it is `MirrorViewport` (the controller's webcam with the tracked skeleton, the guided calibration, controller / command / state bars); while it is off it is an idle notice. The webcam and `/ws/mirror` exist only while the switch is on (`MirrorViewport` owns both): an always-visible panel must not become an always-on camera that commands the hand.
 - `src/components/console/top-bar.tsx` -> `export function TopBar()`

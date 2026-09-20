@@ -73,12 +73,16 @@ fi
 cap=$(( ${RENTAL_MAX_HOURS:-${LAMBDA_MAX_HOURS:-4}} * 3600 ))
 markers="${LAMBDA_REMOTE_DIR:-htn}/policy/lambda"
 ssh_user="${LAMBDA_SSH_USER:-ubuntu}"
+if [[ -z "${LAMBDA_SSH_KEY_PATH:-}" && -z "${WATCHDOG_SSH_OVERRIDE:-}" ]]; then
+  echo "error: LAMBDA_SSH_KEY_PATH is not set (policy/lambda/.env, see .env.example)" >&2
+  exit 1
+fi
 echo "Watching instance $instance_id at $instance_ip (alive timeout ${timeout}s, cap ${cap}s, $(( $(date +%s) - launch_epoch ))s since the launch)"
 
 # ConnectTimeout bounds only the connect; the keepalives end a connection that goes dead
 SSH_CMD=(ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new
   -o ServerAliveInterval=15 -o ServerAliveCountMax=2
-  ${LAMBDA_SSH_KEY_PATH:+-i "$LAMBDA_SSH_KEY_PATH"} "${ssh_user}@${instance_ip}")
+  -i "${LAMBDA_SSH_KEY_PATH:-}" "${ssh_user}@${instance_ip}")
 # Test hook: WATCHDOG_SSH_OVERRIDE="bash -c" runs the probes in a local shell
 if [[ -n "${WATCHDOG_SSH_OVERRIDE:-}" ]]; then
   read -ra SSH_CMD <<< "$WATCHDOG_SSH_OVERRIDE"

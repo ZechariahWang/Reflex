@@ -11,7 +11,7 @@ for f in "$SCRIPT_DIR/.env" "$SCRIPT_DIR/.rental"; do
   fi
 done
 SSH_USER="${LAMBDA_SSH_USER:-ubuntu}"
-SSH_KEY_PATH="${LAMBDA_SSH_KEY_PATH:-$HOME/.ssh/id_ed25519}"
+SSH_KEY_PATH="${LAMBDA_SSH_KEY_PATH:-}"
 REMOTE_DIR="${LAMBDA_REMOTE_DIR:-htn}"
 # BatchMode: a prompt would hang an unattended pull
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes -i "$SSH_KEY_PATH")

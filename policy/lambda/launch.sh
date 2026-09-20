@@ -28,6 +28,7 @@ done
 require LAMBDA_API_KEY
 require LAMBDA_INSTANCE_TYPE
 require LAMBDA_SSH_KEY_NAME
+require LAMBDA_SSH_KEY_PATH
 [[ -f "$SSH_KEY_PATH" ]] || { echo "error: no ssh private key at $SSH_KEY_PATH (LAMBDA_SSH_KEY_PATH)" >&2; exit 1; }
 [[ "$mode" == smoke-scripts ]] || require CLAUDE_CODE_OAUTH_TOKEN
 max_hours="${LAMBDA_MAX_HOURS:-4}"

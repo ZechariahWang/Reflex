@@ -11,6 +11,7 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
+require LAMBDA_SSH_KEY_PATH
 PATHS="policy/outputs policy/logs docs/notes/training/runs"
 ip="${LAMBDA_INSTANCE_IP:-}"
 dry=()

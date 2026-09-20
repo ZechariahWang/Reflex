@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { StatusDot } from "@/components/console/status-dot"
 import { Button } from "@/components/ui/button"
@@ -25,6 +25,16 @@ async function call(path: string, body?: object, base: string = API.episodes): P
   }
 }
 
+function isEditableTarget(target: EventTarget | null): target is HTMLElement {
+  return (
+    target instanceof HTMLElement &&
+    (target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      target.isContentEditable)
+  )
+}
+
 /**
  * Record what the console sees as episodes (state, the last command as the action, both cameras)
  * and play one back: the hand is commanded again and the camera panels show the recording.
@@ -39,6 +49,8 @@ export function EpisodeBar() {
   const [episode, setEpisode] = useState(0)
   const [what, setWhat] = useState<"action" | "state">("action")
   const [error, setError] = useState<string | null>(null)
+  const [countdown, setCountdown] = useState<number | null>(null)
+  const countdownTimers = useRef<ReturnType<typeof setTimeout>[]>([])
 
   const take = useCallback((result: { ok: boolean; data: unknown }) => {
     const data = result.data as { datasets?: EpisodeDataset[]; detail?: string }
@@ -46,15 +58,78 @@ export function EpisodeBar() {
     setError(result.ok ? null : (data.detail ?? "request failed"))
   }, [])
 
+  const clearCountdown = useCallback(() => {
+    for (const timer of countdownTimers.current) clearTimeout(timer)
+    countdownTimers.current = []
+    setCountdown(null)
+  }, [])
+
+  const recordNow = useCallback(
+    (dataset: string, instruction: string) => {
+      void call("/record", { dataset, task: instruction }).then(take)
+    },
+    [take],
+  )
+
+  const saveRecording = useCallback(() => {
+    void call("/stop", { keep: true }).then(take)
+  }, [take])
+
+  const beginCountdown = useCallback(() => {
+    if (mode !== "idle" || name === "" || countdown !== null) return
+
+    const dataset = name
+    const instruction = task
+    clearCountdown()
+    setError(null)
+    setCountdown(2)
+    countdownTimers.current = [
+      setTimeout(() => setCountdown(1), 1000),
+      setTimeout(() => {
+        setCountdown(null)
+        countdownTimers.current = []
+        recordNow(dataset, instruction)
+      }, 2000),
+    ]
+  }, [clearCountdown, countdown, mode, name, recordNow, task])
+
   // On load, and whenever a recording or a replay ends: the list may have a new episode.
   useEffect(() => {
     if (mode === "idle") void call("").then(take)
   }, [mode, take])
 
+  useEffect(() => clearCountdown, [clearCountdown])
+
+  useEffect(() => {
+    if (mode !== "idle" && countdown !== null) clearCountdown()
+  }, [clearCountdown, countdown, mode])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== "Space" || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return
+      if (isEditableTarget(event.target)) return
+
+      if (mode === "recording") {
+        event.preventDefault()
+        saveRecording()
+        return
+      }
+
+      if (mode === "idle" && name !== "" && countdown === null) {
+        event.preventDefault()
+        beginCountdown()
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [beginCountdown, countdown, mode, name, saveRecording])
+
   const selected = datasets.find((dataset) => dataset.name === name)
   const count = selected?.episodes.length ?? 0
   const shown = Math.min(episode, Math.max(0, count - 1))
   const idle = mode === "idle"
+  const countdownActive = countdown !== null
 
   return (
     <section
@@ -66,7 +141,7 @@ export function EpisodeBar() {
         aria-label="Dataset name"
         list="episode-datasets"
         value={name}
-        disabled={!idle}
+        disabled={!idle || countdownActive}
         onChange={(event) => setName(event.target.value)}
         className={`${FIELD} w-32`}
       />
@@ -78,7 +153,7 @@ export function EpisodeBar() {
       <input
         aria-label="Task"
         value={selected?.task || task}
-        disabled={!idle || Boolean(selected)}
+        disabled={!idle || countdownActive || Boolean(selected)}
         onChange={(event) => setTask(event.target.value)}
         className={`${FIELD} w-44`}
       />
@@ -97,7 +172,7 @@ export function EpisodeBar() {
           variant="outline"
           size="xs"
           className={ACTION}
-          disabled={!idle || name === ""}
+          disabled={!idle || name === "" || countdownActive}
           onClick={() => void call("/record", { dataset: name, task }).then(take)}
         >
           Record
@@ -109,7 +184,7 @@ export function EpisodeBar() {
       <select
         aria-label="Episode"
         value={shown}
-        disabled={!idle || count === 0}
+        disabled={!idle || countdownActive || count === 0}
         onChange={(event) => setEpisode(Number(event.target.value))}
         className={`${FIELD} w-40`}
       >
@@ -123,7 +198,7 @@ export function EpisodeBar() {
       <select
         aria-label="What to replay"
         value={what}
-        disabled={!idle}
+        disabled={!idle || countdownActive}
         onChange={(event) => setWhat(event.target.value as "action" | "state")}
         className={`${FIELD} w-24`}
       >
@@ -139,7 +214,7 @@ export function EpisodeBar() {
           variant="outline"
           size="xs"
           className={ACTION}
-          disabled={!idle || count === 0}
+          disabled={!idle || countdownActive || count === 0}
           onClick={() => void call("/replay", { dataset: name, episode: shown, what, speed: 1 }).then(take)}
         >
           Replay
@@ -150,6 +225,7 @@ export function EpisodeBar() {
 
       <MovementPlayer replaying={mode === "replaying"} onError={setError} />
 
+      {countdownActive && <span className="label-micro tracking-normal text-signal normal-case">recording in {countdown}</span>}
       <Progress />
       {error && <span className="label-micro tracking-normal text-signal normal-case">{error}</span>}
     </section>

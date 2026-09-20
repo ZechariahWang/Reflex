@@ -1,6 +1,7 @@
 """Record from the hub, play back into it: the console's own episode format."""
 import asyncio
 import json
+import shutil
 
 import pytest
 
@@ -45,6 +46,24 @@ def test_a_discarded_recording_leaves_nothing_and_the_next_one_takes_its_number(
 
     assert episodes.datasets()[0]["episodes"] == []
     assert not (tmp_path / "grasp" / "episode_000").exists()
+
+
+def test_a_recording_after_a_deleted_episode_keeps_the_episodes_that_are_left(tmp_path):
+    async def scenario():
+        _, episodes, _ = await recorded(tmp_path)
+        episodes.start_recording("grasp", "")
+        await asyncio.sleep(0.1)
+        await episodes.stop()
+        kept = read_frames(tmp_path / "grasp" / "episode_001")
+        shutil.rmtree(tmp_path / "grasp" / "episode_000")  # a person removes a bad episode
+        episodes.start_recording("grasp", "")
+        await asyncio.sleep(0.1)
+        await episodes.stop()
+        return kept
+
+    kept = asyncio.run(scenario())
+    assert read_frames(tmp_path / "grasp" / "episode_001") == kept
+    assert (tmp_path / "grasp" / "episode_002" / "frames.jsonl").is_file()
 
 
 def test_a_replay_commands_the_hand_and_owns_the_camera_panels(tmp_path):

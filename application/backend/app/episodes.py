@@ -84,7 +84,8 @@ class Episodes:
         meta = dataset / "meta.json"
         if not meta.is_file():
             meta.write_text(json.dumps({"fps": FPS, "task": task}))
-        index = len(episode_dirs(dataset))
+        # after the highest number, not the count: a person may have deleted a bad episode
+        index = max((int(p.name.split("_")[1]) + 1 for p in episode_dirs(dataset)), default=0)
         episode = dataset / f"episode_{index:03d}"
         if episode.exists():
             shutil.rmtree(episode)  # the leftover of a discarded or crashed recording

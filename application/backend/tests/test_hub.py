@@ -167,3 +167,13 @@ def test_the_detector_sees_the_wrist_picture_upright_and_the_object_lands_where_
     (cup,) = hub.snapshot(True)["objects"]
     assert cup["xyz"][0] == pytest.approx(0.5, abs=0.01), "placed with the depth under the box turned back"
     assert hub.camera_meta("realsense", "color")["rotation"] == 90 and "rotation" not in hub.camera_meta("iphone", "color")
+
+
+def test_blocked_fingers_from_the_hal_show_in_the_state():
+    hub = Hub(Settings())
+    assert hub.snapshot(True)["blocked"] == [False] * 5
+    hub.on_blocked([0.0, 0.0, 1.0, 0.0, 0.0])
+    assert hub.snapshot(True)["blocked"] == [False, False, True, False, False]
+    hub.on_blocked([1.0])  # not 5 values: ignored
+    assert hub.snapshot(True)["blocked"] == [False, False, True, False, False]
+

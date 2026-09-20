@@ -26,6 +26,7 @@ Finger order everywhere: `thumb, index, middle, ring, pinky`.
 | `/robot_description` | `std_msgs/String` | URDF XML, latched (transient local); arrives once on subscribe. 7 links, primitives only (boxes), joints `<finger>_joint`, links `<finger>_finger`, root `base_link` (`world` link + fixed mount exist in sim only). Contains `<gazebo>`/`<ros2_control>` tags a URDF parser must ignore. |
 | `/joint_states` | `sensor_msgs/JointState` | radians, 0 = open .. 1.57 = closed. ~100 Hz in sim. Names are NOT guaranteed to be in finger order - map by name. |
 | `/hand/state` | `std_msgs/Float64MultiArray` | 5 x 0..1 measured, finger order. 50 Hz. |
+| `/hand/blocked` | `std_msgs/Float64MultiArray` | 5 x 0 or 1, finger order: 1 = the contact stop holds that finger. Latched, on change. |
 | `/hand/command` | `std_msgs/Float64MultiArray` | 5 x 0..1 target, finger order. Publishing here moves the hand (the HAL clamps + rate-limits). |
 | `/camera/color/image_raw/compressed` | `sensor_msgs/CompressedImage` | JPEG, 640x480, 15 Hz, ~55 KB. `data` is base64 over rosbridge. |
 | `/camera/aligned_depth_to_color/camera_info` | `sensor_msgs/CameraInfo` | Intrinsics of the aligned depth (= the colour stream). ROS 2 spells the matrix `k`. Subscribed at 1 Hz; the object placement needs `fx fy cx cy`. |
@@ -71,6 +72,8 @@ Server -> client, JSON text, one message every 16.7 ms (60 Hz, one per display f
  "rates":   {"joint_states": 99.8, "hand_state": 50.0, "hand_command": 0.0, "color": 15.0, "depth": 15.0, "iphone": 15.0, "imu": 60.0, "objects": 8.0}}
 ```
 `passive` (bool, also in the JSON above as `"passive": false`) mirrors the HAL's latched `/hand/passive`: torque off, a person moves the fingers, `/hand/command` is ignored.
+
+`blocked` (5 booleans in finger order, also in the JSON above as `"blocked": [false, false, false, false, false]`) mirrors the HAL's latched `/hand/blocked`: the contact stop holds that finger - it met resistance and pushes on with a low torque. A normal state of a grasp, not a fault. All `false` until the HAL says otherwise, in the sim and in mock mode. The console tints that finger's contact pad on the measured hand and its letter in the command block.
 
 `objects` (also in the JSON above, between `passive` and `rates`) is the surroundings: every object the backend currently tracks, oldest first.
 ```json

@@ -165,6 +165,7 @@ class Hub:
         self._command: list[float] | None = None
         self._orientation: dict[str, float] | None = None
         self._passive = False
+        self._blocked = [False] * len(FINGERS)
         self._urdf: str | None = None
         self._tracker = Tracker()
         self._intrinsics: Intrinsics | None = None
@@ -234,6 +235,12 @@ class Hub:
     def on_passive(self, passive: object) -> None:
         with self._lock:
             self._passive = passive is True
+
+    def on_blocked(self, values: Sequence[object]) -> None:
+        vector = finger_vector(values)
+        if vector is not None:
+            with self._lock:
+                self._blocked = [value > 0.5 for value in vector]
 
     def clear_hand_command(self) -> None:
         """Back to "nobody has commanded": the mock calls this when its override expires."""
@@ -410,6 +417,7 @@ class Hub:
                 "state": list(self._state),
                 "command": None if self._command is None else list(self._command),
                 "passive": self._passive,
+                "blocked": list(self._blocked),
                 "objects": self._tracker.objects(now),
                 "rates": {topic: meter.hz(now) for topic, meter in self._meters.items()},
             }

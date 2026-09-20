@@ -34,6 +34,7 @@ export const OVERLAY_LAYER = 1
 
 /** The accent belongs to the commanded ghost alone; the measured hand is white, metal and graphite. */
 const SIGNAL = "#f2490c"
+const PAD = "#1c1c1e"
 const INK = "#242424"
 
 /** Looks by URDF material name (`appearance` in hand_params.yaml names the parts, not these colours). */
@@ -42,7 +43,7 @@ const SURFACES: Record<string, ConstructorParameters<typeof MeshPhysicalMaterial
   servo: { color: "#3b3c41", roughness: 0.45, metalness: 0.2 },
   finger: { color: "#f4f4f2", roughness: 0.5, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.6 },
   accent: { color: "#c4c6ca", roughness: 0.35, metalness: 0.65 },
-  pad: { color: "#1c1c1e", roughness: 0.9, metalness: 0 },
+  pad: { color: PAD, roughness: 0.9, metalness: 0 },
   camera: { color: "#6b6e75", roughness: 0.3, metalness: 0.8 },
   pcb: { color: "#21483a", roughness: 0.6, metalness: 0.15 },
   // The mannequin hand of the CAD: a quiet reference behind the machine, not part of it.
@@ -91,6 +92,8 @@ export interface HandModel {
   top: number
   /** Ghost only: 0 hides a finger, 1 draws it fully. */
   setPresence: (rig: FingerRig, amount: number) => void
+  /** Measured hand only: the contact pad of a finger the HAL holds takes the accent. */
+  setBlocked: (rig: FingerRig, blocked: boolean) => void
   setVisible: (visible: boolean) => void
   dispose: () => void
 }
@@ -166,6 +169,7 @@ export function buildHandModel(description: HandDescription, variant: HandVarian
   const fingerMaterials = new Map<Finger, Material[]>()
   const fingerEdges = new Map<Finger, LineBasicMaterial>()
   const tips = new Map<Finger, Object3D>()
+  const pads = new Map<Finger, MeshPhysicalMaterial>()
   for (const mesh of parts) {
     const link = owningLink(mesh)
     const finger = fingerOfLink(link)
@@ -187,6 +191,11 @@ export function buildHandModel(description: HandDescription, variant: HandVarian
       mesh.castShadow = !BACKDROP.has(look)
       mesh.receiveShadow = !BACKDROP.has(look)
       mesh.material = surface(look)
+      if (finger && look === "pad") {
+        // Its own material, not the shared one: a blocked finger's pad changes colour alone
+        if (!pads.has(finger)) pads.set(finger, track(new MeshPhysicalMaterial(SURFACES.pad)))
+        mesh.material = pads.get(finger)!
+      }
     }
     if (BACKDROP.has(look)) {
       mesh.renderOrder = 1 // after the opaque machine, which then shows through it
@@ -289,6 +298,9 @@ export function buildHandModel(description: HandDescription, variant: HandVarian
       for (const material of rig.materials) {
         material.opacity = (material instanceof LineBasicMaterial ? GHOST_EDGE_OPACITY : GHOST_FILL_OPACITY) * amount
       }
+    },
+    setBlocked: (rig, blocked) => {
+      pads.get(rig.finger)?.color.set(blocked ? SIGNAL : PAD)
     },
     setVisible: (visible) => {
       root.visible = visible

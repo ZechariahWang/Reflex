@@ -188,6 +188,7 @@ function Hand({ solid, ghost, ghostEnabled, hud, onMovingChange }: HandProps) {
       angles[i] += step
       curls[i] += (curl - curls[i]) * follow
       rig.setAngle(angles[i])
+      solid.setBlocked(rig, message?.blocked?.[i] ?? false)
     }
 
     // The shadow map only depends on the pose, never on the camera: redraw it while the fingers

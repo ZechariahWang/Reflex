@@ -68,6 +68,8 @@ export interface StateMessage {
   command: FingerValues | null
   /** Backdrive mode: the HAL has the torque off, a person moves the fingers, commands are ignored. */
   passive: boolean
+  /** Finger order: the HAL's contact stop holds that finger (it met resistance and pushes on softly). */
+  blocked: boolean[]
   /** The surroundings: objects the backend currently tracks (empty without a detector). */
   objects: TrackedObject[]
   rates: TopicRates

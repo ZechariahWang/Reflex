@@ -163,7 +163,12 @@ export function CommandBlock() {
       <div className="flex items-center gap-3">
         {FINGERS.map((finger, i) => (
           <div key={finger} className="flex items-center gap-1.5">
-            <span className="label-micro">{finger[0]}</span>
+            <span
+              className={snapshot?.blocked?.[i] ? "label-micro text-signal" : "label-micro"}
+              title={snapshot?.blocked?.[i] ? "contact stop: holding with low torque" : undefined}
+            >
+              {finger[0]}
+            </span>
             <div className="relative flex h-4 w-20 items-center">
               <Slider
                 min={0}

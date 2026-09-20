@@ -69,6 +69,18 @@ python server.py --http --port 8770 --public-host <machine>.<tailnet>.ts.net
 sudo tailscale serve --bg --https 8771 http://127.0.0.1:8770   # -> https://<machine>.<tailnet>.ts.net:8771/mcp
 ```
 
+A connector that lives in the cloud (a claude.ai custom connector: Anthropic's servers make the
+connection, not your device) is not on the tailnet and needs a public URL. Then, and only then,
+`tailscale funnel` - with `--secret`, which moves the endpoint to `/<secret>/mcp` (anything else
+is a 404). The secret in the URL is all the authentication there is: make it long and random
+(`python3 -c "import secrets; print(secrets.token_urlsafe(24))"`), keep it out of the repo, and
+turn the funnel off when the demo is over (`sudo tailscale funnel --https 10000 off`).
+
+```bash
+python server.py --http --port 8770 --public-host <machine>.<tailnet>.ts.net --secret <secret>
+sudo tailscale funnel --bg --https 10000 http://127.0.0.1:8770   # -> https://<machine>.<tailnet>.ts.net:10000/<secret>/mcp
+```
+
 `--public-host` is needed because on localhost the MCP SDK answers 421 to any other `Host` header
 (DNS rebinding protection), and the proxy forwards the public name.
 

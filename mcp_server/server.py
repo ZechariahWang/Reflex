@@ -158,8 +158,11 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--public-host", help="the name an HTTPS proxy in front serves this under (e.g. "
                         "tailscale serve: <machine>.<tailnet>.ts.net); on localhost the SDK refuses any other Host")
+    parser.add_argument("--secret", help="serve on /<secret>/mcp instead of /mcp: the only thing between the "
+                        "hand and a stranger when the URL is public (tailscale funnel), so make it long and random")
     args = parser.parse_args()
     if args.http:
+        path = f"/{args.secret}/mcp" if args.secret else "/mcp"
         security = None  # the SDK's default: on localhost, only localhost as Host (DNS rebinding protection)
         if args.public_host:
             names = ["127.0.0.1", "localhost", args.public_host]
@@ -168,6 +171,7 @@ if __name__ == "__main__":
                 allowed_hosts=[entry for name in names for entry in (name, name + ":*")],
                 allowed_origins=[f"{scheme}://{entry}" for scheme in ("http", "https")
                                  for name in names for entry in (name, name + ":*")])
-        mcp.run("streamable-http", host=args.host, port=args.port, transport_security=security)
+        mcp.run("streamable-http", host=args.host, port=args.port, streamable_http_path=path,
+                transport_security=security)
     else:
         mcp.run("stdio")

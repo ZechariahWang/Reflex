@@ -1,7 +1,8 @@
 # Lambda training: rented GPU, local watchdog, agent on the instance
 
 How a SmolVLA fine-tune runs on a rented Lambda Cloud GPU with no person at the
-keyboard. Status: design only, nothing implemented. Date: 2026-09-19. This
+keyboard. Status: built; the tests pass and a CPU run of generator, split, training and
+evaluation works; no rental is run yet (the two smoke levels are next). Date: 2026-09-19. This
 replaces the manual Lambda steps of `../system-design.md` (Training) and closes
 its dataset storage question: the dataset goes from the laptop to the instance
 by `rsync` and nowhere else.
@@ -53,8 +54,9 @@ evaluation script, the synthetic dataset generator, the plan format and a first
 plan, their tests, the two smoke levels, the doc updates.
 
 Out:
-- Depth and the forehead camera as inputs. The recorder has one image,
-  `camera2`. When it has more, only `plan.md` changes.
+- Depth as an input. The images are what `ExoHand` records (`camera1`, the
+  forehead phone, and `camera2`, the wrist); the generator takes its features
+  from `ExoHand`, so it follows the recorder.
 - Resume of a run across rentals. A rental starts each variant from
   `smolvla_base`.
 - More than one instance, more than one person on one account.
@@ -73,6 +75,8 @@ policy/lambda/
   check_key.sh       laptop: is LAMBDA_API_KEY valid
   check_instance.sh  laptop: which instance would terminate target
   run_logged.sh      instance: run one long command with log, EXIT= marker, liveness
+  common.sh          laptop: sourced by the laptop scripts (settings, .rental, API helpers)
+  smoke_plan.md      the plan that `launch.sh --smoke` puts on the instance
   tests/             shell tests for watchdog.sh and run_logged.sh
   .env.example       keys, LAMBDA_INSTANCE_TYPE, LAMBDA_DATASET, LAMBDA_MAX_HOURS
 policy/lerobot_robot_exo_hand/
@@ -167,8 +171,10 @@ Watchdog rules, one probe every 60 s:
 `launch.sh` touches `.watchdog-alive` once after the upload, so rule 1 counts
 from a known time. A future-dated mtime is read as now. The final pull has a
 time limit and two retries; the terminate happens whether it succeeds or not.
-`launch.sh` writes the launch time and the instance id to `policy/lambda/.rental`
-(ignored by git), so a restarted watchdog keeps the same cap.
+`launch.sh` writes the instance id, the ip, the launch time and the cap of this
+rental (`RENTAL_MAX_HOURS`: 1 for a smoke run) to `policy/lambda/.rental`
+(ignored by git), so a restarted watchdog keeps the same cap. The cap and the
+cap warning are checked before the probe, so they hold with no ssh too.
 `--terminate-cmd "echo"` runs the watchdog with no real terminate.
 
 Results:
@@ -325,6 +331,8 @@ The cap for a smoke run is 1 hour.
 - Root `CLAUDE.md`: the layout rule permits `.claude/`; `policy/` names
   `policy/lambda/`; `docs/notes/training/` holds the training plan and the run
   notes.
+- `pull.sh` leaves `training_state/` of each checkpoint on the instance (a third
+  of its size, of use only for a resume, which is out of scope).
 - `policy/README.md` and `../system-design.md`: the Training sections point
   here; the dataset storage question is closed.
 - `../notes/next-work.md`: the state of this work.

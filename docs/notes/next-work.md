@@ -56,6 +56,16 @@ file at the end of a session; the designs themselves are in `../specs/`.
 - Left of the contact stop's work order: the tuning on the hand (the
   `blocked_*` values, `hold_torque`, then `torque_limit` back up for speed).
 
+- **Lambda training: built, no rental run yet** (`../specs/lambda-training-design.md`,
+  `policy/README.md`, Training on a rented Lambda GPU). Tested here: the split and the error math
+  (`pytest`), the watchdog rules and `run_logged.sh` (shell tests with a fake instance), and one
+  CPU run of generator -> split -> `lerobot-train --dataset.episodes` -> `heldout eval`.
+  `launch.sh`, `setup.sh` and `pull.sh` have run nowhere. Left, in this order: fill
+  `policy/lambda/.env` (Lambda key, ssh key name, `claude setup-token`), `launch.sh --dry-run`,
+  `launch.sh --smoke-scripts`, `launch.sh --smoke`, then a real dataset and `plan.md`. Not
+  verified: that the token gives Opus, the `lerobot-train` option names of the variants, the
+  speed of the evaluation on a GPU.
+
 ## Done and working
 
 - Recorder: `exo_hand_leader`, `--robot.passive`, the `/hand/passive` checks;

@@ -7,8 +7,9 @@ servos on a USB adapter (no microcontroller of ours).
 
 ## Layout
 
-Monorepo. The repo root holds only `README.md`, `CLAUDE.md` and `.gitignore`;
-everything else goes in a top-level subfolder per concern.
+Monorepo. The repo root holds only `README.md`, `CLAUDE.md`, `.gitignore` and
+`.claude/` (project skills for Claude Code); everything else goes in a top-level
+subfolder per concern.
 
 - `physical_layer/` - ROS 2 workspace: hand model, sim, HAL, teleop. See
   `physical_layer/CLAUDE.md` before touching anything in there.
@@ -24,11 +25,16 @@ everything else goes in a top-level subfolder per concern.
 - `docs/` - design documents. Read `docs/system-design.md` (devices, ROS
   layout, policy, safety, open questions) before design work. Specs for single features go in `docs/specs/`.
   `docs/notes/next-work.md` says where the work stopped: read it at the start of a session.
+  `docs/notes/training/` holds the training plan (`plan.md`, a person writes it before a GPU
+  rental) and the run notes of each rental (`runs/RUN-<UTC>/`, the agent on the instance writes them).
 - `policy/` - the learned policy side, plain Python (>= 3.12) outside ROS so
   torch & co. never enter the colcon build. `lerobot_robot_exo_hand` is the
   LeRobot `Robot` for the hand; it runs on the GPU laptop and reaches the
   contracts below through rosbridge, never through `rclpy`. Training, datasets
   and inference scripts go here too. See `docs/specs/policy-link-design.md`.
+  `policy/lambda/` rents a Lambda GPU for a training run: a watchdog on the laptop, and a
+  Claude Code agent with the `exo-trainer` skill on the instance
+  (`docs/specs/lambda-training-design.md`).
 
 ## Contracts that cross folders
 

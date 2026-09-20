@@ -12,3 +12,10 @@ policy/datasets/
 
 # secrets (API keys, tokens)
 .env
+
+# a Lambda rental (policy/lambda/): what comes home, and the state of the running rental
+policy/outputs/
+policy/logs/
+policy/lambda/.rental
+policy/lambda/.watchdog.lock
+policy/lambda/PULL-FAILED-*

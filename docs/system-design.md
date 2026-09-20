@@ -149,12 +149,12 @@ current one.
 
 - Cloud GPU on Lambda. An A10 (24 GB) is sufficient for the default fine-tune;
   use an A100 for the run with the unfrozen vision encoder.
-- Lambda deletes the instance storage at termination. Push the checkpoints to
-  a private Hugging Face repository (`--policy.repo_id`). The built-in push
-  uploads only the final checkpoint, so copy the output folder with `rsync`
-  before termination if a run stops early.
-- Dataset storage is not decided. The dataset contains video of people; the
-  options are a private Hugging Face dataset repository or local files only.
+- How a rental runs (launch, watchdog on the laptop, agent on the instance,
+  held-out evaluation): `specs/lambda-training-design.md`.
+- Lambda deletes the instance storage at termination. The watchdog on the
+  laptop pulls the checkpoints with `rsync`; nothing goes to Hugging Face.
+- Dataset storage: local files only. The dataset contains video of people; it
+  goes from the laptop to the instance by `rsync` and nowhere else.
 - 20,000 steps take ~4 hours on an A100.
 - Train three versions and compare them on held-out objects:
   1. RGB only, frozen vision encoder (default)

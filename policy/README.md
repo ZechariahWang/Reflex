@@ -13,7 +13,7 @@ Python >= 3.12 (a requirement of `lerobot`). No ROS.
 ```bash
 cd policy
 uv venv --python 3.12 && source .venv/bin/activate
-uv pip install -e ".[dev]" "lerobot[smolvla,async]==0.6.1"   # async = gRPC for the inference loop
+uv pip install -e ".[dev]" "lerobot[smolvla,async,training]==0.6.1"   # async = gRPC for the inference loop, training = lerobot-train
 python -m pytest            # no rosbridge needed
 ```
 
@@ -133,8 +133,9 @@ the repo after each session.
 
 ## Training
 
-`lerobot-train` does it; there is no training code of ours. On the training
-machine (Lambda, see `../docs/system-design.md`): the Setup above, then
+`lerobot-train` does it; there is no training code of ours. A rental of a Lambda GPU runs it
+with no person at the keyboard (next section). By hand, on a machine with a GPU: the Setup
+above, then
 
 ```bash
 lerobot-train \
@@ -160,6 +161,40 @@ there, so this had no effect in the dry run.
 If the log says that `torchcodec` cannot load `libavutil`, lerobot decodes the
 video with `pyav`. It works, and it is slower: install an FFmpeg that
 `torchcodec` supports on the training machine.
+
+## Training on a rented Lambda GPU
+
+Design: `../docs/specs/lambda-training-design.md`. `lambda/launch.sh` rents one instance, uploads
+`policy/`, one dataset, the `exo-trainer` skill and `docs/notes/training/`, and starts Claude Code
+(Opus) there. The agent runs the variants of `docs/notes/training/plan.md`, evaluates each
+checkpoint on held-out episodes (`heldout.py`), writes `docs/notes/training/runs/RUN-<UTC>/` and
+ends the rental. `lambda/watchdog.sh` on the laptop pulls `policy/outputs/`, `policy/logs/` and the
+run notes every 5 minutes and terminates the instance: 30 minutes after the last sign of life, at
+`LAMBDA_MAX_HOURS`, or when the agent asks. **Keep the laptop awake and online for the whole
+rental: nothing else stops the billing.**
+
+```bash
+cp policy/lambda/.env.example policy/lambda/.env   # the keys, the GPU type, LAMBDA_DATASET, the cap
+policy/lambda/check_key.sh
+policy/lambda/launch.sh --dry-run          # the confirm screen and the capacity, no launch
+policy/lambda/launch.sh --smoke-scripts    # ~10 min, no agent: 50 steps on a fake dataset
+policy/lambda/launch.sh --smoke            # the agent, two 50-step variants on the fake dataset
+policy/lambda/launch.sh                    # the rental of plan.md; then: tmux attach -t htn-train
+policy/lambda/check_instance.sh            # what bills now
+policy/lambda/terminate.sh                 # stop it by hand
+```
+
+A smoke run is good if a `pretrained_model` folder and a `results.jsonl` are on the laptop and
+`check_instance.sh` shows no instance. Several recording sessions: merge them into one dataset
+before a rental. Delete an episode only with `lerobot-edit-dataset`, never by hand: it numbers the
+episodes again. The checkpoints come home without `training_state/` (~1 GB each), so a run does not
+resume on another rental. Revoke the `claude setup-token` token after the hackathon.
+
+Tests of the scripts, with no instance and no key:
+
+```bash
+for t in policy/lambda/tests/test_*.sh; do bash "$t"; done
+```
 
 ## Inference loop
 

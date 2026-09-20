@@ -28,6 +28,17 @@ def test_joint_states_keep_only_finite_finger_joints():
     assert joints["pinky_joint"] == 0.5 and joints["thumb_joint"] == 0.0
 
 
+def test_orientation_keeps_only_finite_imu_quaternions():
+    hub = Hub(Settings())
+    assert hub.snapshot(True)["orientation"] is None
+
+    hub.on_orientation({"x": 0.0, "y": 0.0, "z": float("nan"), "w": 1.0})
+    assert hub.snapshot(True)["orientation"] is None
+
+    hub.on_orientation({"x": 0.1, "y": 0.2, "z": 0.3, "w": 0.9})
+    assert hub.snapshot(True)["orientation"] == {"x": 0.1, "y": 0.2, "z": 0.3, "w": 0.9}
+
+
 def test_head_jpeg_reaches_the_iphone_color_channel_untouched():
     async def scenario() -> Hub:
         hub = Hub(Settings())

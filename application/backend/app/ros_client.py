@@ -27,12 +27,14 @@ COLOR_TOPIC = "/camera/color/image_raw/compressed"
 HEAD_COLOR_TOPIC = "/head_camera/color/image_raw/compressed"
 DEPTH_TOPIC = "/camera/aligned_depth_to_color/image_raw/compressedDepth"
 CAMERA_INFO_TOPIC = "/camera/aligned_depth_to_color/camera_info"
+IMU_TOPIC = "/camera/imu"
 HEAD_DEPTH_TOPIC = "/head_camera/aligned_depth_to_color/image_raw/compressedDepth"
 HEAD_CAMERA_INFO_TOPIC = "/head_camera/color/camera_info"  # the head depth is on the colour picture's pixels
 HEAD_DEPTH_THROTTLE_MS = 200  # only the object detector reads it, a few times a second
 CAMERA_INFO_THROTTLE_MS = 1000  # intrinsics do not change; one a second is plenty
 MULTI_ARRAY = "std_msgs/Float64MultiArray"
 COMPRESSED_IMAGE = "sensor_msgs/CompressedImage"
+IMU = "sensor_msgs/Imu"
 
 
 class RosClient:
@@ -73,6 +75,7 @@ class RosClient:
         self._subscribe(
             ros, DEPTH_TOPIC, COMPRESSED_IMAGE, IMAGE_THROTTLE_MS, lambda m: hub.on_depth(base64.b64decode(m["data"]))
         )
+        self._subscribe(ros, IMU_TOPIC, IMU, STATE_THROTTLE_MS, lambda m: hub.on_orientation(m["orientation"]))
         self._subscribe(
             ros,
             HEAD_COLOR_TOPIC,

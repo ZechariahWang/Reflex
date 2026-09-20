@@ -26,7 +26,7 @@ from .objects import Detector, Intrinsics, Located, Tracker, locate, make_detect
 LOGGER = logging.getLogger(__name__)
 
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
-TOPICS = ("joint_states", "hand_state", "hand_command", "color", "depth", "iphone", "objects")
+TOPICS = ("joint_states", "hand_state", "hand_command", "color", "depth", "iphone", "imu", "objects")
 # The source keeps the name `iphone` in the API; on the ROS side it is the head camera, colour only.
 CAMERA_STREAMS = {"realsense": ("color", "depth"), "iphone": ("color",)}
 RATE_WINDOW_S = 2.0
@@ -135,6 +135,7 @@ class Hub:
         self._joints: dict[str, float] = {f"{finger}_joint": 0.0 for finger in FINGERS}
         self._state: list[float] = [0.0] * len(FINGERS)
         self._command: list[float] | None = None
+        self._orientation: dict[str, float] | None = None
         self._passive = False
         self._urdf: str | None = None
         self._tracker = Tracker()
@@ -179,6 +180,18 @@ class Hub:
             self._meters["hand_command"].tick(time.monotonic())
             if vector is not None:
                 self._command = vector
+
+    def on_orientation(self, value: dict) -> None:
+        """Quaternion from sensor_msgs/Imu.orientation, or ignored if malformed."""
+        try:
+            quat = {axis: float(value[axis]) for axis in ("x", "y", "z", "w")}
+        except (KeyError, TypeError, ValueError):
+            return
+        if not all(math.isfinite(component) for component in quat.values()):
+            return
+        with self._lock:
+            self._meters["imu"].tick(time.monotonic())
+            self._orientation = quat
 
     def on_passive(self, passive: object) -> None:
         with self._lock:
@@ -346,6 +359,7 @@ class Hub:
                 "ros_connected": ros_connected,
                 "fingers": list(FINGERS),
                 "joints": dict(self._joints),
+                "orientation": None if self._orientation is None else dict(self._orientation),
                 "state": list(self._state),
                 "command": None if self._command is None else list(self._command),
                 "passive": self._passive,

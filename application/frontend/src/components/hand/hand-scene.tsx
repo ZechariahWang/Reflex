@@ -132,15 +132,27 @@ function Hand({ solid, ghost, ghostEnabled, hud, onMovingChange }: HandProps) {
     ghostAngles: new Float32Array(FINGERS.length),
     presence: 0,
   })
+  const baseOrientation = useRef({
+    solidRest: new Quaternion(),
+    ghostRest: new Quaternion(),
+    map: new Quaternion(),
+    mapInverse: new Quaternion(),
+    sensor: new Quaternion(),
+    delta: new Quaternion(),
+  })
   // Starts as moving, so the first frames draw their shadows.
   const motion = useRef({ moving: true, stillFor: 0 })
 
   // A new model needs its shadows drawn even if no finger is moving.
   useEffect(() => {
+    baseOrientation.current.solidRest.copy(solid.root.quaternion)
+    baseOrientation.current.ghostRest.copy(ghost.root.quaternion)
+    baseOrientation.current.map.copy(solid.root.quaternion)
+    baseOrientation.current.mapInverse.copy(baseOrientation.current.map).invert()
     motion.current.moving = true
     motion.current.stillFor = 0
     onMovingChange(true)
-  }, [solid, onMovingChange])
+  }, [solid, ghost, onMovingChange])
   const nodes = useRef<HudNodes | null>(null)
   const projected = useRef(new Vector3())
   const callouts = useRef({
@@ -154,6 +166,17 @@ function Hand({ solid, ghost, ghostEnabled, hud, onMovingChange }: HandProps) {
     const message = useSimStore.getState().live.message
     const { angles, curls, ghostAngles } = pose.current
     const follow = damp(FOLLOW_RATE, dt)
+    const orientation = baseOrientation.current
+    const imu = message?.orientation
+    if (imu) {
+      orientation.sensor.set(imu.x, imu.y, imu.z, imu.w).normalize()
+      orientation.delta.copy(orientation.map).multiply(orientation.sensor).multiply(orientation.mapInverse)
+      solid.root.quaternion.copy(orientation.delta).multiply(orientation.solidRest)
+      ghost.root.quaternion.copy(orientation.delta).multiply(orientation.ghostRest)
+    } else {
+      solid.root.quaternion.copy(orientation.solidRest)
+      ghost.root.quaternion.copy(orientation.ghostRest)
+    }
 
     let moved = 0
     for (const rig of solid.fingers) {
@@ -384,8 +407,8 @@ function CameraRig({
       makeDefault
       target={target}
       enablePan={false}
-      enableDamping
-      dampingFactor={0.08}
+      // CAD-style: the view stays where the drag leaves it, no momentum after release
+      enableDamping={false}
       rotateSpeed={0.7}
       zoomSpeed={0.6}
       minDistance={fit * 0.55}

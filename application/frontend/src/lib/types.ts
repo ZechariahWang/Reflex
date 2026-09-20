@@ -11,7 +11,7 @@ export const JOINT_MAX_RAD = 1.57
 /** Five values in finger order, each 0 (open) .. 1 (closed). */
 export type FingerValues = [number, number, number, number, number]
 
-export type TopicKey = "joint_states" | "hand_state" | "hand_command" | "color" | "depth" | "iphone" | "objects"
+export type TopicKey = "joint_states" | "hand_state" | "hand_command" | "color" | "depth" | "iphone" | "imu" | "objects"
 
 /** ROS topic behind each key, for labels and tags. */
 export const TOPIC_NAMES: Record<TopicKey, string> = {
@@ -21,7 +21,15 @@ export const TOPIC_NAMES: Record<TopicKey, string> = {
   color: "/camera/color/image_raw/compressed",
   depth: "/camera/aligned_depth_to_color/image_raw/compressedDepth",
   iphone: "/head_camera/color/image_raw/compressed",
+  imu: "/camera/imu",
   objects: "detector",
+}
+
+export interface QuaternionMessage {
+  x: number
+  y: number
+  z: number
+  w: number
 }
 
 /**
@@ -52,6 +60,8 @@ export interface StateMessage {
   fingers: Finger[]
   /** Radians by joint name. */
   joints: Record<JointName, number>
+  /** D435i IMU orientation quaternion, or null until /camera/imu arrives. */
+  orientation: QuaternionMessage | null
   /** Measured position, finger order. */
   state: FingerValues
   /** Last commanded target, finger order; null until one is published. */

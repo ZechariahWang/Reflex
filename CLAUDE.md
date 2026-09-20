@@ -38,6 +38,10 @@ everything else goes in a top-level subfolder per concern.
   person moves the fingers. `/hand/passive` (`std_msgs/Bool`, latched) reports
   the mode. Leaving it holds the pose the fingers are in and publishes that pose
   once on `/hand/command`. A recorder needs only `/hand/state` and the camera.
+- Which way the hand points is `/hand/orientation` (`geometry_msgs/QuaternionStamped`, 30 Hz):
+  `base_link` in a world with z up, from the IMU of the wrist camera. There is no
+  magnetometer: yaw 0 is where the hand pointed at the start, or at the last call of
+  `/hand/reset_yaw` (`std_srvs/Trigger`), and it drifts slowly. No IMU = no messages.
 - Anything that wants to see reads the camera from `/camera/color/image_raw`
   (`sensor_msgs/Image`, rgb8, + `/compressed`), `/camera/depth/image_rect_raw`
   and `/camera/aligned_depth_to_color/image_raw` (16UC1, millimetres), each

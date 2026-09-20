@@ -61,6 +61,9 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
   colours, sim mount, servo calibration - what a person decides).
   - `<finger>_joint` is the SERVO HORN, 0 = open = CAD pose, positive closes,
     `max_angle` = horn angle for a 90 deg curl of the contact pad (~72-74 deg);
+    `min_angle` < 0 = a finger that opens PAST the CAD pose (ring, pinky: their calibrated
+    travel does not fit between the CAD pose and the bind; both linkage solvers tabulate
+    `[min_angle, max_angle]` out from the CAD pose);
     the linkage binds at 84-100 deg (`lock_rad`). `<finger>_finger` is the
     adapter + contact pad. `base_link` is the CAD frame: fingers along +Y,
     curling to -Z, thumb on +X (a left hand).
@@ -120,6 +123,12 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
     and `SEQUENCES` (list of (pose, seconds)). The control window builds one
     toggle button per entry.
   - `hand_config.py`: `FINGERS` order and the YAML loader.
+  - `hand_orientation_node.py` + `orientation.py` (pure maths, `test_orientation.py`):
+    `/camera/imu` (the D435i's gyro + accelerometer, united by the driver; turned on in
+    `camera.launch.py`) -> `/hand/orientation`. A complementary filter: gyro integrated,
+    tilt pulled to gravity, gyro bias learnt while the hand lies still. The samples are
+    turned into `base_link` with `camera.rpy` of `hand_params.yaml`. Started with the
+    RealSense; with a camera that has no IMU it publishes nothing.
   - `iphone_camera_node.py` + `iphone_worker.py`: the forehead iPhone (Record3D
     app in USB Streaming mode) as `/head_camera/color/image_raw/compressed` +
     `camera_info`, and its LiDAR depth on the same pixels as

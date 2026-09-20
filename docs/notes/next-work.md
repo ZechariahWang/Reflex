@@ -21,6 +21,12 @@ file at the end of a session; the designs themselves are in `../specs/`.
   angles) is the part most likely to need a change. On the real hand only the thumb
   moves until the other fingers are calibrated. TODO next to it: the recording
   console spec.
+- **Ring and pinky travel too far.** Calibrated travel: ring 101.5 deg of horn, pinky 95.6 deg; the
+  linkage has 117 deg (ring) and 129 deg (pinky) between its two binds. The ring is within 8 deg
+  of a bind at BOTH ends: near a bind the linkage's leverage goes to infinity, which is the likely
+  cause of the broken plastic. Recalibrate the ring with less travel (`servo_tool calibrate`).
+  `min_angle` of both in `hand_params.yaml` is an estimate (where the travel lies relative to the
+  CAD pose is not measured): check the 3D hand against the real one at open and at closed.
 - **The forehead iPhone is a ROS camera** (`../specs/iphone-camera-design.md`):
   `iphone_camera_node` (`head_camera:=iphone`) publishes
   `/head_camera/color/image_raw/compressed`, `ExoHand` has it as `camera1`, the web

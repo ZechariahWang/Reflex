@@ -25,3 +25,6 @@ class ExoHandConfig(RobotConfig):
     connect_timeout_s: float = 10.0
     # Data collection with the torque off: send_action() publishes nothing
     passive: bool = False
+    # The switch of the web console (std_msgs/Bool, latched), /policy/enabled in run_policy.sh: while it is
+    # off no action reaches the hand, and the step to off opens the hand once. Empty = no switch
+    enable_topic: str = ""

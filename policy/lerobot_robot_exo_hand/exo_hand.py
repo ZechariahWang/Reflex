@@ -29,6 +29,7 @@ from .convert import (
 STATE_TOPIC = "/hand/state"
 COMMAND_TOPIC = "/hand/command"
 PASSIVE_TOPIC = "/hand/passive"
+ACTIVE_TOPIC = "/policy/active"
 MULTI_ARRAY = "std_msgs/Float64MultiArray"
 COMPRESSED_IMAGE = "sensor_msgs/CompressedImage"
 BOOL = "std_msgs/Bool"
@@ -56,6 +57,10 @@ class ExoHand(Robot):
         self._last_command: list[float] | None = None
         # Latched by the HAL; None until it arrives (or with a HAL that has no passive mode)
         self._hal_passive: bool | None = None
+        # The console's switch (config.enable_topic). Off until it says on: a policy never starts to move by itself
+        self._enabled = False
+        self._active_out: roslibpy.Topic | None = None
+        self._active_stamp: float | None = None
 
     @property
     def observation_features(self) -> dict[str, type | tuple[int, int, int]]:
@@ -96,6 +101,7 @@ class ExoHand(Robot):
             (self.config.head_topic, COMPRESSED_IMAGE, self._on_head),
             (COMMAND_TOPIC, MULTI_ARRAY, self._on_command),
             (PASSIVE_TOPIC, BOOL, self._on_passive),
+            (self.config.enable_topic, BOOL, self._on_enabled),
         ):
             if not name:
                 continue
@@ -103,6 +109,9 @@ class ExoHand(Robot):
         # A Topic replays only one of subscribe / advertise on reconnect, so publishing gets its own
         self._command_out = roslibpy.Topic(ros, COMMAND_TOPIC, MULTI_ARRAY, queue_size=1)
         self._command_out.advertise()
+        if self.config.enable_topic:
+            self._active_out = roslibpy.Topic(ros, ACTIVE_TOPIC, BOOL, queue_size=1)
+            self._active_out.advertise()
         ros.run(timeout=self.config.connect_timeout_s)
         self._ros = ros
 
@@ -142,6 +151,22 @@ class ExoHand(Robot):
         with self._lock:
             self._hal_passive = bool(message["data"])
 
+    def _on_enabled(self, message: dict) -> None:
+        enabled = bool(message["data"])
+        # Published with the lock held: an action that send_action() has decided on cannot come after the open
+        with self._lock:
+            if self._enabled and not enabled and self._command_out is not None:
+                self._last_command = [0.0] * len(KEYS)
+                self._command_out.publish(roslibpy.Message({"data": self._last_command}))
+            self._enabled = enabled
+            self._say_active()
+
+    def _say_active(self) -> None:
+        """Call with the lock held."""
+        if self._active_out is not None:
+            self._active_out.publish(roslibpy.Message({"data": self._enabled}))
+            self._active_stamp = time.monotonic()
+
     def _stamps(self) -> tuple[float | None, ...]:
         """Call with the lock held. A dead phone stops the client the same way as a dead RealSense."""
         stamps = (self._state_stamp, self._jpeg_stamp)
@@ -156,6 +181,9 @@ class ExoHand(Robot):
         with self._lock:
             state, jpeg, head_jpeg = self._state, self._jpeg, self._head_jpeg
             stamps = self._stamps()
+            # The heartbeat of the policy for the console: silence means that no policy runs
+            if self._active_stamp is None or time.monotonic() - self._active_stamp >= 1.0:
+                self._say_active()
         # Without this a dead link returns the last frame forever and the policy acts on it
         if not is_fresh(stamps, time.monotonic(), self.config.max_age_s):
             raise ConnectionError(f"no data from rosbridge within {self.config.max_age_s} s")
@@ -180,6 +208,8 @@ class ExoHand(Robot):
         if self.config.passive:
             return dict(zip(KEYS, command))
         with self._lock:
+            if self.config.enable_topic and not self._enabled:
+                return dict(zip(KEYS, self._last_command or command))
             # A passive HAL ignores every command: the policy would run and the hand would not move
             if self._hal_passive:
                 raise RuntimeError(f"the HAL is passive (torque off) and ignores {COMMAND_TOPIC}; switch it to active")
@@ -187,8 +217,7 @@ class ExoHand(Robot):
             publish = last is None or differs(command, last, self.config.command_tolerance)
             if publish:
                 self._last_command = command
-        if publish:
-            self._command_out.publish(roslibpy.Message({"data": command}))
+                self._command_out.publish(roslibpy.Message({"data": command}))
         return dict(zip(KEYS, command if publish else last))
 
 

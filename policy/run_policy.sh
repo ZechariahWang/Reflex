@@ -22,6 +22,9 @@ checkpoint="${POLICY_CHECKPOINT:?is not set (policy/.env)}"
   exit 1
 }
 python="${PYTHON:-.venv/bin/python}"
+# The switch of the web console: no action reaches the hand until the console says on
+gate=(--robot.enable_topic=/policy/enabled)
+[[ "${POLICY_GATE:-1}" == 0 ]] && gate=()
 port="${POLICY_PORT:-8080}"
 
 "$python" -m lerobot.async_inference.policy_server --port="$port" &
@@ -33,7 +36,7 @@ until (exec 3<>"/dev/tcp/localhost/$port") 2>/dev/null; do
 done
 
 "$python" -m lerobot.async_inference.robot_client \
-  --robot.type=exo_hand --robot.host="${ROS_HOST:-localhost}" --robot.id=exo \
+  --robot.type=exo_hand --robot.host="${ROS_HOST:-localhost}" --robot.id=exo "${gate[@]}" \
   --server_address="localhost:$port" \
   --policy_type=smolvla --pretrained_name_or_path="$checkpoint" \
   --policy_device="${POLICY_DEVICE:-cuda}" \

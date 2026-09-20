@@ -49,6 +49,11 @@ subfolder per concern.
   person moves the fingers. `/hand/passive` (`std_msgs/Bool`, latched) reports
   the mode. Leaving it holds the pose the fingers are in and publishes that pose
   once on `/hand/command`. A recorder needs only `/hand/state` and the camera.
+- The learned policy is its own service (`policy/run_policy.sh`), and the console switches it through
+  two topics, never as a process. `/policy/enabled` (`std_msgs/Bool`, latched, from the console): while
+  it is off, or was never said, the policy publishes nothing on `/hand/command`; the step to off opens
+  the hand once. `/policy/active` (`std_msgs/Bool`, once a second, from the policy) says if its actions
+  reach the hand; silence means that no policy runs.
 - `/hand/blocked` (`std_msgs/Float64MultiArray`, 5 values, latched) says which
   fingers the HAL's contact stop holds: `1` = the finger met resistance and
   pushes on with a low torque, `0` = free. Always `0` in the sim.

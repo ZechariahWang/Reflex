@@ -16,7 +16,8 @@ class FakeTopic:
         self.sent = []
 
     def publish(self, message):
-        self.sent.append(list(message["data"]))
+        data = message["data"]
+        self.sent.append(list(data) if isinstance(data, list) else data)
 
 
 def jpeg_message(height=480, width=640):
@@ -183,3 +184,50 @@ def test_send_action_refuses_while_the_hal_ignores_commands(robot):
 
     robot.config.passive = True  # a recording: nothing is published, so the HAL mode is no problem
     assert robot.send_action(action(0.5)) == action(0.5)
+
+
+@pytest.fixture
+def gated(robot):
+    """The robot of run_policy.sh: the console's switch decides if an action reaches the hand."""
+    robot.config.enable_topic = "/policy/enabled"
+    robot._active_out = FakeTopic()
+    return robot
+
+
+def test_a_gated_policy_moves_nothing_until_the_console_enables_it(gated):
+    gated._on_passive({"data": True})  # the policy service stays up while a person records demonstrations
+
+    assert gated.send_action(action(0.8)) == action(0.8)
+    assert gated._command_out.sent == []
+
+    gated._on_passive({"data": False})
+    gated._on_enabled({"data": True})
+    gated.send_action(action(0.8))
+    assert gated._command_out.sent == [[0.8] * 5]
+
+
+def test_disabling_the_policy_opens_the_hand_once_and_drops_the_actions_after_it(gated):
+    gated._on_enabled({"data": True})
+    gated.send_action(action(0.8))
+
+    gated._on_enabled({"data": False})
+    gated._on_enabled({"data": False})
+    gated.send_action(action(0.9))
+
+    assert gated._command_out.sent == [[0.8] * 5, [0.0] * 5]
+
+
+def test_a_gated_policy_says_once_a_second_if_its_actions_reach_the_hand(gated, clock):
+    for message in (gated._on_color, gated._on_head):
+        message(jpeg_message())
+    gated._on_state({"data": [0.0] * 5})
+
+    gated.get_observation()
+    gated.get_observation()
+    gated._on_enabled({"data": True})
+    assert gated._active_out.sent == [False, True], "a change of the switch is said at once"
+
+    clock.value += 0.2
+    gated._on_state({"data": [0.0] * 5})
+    gated.get_observation()
+    assert gated._active_out.sent == [False, True]

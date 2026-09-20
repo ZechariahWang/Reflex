@@ -29,7 +29,12 @@ touch "$tmp/ckpt/model.safetensors"
 PYTHON="$tmp/python" "$tmp/run_policy.sh" >/dev/null 2>&1; code=$?
 check "the client gets the checkpoint, the host and 30 fps" \
   '[[ $code == 0 ]] && grep -q -- "--pretrained_name_or_path=ckpt" "$tmp/client.args" && grep -q -- "--robot.host=10.0.0.7" "$tmp/client.args" && grep -q -- "--fps=30" "$tmp/client.args"'
+check "the console's switch gates the client" 'grep -q -- "--robot.enable_topic=/policy/enabled" "$tmp/client.args"'
 check "the server stops with the client" '! kill -0 "$(cat "$tmp/server.pid")" 2>/dev/null'
+
+echo POLICY_GATE=0 >> "$tmp/.env"
+PYTHON="$tmp/python" "$tmp/run_policy.sh" >/dev/null 2>&1
+check "POLICY_GATE=0: no switch" '! grep -q enable_topic "$tmp/client.args"'
 
 rm "$tmp/.env"
 PYTHON="$tmp/python" "$tmp/run_policy.sh" >/dev/null 2>&1

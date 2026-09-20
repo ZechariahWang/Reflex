@@ -224,7 +224,12 @@ cp .env.example .env     # once: POLICY_CHECKPOINT = the pretrained_model folder
 ```
 
 `run_policy.sh` refuses a checkpoint folder with no `model.safetensors`, and gives the client the
-instruction above. The same by hand, in two terminals:
+instruction above. The hand does not move yet: the policy waits for the **Policy** switch of the web
+console (command block, armed). The switch is the latched `/policy/enabled`; while it is off the
+adapter drops every action, and the step to off opens the hand once. `/policy/active` is the
+heartbeat that the console shows as offline / ready / running. `POLICY_GATE=0` in `.env` is a run
+with no console: the policy moves the hand from its first action. The switch is a convenience, not
+an emergency stop: that is Ctrl+C here, and the limits of the HAL. The same by hand, in two terminals:
 
 ```bash
 python -m lerobot.async_inference.policy_server --port=8080

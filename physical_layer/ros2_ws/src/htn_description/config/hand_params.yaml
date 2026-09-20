@@ -86,7 +86,10 @@ sim_mount:
 # sets its max_angle above to the travel that was set, so the 3D views show the real
 # horn angle. Fingers still on open_step 2048 are guesses.
 servos:
-  torque_limit: 700    # 0..1000, drive duty cap in free motion (speed AND stall torque)
+  torque_limit: 400    # 0..1000, drive duty cap in free motion (speed AND stall torque). The force a finger
+                       # pushes with until the contact stop has it (0.2 s at least: the current rises slowly).
+                       # At 700 parts of the hand broke. Below ~250 a resisted finger may never reach
+                       # blocked_current (estimated, NOT measured): check the mA in the console after a change
   hold_torque: 60     # the same while a finger is blocked: the force it keeps pushing with
   thumb:  {id: 1, open_step: 1496, closed_step: 2157}
   index:  {id: 2, open_step: 2028, closed_step: 1213}
@@ -103,8 +106,8 @@ servos:
 contact_stop:
   enabled: true
   blocked_current: 100   # mA
-  blocked_excess: 150    # mA: one cycle at 250 mA, or 3 at 150. On the hand a free start of the
-                         # middle finger summed to 34, a push against it to 162 in 3 cycles
+  blocked_excess: 100    # mA: one cycle at 200 mA, or 2 at 150. On the hand free motion stays below
+                         # ~90 mA (nothing to sum); a free start of the middle finger summed to 34 once
   hold_lead: 0.03        # the setpoint sits this far past the finger while it is blocked
   release_travel: 0.15   # a blocked finger that gets this far past the block is free again. More than
                          # it coasts after the torque drops (estimated 0.04 to 0.08, NOT measured)

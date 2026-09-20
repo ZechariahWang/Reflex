@@ -74,9 +74,10 @@ if info is None:
 print(info['instance_type']['price_cents_per_hour'])
 ")" || exit 1
 echo "Mode:      $mode"
-echo "Instance:  $LAMBDA_INSTANCE_TYPE${LAMBDA_REGION:+ in $LAMBDA_REGION}, \$$(( price / 100 )).$(printf '%02d' $(( price % 100 )))/h"
-echo "Cap:       $max_hours h, so at most \$$(( price * max_hours / 100 )) (the watchdog terminates at the cap)"
-echo "Dataset:   $dataset ($episodes episodes)"
+dollars() { printf '$%d.%02d' $(( $1 / 100 )) $(( $1 % 100 )); }
+echo "Instance:  $LAMBDA_INSTANCE_TYPE${LAMBDA_REGION:+ in $LAMBDA_REGION}, $(dollars "$price")/h"
+echo "Cap:       $max_hours h, so at most $(dollars $(( price * max_hours ))) (the watchdog terminates at the cap)"
+echo "Dataset:   $dataset (episodes: $episodes)"
 echo "Upload to ~/$REMOTE_DIR:"
 for p in "policy/datasets/$dataset" "${uploads[@]}"; do
   awk -v p="$p/" 'index($2, p) == 1 { n += $1 } END { printf "  %8.1f MB  %s\n", n / 1e6, p }' <<< "$listing"

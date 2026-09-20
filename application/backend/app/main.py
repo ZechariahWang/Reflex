@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from .config import Settings
 from .episodes import EpisodeError, Episodes
 from .movements import MovementError, Movements
+from .omni import make_router as make_omni_router
 from .hub import CAMERA_STREAMS, Hub, Source, parse_command, parse_passive, ticks
 from .frames import LatestChannel
 from .mirror.session import MirrorSession, Tracker, parse_calibrate
@@ -368,6 +369,7 @@ def create_app(settings: Settings) -> FastAPI:
         await serve_socket(ws, settings.cors_origins, lambda: send_camera(ws, camera, kind, readiness), readiness.on_text)
 
     mirror_busy = False
+    app.include_router(make_omni_router(hub, source, movements, episodes, settings, lambda: mirror_busy))
 
     def make_tracker() -> Tracker:
         if settings.mock:

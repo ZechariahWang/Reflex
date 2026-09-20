@@ -1,5 +1,9 @@
 # application/ - hand simulator console
 
+This branch includes the Qwen OMNI piano assistant: microphone audio + a fresh camera
+frame + hand telemetry, with operator-executed movement proposals. See
+[OMNI setup and live demo](../docs/omni-live.md) for sponsored yibuapi configuration.
+
 ![Hand Console](docs/screenshot.png)
 
 A one-screen web console for the exoskeleton hand: a three.js viewport of the hand

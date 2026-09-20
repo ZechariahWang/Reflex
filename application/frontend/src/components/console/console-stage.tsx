@@ -4,6 +4,7 @@ import { CameraViewport } from "@/components/camera/camera-viewport"
 import { HandViewport } from "@/components/hand/hand-viewport"
 import { MirrorViewport } from "@/components/mirror/mirror-viewport"
 import { CommandPanel } from "@/components/telemetry/command-panel"
+import { OmniPanel } from "@/components/console/omni-panel"
 import { useMirrorStore } from "@/lib/mirror-store"
 import { cn } from "@/lib/utils"
 
@@ -21,11 +22,11 @@ export function ConsoleStage() {
       className={cn(
         "grid min-h-0 grid-cols-[minmax(0,1fr)] gap-3",
         mirror
-          ? "console:grid-cols-[minmax(0,46fr)_minmax(0,27fr)_minmax(0,27fr)]"
-          : "console:grid-cols-[minmax(0,73fr)_minmax(0,27fr)]",
+          ? "console:grid-cols-[minmax(0,40fr)_minmax(0,20fr)_minmax(0,20fr)_minmax(0,20fr)]"
+          : "console:grid-cols-[minmax(0,50fr)_minmax(0,25fr)_minmax(0,25fr)]",
       )}
     >
-      <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-3">
+      <div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] gap-3">
         <div className="h-[70vw] max-h-[75dvh] min-h-0 console:h-auto console:max-h-none">
           <HandViewport />
         </div>
@@ -41,6 +42,7 @@ export function ConsoleStage() {
           <CameraViewport source="iphone" />
         </div>
       </div>
+      <div className="h-[600px] min-h-0 console:h-auto"><OmniPanel /></div>
       {mirror && (
         <div className="h-[90vw] max-h-[80dvh] min-h-0 console:h-auto console:max-h-none">
           <MirrorViewport />

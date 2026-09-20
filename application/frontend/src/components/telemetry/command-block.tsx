@@ -160,7 +160,7 @@ export function CommandBlock() {
       <span className="h-4 w-px bg-border" aria-hidden />
 
       {/* One slider per finger; the tick under it is the measured position. */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         {FINGERS.map((finger, i) => (
           <div key={finger} className="flex items-center gap-1.5">
             <span

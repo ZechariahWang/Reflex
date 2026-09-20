@@ -40,7 +40,7 @@ not matter: with ROS down the console shows OFFLINE / NO SIGNAL and recovers on 
 |---|---|---|
 | `MOCK` | `0` | `1` = synthesize everything |
 | `MOCK_OBJECTS` | `0` | `1` = live ROS, synthetic objects around the hand (a sim has no camera) |
-| `REALSENSE_ROTATION` | `90` | degrees clockwise the RealSense picture is turned on the page and for the object detector (the camera sits portrait on the hand); `0` = as sent |
+| `REALSENSE_ROTATION` | `270` | degrees clockwise the RealSense picture is turned on the page and for the object detector (the camera sits portrait on the hand); `0` = as sent |
 | `DETECT_MODEL` | `yolov8n.pt` | Ultralytics model that finds the objects around the hand in the RealSense image; needs `backend/requirements-detect.txt`, `""` turns it off |
 | `DETECT_HZ` / `DETECT_THREADS` | `4` / `2` | detector passes per second at most, and its torch threads (it shares the CPU with the sim and the browser) |
 | `ROSBRIDGE_HOST` / `ROSBRIDGE_PORT` | `localhost` / `9090` | where rosbridge listens |

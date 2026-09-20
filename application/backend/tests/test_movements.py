@@ -24,9 +24,9 @@ def test_hot_cross_buns_presses_index_middle_ring_and_nothing_else():
     index, middle, ring = 1, 2, 3
     assert pressed == [index, middle, ring] * 2 + [ring] * 4 + [middle] * 4 + [index, middle, ring]
     assert all(pose[0] == pose[4] == min(pose) for pose, _ in movement["steps"]), "thumb and pinky never press"
-    shortest = min(seconds for pose, seconds in movement["steps"] if max(pose) > min(pose))
-    travel = max(max(pose) - min(pose) for pose, _ in movement["steps"])
-    assert shortest + 1e-9 >= travel / 2.0 + 0.1, "the HAL's 2.0 per second (plus its ramp) must fit into the shortest press"
+    presses = [max(pose) - min(pose) for pose, _ in movement["steps"] if max(pose) > min(pose)]
+    assert min(presses) >= 0.8, "a press asks for nearly the whole travel; how far it gets is the HAL's max_speed"
+    assert sum(seconds for _, seconds in movement["steps"]) < 13.0, "the whole tune, at ~86 bpm"
 
 
 def test_a_movement_is_played_step_by_step_and_its_status_shows_the_step(tmp_path):

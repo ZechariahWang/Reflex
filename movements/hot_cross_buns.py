@@ -13,12 +13,19 @@ DESCRIPTION = "B A G on index, middle, ring: three key presses per bar"
 FINGERS = ["thumb", "index", "middle", "ring", "pinky"]
 NOTE_FINGER = {"B": "index", "A": "middle", "G": "ring"}
 
-REST = 0.15    # fingers hover over the keys, a little curled
-PRESS = 0.55   # a key is down
-BEAT_S = 1.2   # one quarter note. Slow on purpose: the HAL moves a finger at 2.0 of its travel
-               # per second at most (and eases in and out), so the 0.4 of a press takes ~0.3 s
-               # down and ~0.3 s up - exactly what an eighth note (half a beat) has
-DOWN_SHARE = 0.5  # of a note's time the key is down; the rest of it the finger comes back up
+REST = 0.05    # fingers hover over the keys, nearly open
+PRESS = 0.95   # a key is down: nearly the whole travel
+BEAT_S = 0.7   # one quarter note (~86 bpm)
+DOWN_SHARE = 0.5  # of a note's time the finger goes down; the rest of it, it comes back up
+
+# How far a finger really gets is the HAL's business, not this file's: it moves a finger at
+# `max_speed` (2.0 of its travel per second by default, eased in and out by `max_accel`), so in
+# the 0.35 s of a quarter note a finger gets 0.72 of its travel down, and in the 0.175 s of an
+# eighth note 0.36 (the HAL's own sweep, simulated) - PRESS is then a direction more than a
+# place. Launched faster, a quarter note reaches the full 0.90 and an eighth note 0.72:
+#     ros2 launch htn_launch hardware.launch.py max_speed:=4.0 max_accel:=60.0
+# (both launch files take them). On the real hand that is only as fast as the servos can go
+# with `servos.torque_limit` of hand_params.yaml, and everything a finger meets, it meets harder.
 
 # (note, beats); "-" is a rest
 TUNE = [

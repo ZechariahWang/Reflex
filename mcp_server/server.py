@@ -24,6 +24,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 BACKEND_URL = os.environ.get("HTN_BACKEND_URL", "http://localhost:8000").rstrip("/")
 FINGERS = ["thumb", "index", "middle", "ring", "pinky"]
+ARRIVED = 0.04  # as the backend's movement player: measured within this of the pose = the hand is there
 
 INSTRUCTIONS = """\
 You control a wearable exoskeleton hand with 5 fingers, each with ONE degree of freedom (curl).
@@ -78,13 +79,21 @@ def get_hand_state() -> dict:
 
 
 @mcp.tool()
-def move_hand(thumb: float, index: float, middle: float, ring: float, pinky: float, wait_s: float = 1.0) -> dict:
-    """Send ONE pose (each finger 0 = open .. 1 = closed) and, after wait_s seconds (0 .. 10), report
-    what the hand measured. Use it to try a pose before it goes into a skill. A finger that stays
-    far from its target has met something (the contact stop holds it there with a low force)."""
-    sent = backend("POST", "/api/command", {"values": [thumb, index, middle, ring, pinky]})["sent"]
-    time.sleep(min(10.0, max(0.0, wait_s)))
-    return {"sent": by_finger(sent), "measured": by_finger(backend("GET", "/api/state")["state"])}
+def move_hand(thumb: float, index: float, middle: float, ring: float, pinky: float, wait_s: float = 3.0) -> dict:
+    """Send ONE pose (each finger 0 = open .. 1 = closed) and return when the hand has ARRIVED there
+    (every finger measured within 0.04 of it), or after wait_s seconds (0 .. 10) at the latest. It
+    reports what the hand measured and `arrived`. Use it to try a pose before it goes into a skill.
+    A finger that does not arrive has met something (the contact stop holds it there with a low
+    force). Never send the next pose of a sequence before the last one has arrived."""
+    pose = [thumb, index, middle, ring, pinky]
+    sent = backend("POST", "/api/command", {"values": pose})["sent"]
+    deadline = time.monotonic() + min(10.0, max(0.0, wait_s))
+    while True:
+        measured = backend("GET", "/api/state")["state"]
+        there = all(abs(m - s) <= ARRIVED for m, s in zip(measured, sent))
+        if there or time.monotonic() >= deadline:
+            return {"sent": by_finger(sent), "measured": by_finger(measured), "arrived": there}
+        time.sleep(0.05)
 
 
 @mcp.tool()
@@ -108,7 +117,8 @@ def teach_skill(name: str, title: str, description: str, steps: list[dict]) -> d
     name: lower case letters, digits and _ (e.g. "peace_sign"); title and description are for people.
     steps: a list of {"pose": [thumb, index, middle, ring, pinky], "seconds": s}. Each pose
     (0 = open .. 1 = closed) is sent to the hand, then nothing happens for `seconds` (0 < s <= 30)
-    - so `seconds` is both the time the fingers get to arrive and the hold. At most 2000 steps.
+    - and until the hand has arrived at the pose: the next pose is never sent before that, so
+    `seconds` is the SHORTEST a step takes (the hold), not a promise of the tempo. At most 2000 steps.
     Start and end a path in a relaxed pose (e.g. all 0.15) unless the user wants otherwise.
     The skill is saved as movements/<name>.py in the project and is in the console's dropdown."""
     return backend("PUT", f"/api/movements/{name}", {"title": title, "description": description, "steps": steps})

@@ -49,7 +49,7 @@ def test_the_tools_an_agent_gets():
 
 
 def test_move_hand_sends_the_pose_in_finger_order_and_reports_what_was_measured(backend):
-    call("move_hand", thumb=0.1, index=0.2, middle=0.3, ring=0.4, pinky=0.5, wait_s=0)
+    call("move_hand", thumb=0.1, index=0.2, middle=0.3, ring=0.4, pinky=0.5)
 
     assert ("POST", "/api/command", {"values": [0.1, 0.2, 0.3, 0.4, 0.5]}) in backend.calls
     assert server.by_finger(backend.state["state"]) == {"thumb": 0.1, "index": 0.2, "middle": 0.3, "ring": 0.4, "pinky": 0.5}

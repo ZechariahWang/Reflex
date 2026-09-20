@@ -15,6 +15,14 @@ LOGGER = logging.getLogger(__name__)
 
 MAX_STEPS = 2000
 MAX_STEP_S = 30.0
+# A step is over when its seconds have passed AND the hand has arrived: every finger measured
+# within ARRIVED of the pose that was sent. The next pose is never sent before that, however
+# slow the motors are. A finger that cannot arrive (something in its way: the contact stop holds
+# it there; torque off; ROS down) must not stop the movement for ever: after ARRIVE_TIMEOUT_S
+# more the movement goes on, and the status says how many steps went that way.
+ARRIVED = 0.04
+ARRIVE_TIMEOUT_S = 3.0
+POLL_S = 0.02
 FINGER_COUNT = 5
 
 Step = tuple[list[float], float]
@@ -74,10 +82,20 @@ def source_of(title: str, description: str, steps: list[Step]) -> str:
     )
 
 
+def arrived(measured: list[float], pose: list[float]) -> bool:
+    return all(abs(m - p) <= ARRIVED for m, p in zip(measured, pose))
+
+
 class Movements:
-    def __init__(self, folder: Path, send_command: Callable[[list[float]], None]) -> None:
+    def __init__(
+        self,
+        folder: Path,
+        send_command: Callable[[list[float]], None],
+        hand_state: Callable[[], list[float]] | None = None,
+    ) -> None:
         self._folder = folder
         self._send_command = send_command
+        self._hand_state = hand_state  # the measured fingers; None = nothing to wait for (tests)
         self._task: asyncio.Task | None = None
         self._status: dict | None = None
 
@@ -110,7 +128,8 @@ class Movements:
         if path is None:
             raise MovementError(f"no movement called {name}")
         movement = load(path)
-        self._status = {"name": name, "title": movement["title"], "step": 0, "steps": len(movement["steps"])}
+        self._status = {"name": name, "title": movement["title"], "step": 0, "steps": len(movement["steps"]),
+                        "waiting": False, "not_arrived": 0}
         self._task = asyncio.create_task(self._run(movement["steps"]))
 
     async def _run(self, steps: list[Step]) -> None:
@@ -119,8 +138,25 @@ class Movements:
                 self._send_command(pose)
                 self._status["step"] = number
                 await asyncio.sleep(seconds)
+                await self._arrive(pose)
         finally:
             self._status = None
+
+    async def _arrive(self, pose: list[float]) -> None:
+        """Hold the movement until the hand is at `pose` (or ARRIVE_TIMEOUT_S have passed)."""
+        if self._hand_state is None:
+            return
+        waited = 0.0
+        while not arrived(self._hand_state(), pose):
+            if waited >= ARRIVE_TIMEOUT_S:
+                self._status["not_arrived"] += 1
+                LOGGER.warning("movement %s: step %d did not arrive at %s, going on", self._status["name"],
+                               self._status["step"], pose)
+                break
+            self._status["waiting"] = True
+            await asyncio.sleep(POLL_S)
+            waited += POLL_S
+        self._status["waiting"] = False
 
     def read(self, name: str) -> dict:
         """One movement with its steps, e.g. to change it and teach it again."""

@@ -51,7 +51,8 @@ def test_a_movement_is_played_step_by_step_and_its_status_shows_the_step(tmp_pat
 
     sent, during, after = asyncio.run(scenario())
     assert sent == [[0.0] * 5, [1.0, 1.0, 0.0, 0.5, 0.0]], "values are clamped to 0..1"
-    assert during == {"name": "wave", "title": "Wave", "step": 1, "steps": 2} and after is None
+    assert during == {"name": "wave", "title": "Wave", "step": 1, "steps": 2, "waiting": False, "not_arrived": 0}
+    assert after is None
 
 
 def test_a_broken_file_is_listed_with_its_error_and_cannot_be_played(tmp_path):
@@ -133,3 +134,56 @@ def test_teach_run_and_command_over_http(tmp_path):
         assert client.post("/api/command", json={"values": [0, 0]}).status_code == 422
         client.post("/api/movements/stop")
         assert client.delete("/api/movements/fist").status_code == 200
+
+
+def test_the_next_pose_is_not_sent_before_the_hand_has_arrived_at_the_last_one(tmp_path, monkeypatch):
+    """Quick notes on slow motors: the step's seconds are over long before the finger is there."""
+    script(tmp_path, "trill", "def steps():\n    return [([0, 1, 0, 0, 0], 0.02), ([0] * 5, 0.02), ([0, 1, 0, 0, 0], 0.02)]\n")
+
+    async def scenario():
+        measured = [0.0] * 5
+        target = [0.0] * 5
+        sent = []  # (the pose, where the hand was when it was sent)
+
+        def send(pose):
+            sent.append((pose, list(measured)))
+            target[:] = pose
+
+        movements = Movements(tmp_path, send, lambda: list(measured))
+        movements.play("trill")
+        seen_waiting = False
+        for _ in range(400):  # a slow hand: 0.02 of the travel per 5 ms
+            await asyncio.sleep(0.005)
+            measured[:] = [m + max(-0.02, min(0.02, t - m)) for m, t in zip(measured, target)]
+            seen_waiting |= bool(movements.status() and movements.status()["waiting"])
+            if not movements.playing:
+                break
+        return sent, seen_waiting
+
+    sent, seen_waiting = asyncio.run(scenario())
+    assert [pose[1] for pose, _ in sent] == [1.0, 0.0, 1.0]
+    assert sent[1][1][1] >= 0.96, "the key was DOWN when the release was sent"
+    assert sent[2][1][1] <= 0.04, "and the finger was back UP when the next stroke was sent"
+    assert seen_waiting
+
+
+def test_a_finger_that_cannot_arrive_does_not_hold_the_movement_for_ever(tmp_path, monkeypatch):
+    import app.movements as module
+
+    monkeypatch.setattr(module, "ARRIVE_TIMEOUT_S", 0.1)
+    script(tmp_path, "push", "def steps():\n    return [([1] * 5, 0.02), ([0] * 5, 0.02)]\n")
+
+    async def scenario():
+        sent, last = [], {}
+        movements = Movements(tmp_path, sent.append, lambda: [0.0] * 5)  # blocked: the hand never moves
+        movements.play("push")
+        for _ in range(100):
+            await asyncio.sleep(0.01)
+            last = movements.status() or last
+            if not movements.playing:
+                break
+        return sent, last
+
+    sent, last = asyncio.run(scenario())
+    assert sent == [[1.0] * 5, [0.0] * 5], "it went on after the timeout"
+    assert last["not_arrived"] == 1, "and the status counted the step that did not arrive"

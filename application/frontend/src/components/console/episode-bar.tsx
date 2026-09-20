@@ -220,6 +220,8 @@ function Progress() {
         <StatusDot status="live" />
         <span className="label-micro tracking-normal text-ink normal-case">
           playing {movement.title} · step {movement.step} of {movement.steps}
+          {movement.waiting && " · waiting for the hand"}
+          {movement.not_arrived > 0 && ` · ${movement.not_arrived} not reached`}
         </span>
       </span>
     )

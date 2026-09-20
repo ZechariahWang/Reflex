@@ -200,7 +200,7 @@ def create_app(settings: Settings) -> FastAPI:
     # running recording or replay is `session` in /ws/state.
     episodes = Episodes(settings.recordings_dir, hub, source.send_command)
 
-    movements = Movements(settings.movements_dir, source.send_command)
+    movements = Movements(settings.movements_dir, source.send_command, lambda: hub.hand_state)
 
     def refuse(error: ValueError) -> HTTPException:
         return HTTPException(status.HTTP_409_CONFLICT, str(error))

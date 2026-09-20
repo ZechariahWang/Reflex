@@ -83,6 +83,10 @@ export interface MovementStatus {
   /** Steps sent so far, of `steps`. */
   step: number
   steps: number
+  /** The step's time is over but the hand has not arrived at its pose yet: the next pose waits. */
+  waiting: boolean
+  /** Steps that gave up waiting (a finger met something, or the torque is off). */
+  not_arrived: number
 }
 
 /** One file of `movements/`; `error` says why a file cannot be played. */

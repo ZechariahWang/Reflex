@@ -11,11 +11,16 @@ TITLE = "Hot cross buns"             # the name in the dropdown
 DESCRIPTION = "one line, optional"
 
 def steps():
-    """The movement: a list of (pose, seconds). The pose is sent to /hand/command, then nothing
-    is sent for `seconds`. A pose is 5 values in the order thumb, index, middle, ring, pinky,
-    0 = open .. 1 = closed."""
+    """The movement: a list of (pose, seconds). The pose is sent to /hand/command; the next one
+    is sent when `seconds` have passed AND the hand has arrived at this one. A pose is 5 values
+    in the order thumb, index, middle, ring, pinky, 0 = open .. 1 = closed."""
     return [([0, 0, 0, 0, 0], 0.5), ([0, 1, 1, 0, 0], 1.0)]
 ```
+
+A step never starts before the last one has arrived: every finger measured within 0.04 of the
+pose that was sent. So `seconds` is the shortest a step takes, and slow motors stretch the tempo
+instead of cutting strokes short. A finger that cannot arrive (something is in its way, the torque
+is off) holds the movement for 3 s, then it goes on; the status counts those steps (`not_arrived`).
 
 Rules the backend checks: at most 2000 steps, each 0 < seconds <= 30, values are clamped to 0..1.
 The HAL still rate-limits every move (`max_speed` 4.0 of the travel per second: a full close takes ~0.3 s, a stroke of depth d about d / 4 + 0.07 s) and the contact stop

@@ -201,9 +201,8 @@ policy learns against it.
 
 ## TODO, outside this spec
 
-- **The forehead iPhone as a ROS topic** and as a second image key in `ExoHand`
-  (today the recorder saves only the RealSense colour image). The backend
-  receives the iPhone through Record3D already, but nothing of it is in ROS. The
+- Done, `iphone-camera-design.md`: the forehead iPhone is a ROS topic
+  (`/head_camera/...`) and the second image key (`camera1`) in `ExoHand`. The
   mirror is the same with one policy camera or two.
 - Recording console: episode buttons, shortcuts and recording status in the
   frontend. Starts with a read of the `lerobot==0.6.1` record loop to find the

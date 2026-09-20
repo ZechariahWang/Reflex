@@ -19,9 +19,15 @@ file at the end of a session; the designs themselves are in `../specs/`.
   tune `MIRROR_MIN_CUTOFF` / `MIRROR_BETA`, two
   `lerobot-record` episodes, the loop rate on one laptop. The thumb measure (joint
   angles) is the part most likely to need a change. On the real hand only the thumb
-  moves until the other fingers are calibrated. TODO next to it: the forehead
-  iPhone as a ROS topic + second image key in `ExoHand`, then the recording
+  moves until the other fingers are calibrated. TODO next to it: the recording
   console spec.
+- **The forehead iPhone is a ROS camera** (`../specs/iphone-camera-design.md`):
+  `iphone_camera_node` (`head_camera:=iphone`) publishes
+  `/head_camera/color/image_raw/compressed`, `ExoHand` has it as `camera1`, the web
+  backend only passes it through. Tested on a fake phone only. Left: plug the phone in
+  (Record3D, USB Streaming mode, NOT recording), `ros2 topic hz
+  /head_camera/color/camera_info` must show ~15 Hz, check in Foxglove that the image is
+  the right way up on the forehead mount (`rotation`) BEFORE the first recording.
 - **Calibrated on the hand so far: the thumb** (open 1511, closed 2208 = 61 deg of
   horn; its `max_angle` is that travel). index .. pinky are `enabled: false` in
   `hand_params.yaml`: the HAL never gives them torque or a goal, whatever is

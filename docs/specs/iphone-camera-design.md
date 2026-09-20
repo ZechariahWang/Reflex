@@ -1,8 +1,9 @@
 # iPhone head camera: from the backend into ROS
 
 How the forehead iPhone becomes a ROS camera, so that the recorder and the policy
-read it the same way as the RealSense. Status: design, nothing built. Date:
-2026-09-19. It closes the TODO "the forehead iPhone as a ROS topic" of
+read it the same way as the RealSense. Status: built on 2026-09-19 (the node, `ExoHand`,
+the backend and the frontend), tested on a fake phone and run with no phone; NOT yet run
+with a real phone - the done checks of the work order are open. Date: 2026-09-19. It closes the TODO "the forehead iPhone as a ROS topic" of
 `mirror-teleop-design.md`.
 
 Scope: a ROS node that owns the phone, the contract topics, the second image key
@@ -92,9 +93,11 @@ Parameters:
 This is the risk of the design. Do it before any other work; if it fails, stop
 and go back to the fallback below.
 
-1. In the ROS environment (container or native): `pip install record3d==1.4.1`.
-   It builds native code (needs `cmake`, a C++ compiler). Not confirmed on
-   Python 3.10 (Humble) or on ARM (Pi 5).
+1. In the ROS environment (container or native):
+   `python3 -m pip install --user --no-deps record3d==1.4.1` (`--no-deps`: it must not
+   pull numpy 2 over the numpy that ROS and `cv2` use). Confirmed on x86-64, Python 3.10
+   (Humble), native: it is a wheel, nothing compiles, and it imports next to numpy 1.26.
+   Not confirmed on ARM (Pi 5): there it may build native code (`cmake`, a C++ compiler).
 2. The library talks to the host's `usbmuxd` through `/var/run/usbmuxd`. In a
    distrobox that socket must be visible in the container. Not confirmed.
 3. Check: a 10-line script in that environment prints the shape of one frame.
@@ -191,5 +194,7 @@ untouched; `test_mock_api` follows the removed endpoints.
 - rosbridge CPU load with two JPEG streams and two clients each, on a Pi
   (already open in `policy-link-design.md` for one stream).
 - The rotation value for the forehead mount.
-- That `get_intrinsic_mat()` is valid before the first frame; if not, the node
-  reads it in the first frame callback.
+- That `get_intrinsic_mat()` is valid before the first frame: not needed any more, the
+  worker reads it in each frame callback and sends it with the frame.
+- The node with a real phone: the picture size it sends over USB, ~15 Hz on
+  `camera_info`, the image the right way up in Foxglove.

@@ -29,7 +29,7 @@ export function ConsoleStage() {
         <div className="h-[70vw] max-h-[75dvh] min-h-0 console:h-auto console:max-h-none">
           <HandViewport />
         </div>
-        <div className="h-[10.5rem] min-h-0">
+        <div className="min-h-0">
           <CommandPanel />
         </div>
       </div>

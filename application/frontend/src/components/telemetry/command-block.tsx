@@ -17,7 +17,7 @@ const SEND_INTERVAL_MS = 25 // a slider drag reaches the HAL (50 Hz) on its very
 /** After the last input the sliders keep the local target this long, until /hand/command echoes back. */
 const HOLD_MS = 600
 const POSE_TOLERANCE = 0.02
-/** Slider thumb height (h-1.5): Radix insets the thumb's travel by it, and the measured tick follows. */
+/** Slider thumb width (w-1.5): Radix insets the thumb's travel by it, and the measured tick follows. */
 const THUMB_PX = 6
 const OPEN_HAND: FingerValues = [0, 0, 0, 0, 0]
 
@@ -93,134 +93,112 @@ export function CommandBlock() {
   // Sliders start from where the hand already is, so grabbing one never makes it jump.
   const shown = target ?? (online ? (snapshot?.command ?? snapshot?.state) : null) ?? OPEN_HAND
 
+  const switchClass = "rounded-[2px] data-checked:bg-signal [&_[data-slot=switch-thumb]]:rounded-[1px]"
+
   return (
-    <div className="flex h-full min-w-0 gap-5 px-3 py-2.5">
-      <div className="flex flex-col gap-2">
-        <span className="label-micro flex items-center justify-between gap-3 text-ink">
-          Command
-          <span className="flex items-center gap-1 text-ink-mute" aria-hidden>
-            <span className="h-px w-2 bg-ink" />
-            Meas
-          </span>
-        </span>
-        <div className="flex h-20 min-h-0 gap-2.5 console:h-auto console:flex-1">
-          {FINGERS.map((finger, i) => (
-            <div key={finger} className="flex flex-col items-center gap-1.5">
-              <div className="relative flex min-h-0 w-4 flex-1 justify-center">
-                <Slider
-                  orientation="vertical"
-                  min={0}
-                  max={100}
-                  step={1}
-                  disabled={!armed || passive || mirror}
-                  value={[Math.round(shown[i] * 100)]}
-                  onValueChange={([value]) => drive(shown.with(i, value / 100) as FingerValues)}
-                  onValueCommit={release}
-                  aria-label={`${finger} command`}
-                  className="data-vertical:min-h-0! [&_[data-slot=slider-thumb]]:h-1.5 [&_[data-slot=slider-thumb]]:w-3.5 [&_[data-slot=slider-thumb]]:rounded-[1px] [&_[data-slot=slider-thumb]]:border-ink [&_[data-slot=slider-range]]:rounded-none [&_[data-slot=slider-track]]:rounded-none [&_[data-slot=slider-track]]:bg-ink/10"
-                />
-                {measured && (
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute -right-1.5 h-px w-2 bg-ink"
-                    style={{ bottom: `calc(${measured[i].toFixed(2)} * (100% - ${THUMB_PX}px) + ${THUMB_PX / 2 - 0.5}px)` }}
-                  />
-                )}
-              </div>
-              <span className="label-micro">{finger[0]}</span>
-            </div>
-          ))}
-        </div>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2">
+      <label className="flex items-center gap-2">
+        <StatusDot status={armed ? "live" : "offline"} />
+        <span className={cn("label-micro", armed && "text-ink")}>{armed ? "Armed" : "Safe"}</span>
+        <Switch
+          size="sm"
+          checked={armed}
+          disabled={!online}
+          onCheckedChange={(next) => (next ? setArmed(true) : disarm())}
+          aria-label="Arm command publishing"
+          className={switchClass}
+        />
+      </label>
+      <label className="flex items-center gap-2">
+        <StatusDot status={passive ? "live" : "offline"} />
+        <span className={cn("label-micro", passive && "text-ink")}>Backdrive</span>
+        <Switch
+          size="sm"
+          checked={passive}
+          disabled={!armed || mirror}
+          onCheckedChange={(next) => useSimStore.getState().setPassive(next)}
+          aria-label="Backdrive mode: torque off, move the fingers by hand"
+          className={switchClass}
+        />
+      </label>
+      <label className="flex items-center gap-2">
+        <StatusDot status={mirror ? "live" : "offline"} />
+        <span className={cn("label-micro", mirror && "text-ink")}>Mirror</span>
+        <Switch
+          size="sm"
+          checked={mirror}
+          disabled={!armed || passive}
+          onCheckedChange={setMirrorEnabled}
+          aria-label="Mirror teleop: a hand in front of the webcam commands the fingers"
+          className={switchClass}
+        />
+      </label>
+
+      <span className="h-4 w-px bg-border" aria-hidden />
+
+      <div className="flex gap-1">
+        {PRESETS.map(({ name, pose }) => (
+          <Button
+            key={name}
+            variant="outline"
+            size="xs"
+            disabled={!armed || passive || mirror}
+            onClick={() => {
+              drive(pose)
+              release()
+            }}
+            className={cn(
+              "label-micro h-6 rounded-[2px] bg-surface px-2 tracking-[0.06em] disabled:border-hairline disabled:text-ink-mute disabled:opacity-100",
+              armed && matches(shown, pose) ? "border-ink text-ink" : "text-ink-soft",
+            )}
+          >
+            {name}
+          </Button>
+        ))}
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <label className="flex items-center justify-between gap-3">
-          <span className="flex min-w-0 items-center gap-2">
-            <StatusDot status={armed ? "live" : "offline"} />
-            <span className={cn("label-micro", armed && "text-ink")}>{armed ? "Armed" : "Safe"}</span>
-            <span className="label-micro truncate leading-4 tracking-normal normal-case">
-              {armed ? "publishing" : online ? "read-only" : "no link"}
-            </span>
-          </span>
-          <Switch
-            size="sm"
-            checked={armed}
-            disabled={!online}
-            onCheckedChange={(next) => (next ? setArmed(true) : disarm())}
-            aria-label="Arm command publishing"
-            className="rounded-[2px] data-checked:bg-signal [&_[data-slot=switch-thumb]]:rounded-[1px]"
-          />
-        </label>
+      <span className="h-4 w-px bg-border" aria-hidden />
 
-        <label className="flex items-center justify-between gap-3">
-          <span className="flex min-w-0 items-center gap-2">
-            <StatusDot status={passive ? "live" : "offline"} />
-            <span className={cn("label-micro", passive && "text-ink")}>Backdrive</span>
-            <span className="label-micro truncate leading-4 tracking-normal normal-case">
-              {passive ? "torque off" : "torque on"}
-            </span>
-          </span>
-          <Switch
-            size="sm"
-            checked={passive}
-            disabled={!armed || mirror}
-            onCheckedChange={(next) => useSimStore.getState().setPassive(next)}
-            aria-label="Backdrive mode: torque off, move the fingers by hand"
-            className="rounded-[2px] data-checked:bg-signal [&_[data-slot=switch-thumb]]:rounded-[1px]"
-          />
-        </label>
-
-        <label className="flex items-center justify-between gap-3">
-          <span className="flex min-w-0 items-center gap-2">
-            <StatusDot status={mirror ? "live" : "offline"} />
-            <span className={cn("label-micro", mirror && "text-ink")}>Mirror</span>
-            <span className="label-micro truncate leading-4 tracking-normal normal-case">
-              {mirror ? "webcam commands" : "webcam off"}
-            </span>
-          </span>
-          <Switch
-            size="sm"
-            checked={mirror}
-            disabled={!armed || passive}
-            onCheckedChange={setMirrorEnabled}
-            aria-label="Mirror teleop: a hand in front of the webcam commands the fingers"
-            className="rounded-[2px] data-checked:bg-signal [&_[data-slot=switch-thumb]]:rounded-[1px]"
-          />
-        </label>
-
-        <div className="grid grid-cols-5 gap-1">
-          {PRESETS.map(({ name, pose }) => (
-            <Button
-              key={name}
-              variant="outline"
-              size="xs"
-              disabled={!armed || passive || mirror}
-              onClick={() => {
-                drive(pose)
-                release()
-              }}
-              className={cn(
-                "label-micro h-6 rounded-[2px] bg-surface px-0 tracking-[0.06em] disabled:border-hairline disabled:text-ink-mute disabled:opacity-100",
-                armed && matches(shown, pose) ? "border-ink text-ink" : "text-ink-soft",
+      {/* One slider per finger; the tick under it is the measured position. */}
+      <div className="flex items-center gap-3">
+        {FINGERS.map((finger, i) => (
+          <div key={finger} className="flex items-center gap-1.5">
+            <span className="label-micro">{finger[0]}</span>
+            <div className="relative flex h-4 w-20 items-center">
+              <Slider
+                min={0}
+                max={100}
+                step={1}
+                disabled={!armed || passive || mirror}
+                value={[Math.round(shown[i] * 100)]}
+                onValueChange={([value]) => drive(shown.with(i, value / 100) as FingerValues)}
+                onValueCommit={release}
+                aria-label={`${finger} command`}
+                className="[&_[data-slot=slider-thumb]]:h-3.5 [&_[data-slot=slider-thumb]]:w-1.5 [&_[data-slot=slider-thumb]]:rounded-[1px] [&_[data-slot=slider-thumb]]:border-ink [&_[data-slot=slider-range]]:rounded-none [&_[data-slot=slider-track]]:rounded-none [&_[data-slot=slider-track]]:bg-ink/10"
+              />
+              {measured && (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute -bottom-1 h-2 w-px bg-ink"
+                  style={{ left: `calc(${measured[i].toFixed(2)} * (100% - ${THUMB_PX}px) + ${THUMB_PX / 2 - 0.5}px)` }}
+                />
               )}
-            >
-              {name}
-            </Button>
-          ))}
-        </div>
+            </div>
+          </div>
+        ))}
+      </div>
 
-        <p className="label-micro mt-auto leading-[1.5] tracking-normal normal-case">
-          {passive
-            ? `torque off: move the fingers by hand, ${TOPIC_NAMES.hand_state} records them`
-            : mirror
+      <span className="label-micro min-w-0 truncate tracking-normal normal-case">
+        {passive
+          ? `torque off: move the fingers by hand, ${TOPIC_NAMES.hand_state} records them`
+          : mirror
             ? `the webcam hand publishes ${TOPIC_NAMES.hand_command}`
             : armed
-            ? `publishing ${TOPIC_NAMES.hand_command} · 40 Hz max`
-            : online
-              ? `arm to publish ${TOPIC_NAMES.hand_command}`
-              : "arming needs a live hand"}
-        </p>
-      </div>
+              ? `publishing ${TOPIC_NAMES.hand_command} · 40 Hz max`
+              : online
+                ? `arm to publish ${TOPIC_NAMES.hand_command}`
+                : "arming needs a live hand"}
+      </span>
     </div>
   )
 }

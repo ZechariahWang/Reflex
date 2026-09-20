@@ -58,6 +58,23 @@ lerobot-record \
 Right arrow = save the episode, left arrow = record it again, Esc = stop (the keys
 may not work on Wayland; `episode_time_s` is the upper limit then).
 
+## Replay of a recording
+
+```bash
+python -m lerobot_robot_exo_hand.replay --root policy/datasets/exo_grasp --episode 0 --host <ros-ip>
+```
+
+Plays one episode back through rosbridge at the fps it was recorded with: `action` goes to
+`/hand/command` (the hand of the sim, or the real one, does what it was told), and the two camera
+images go to `/head_camera/color/image_raw/compressed` and `/camera/color/image_raw/compressed`,
+so the web console and Foxglove show what the cameras saw next to the moving hand. For that the ROS
+side must have NO camera of its own running: `ros2 launch htn_launch sim.launch.py camera:=none`.
+With a live camera pass `--no-images` (the hand only). `--what state` sends the measured
+`observation.state` instead of the action (what the hand did, not what it was told),
+`--speed 0.5` is half speed, `--loop` repeats until Ctrl-C. It commands the hand: on the real one,
+clear its surroundings first. The episode is decoded before the first frame goes out, so a slow
+video decode is not part of the timing.
+
 ## Data collection: backdrive (closed for these servos)
 
 Design: `../docs/specs/data-collection-design.md`. The HAL is in its torque-off

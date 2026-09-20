@@ -135,7 +135,8 @@ function KindToggle({ kind, onChange }: { kind: CameraKind; onChange: (kind: Cam
 export function CameraViewport({ source }: { source: CameraSource }) {
   const { index, title, tags, lost } = PANELS[source]
   const [kind, setKind] = useState<CameraKind>("color")
-  const { canvasRef, meta, status, fps } = useCameraStream(source, kind)
+  const { canvasRef, frameRef, meta, status, fps } = useCameraStream(source, kind)
+  const heldFrameRef = useRef<Blob | null>(null)
   const holdRef = useRef<HTMLCanvasElement | null>(null)
   const [held, setHeld] = useState(false)
   const [grid, setGrid] = useState(false)
@@ -167,6 +168,7 @@ export function CameraViewport({ source }: { source: CameraSource }) {
       hold.width = live.width
       hold.height = live.height
       hold.getContext("2d")?.drawImage(live, 0, 0)
+      heldFrameRef.current = frameRef.current // the histogram holds with the picture
     }
     setHeld(!held)
   }
@@ -280,7 +282,7 @@ export function CameraViewport({ source }: { source: CameraSource }) {
 
           <div className={cn(RAIL, "border-l")}>
             {range && <DepthLegend {...range} />}
-            {kind === "color" && showImage && <LumaRail canvasRef={shownRef} />}
+            {kind === "color" && showImage && <LumaRail frameRef={held ? heldFrameRef : frameRef} />}
           </div>
         </Panel>
       </motion.div>

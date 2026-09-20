@@ -15,6 +15,11 @@ export type CameraStreamStatus = "connecting" | "live" | "no-signal" | "offline"
 export interface CameraStream {
   /** Attach to a <canvas>; its width/height follow the incoming frames. */
   canvasRef: RefObject<HTMLCanvasElement | null>
+  /**
+   * The newest frame as it arrived (a JPEG). Whoever wants pixel values decodes a small copy of
+   * this: reading the canvas back stalls the page until the GPU has finished all it has queued.
+   */
+  frameRef: RefObject<Blob | null>
   /** Latest meta frame from the server; null until the first one. */
   meta: CameraMeta | null
   status: CameraStreamStatus
@@ -39,6 +44,7 @@ interface StreamState {
 
 export function useCameraStream(source: CameraSource, kind: CameraKind): CameraStream {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const frameRef = useRef<Blob | null>(null)
   const url = WS.camera(source, kind)
   const [state, setState] = useState<StreamState>({ url, meta: null, status: "connecting", fps: 0 })
 
@@ -125,6 +131,7 @@ export function useCameraStream(source: CameraSource, kind: CameraKind): CameraS
           // Not JSON: ignore.
         }
       } else if (event.data instanceof Blob) {
+        frameRef.current = event.data
         if (decoding) pending = event.data
         else void decode(event.data)
         sayReady()
@@ -174,5 +181,5 @@ export function useCameraStream(source: CameraSource, kind: CameraKind): CameraS
   }, [url])
 
   const current = state.url === url ? state : { meta: null, status: "connecting" as const, fps: 0 }
-  return { canvasRef, meta: current.meta, status: current.status, fps: current.fps }
+  return { canvasRef, frameRef, meta: current.meta, status: current.status, fps: current.fps }
 }

@@ -14,7 +14,7 @@ const SAMPLE_MS = 500
  * (square-root scaled, so thin tails stay visible next to the peak).
  * The RGB panel's counterpart of the depth legend, so both images share one frame.
  */
-export function LumaRail({ canvasRef }: { canvasRef: RefObject<HTMLCanvasElement | null> }) {
+export function LumaRail({ frameRef }: { frameRef: RefObject<Blob | null> }) {
   const bars = useRef<HTMLOListElement | null>(null)
   const [mean, setMean] = useState<number | null>(null)
 
@@ -22,10 +22,15 @@ export function LumaRail({ canvasRef }: { canvasRef: RefObject<HTMLCanvasElement
     const sampler = new PixelSampler(SAMPLE_WIDTH, SAMPLE_HEIGHT)
     const counts = new Uint32Array(BINS)
 
-    const sample = () => {
-      const canvas = canvasRef.current
-      const pixels = canvas && sampler.read(canvas, 0, 0, canvas.width, canvas.height)
-      if (!pixels || !bars.current) return
+    let disposed = false
+    let sampled: Blob | null = null
+
+    const sample = async () => {
+      const frame = frameRef.current
+      if (!frame || frame === sampled) return // nothing new since the last histogram
+      sampled = frame
+      const pixels = await sampler.readFrame(frame)
+      if (disposed || !pixels || !bars.current) return
       counts.fill(0)
       let total = 0
       for (let i = 0; i < pixels.length; i += 4) {
@@ -40,10 +45,13 @@ export function LumaRail({ canvasRef }: { canvasRef: RefObject<HTMLCanvasElement
       setMean(total / (pixels.length / 4) / 255)
     }
 
-    sample()
-    const timer = setInterval(sample, SAMPLE_MS)
-    return () => clearInterval(timer)
-  }, [canvasRef])
+    void sample()
+    const timer = setInterval(() => void sample(), SAMPLE_MS)
+    return () => {
+      disposed = true
+      clearInterval(timer)
+    }
+  }, [frameRef])
 
   return (
     <div className="flex h-full flex-col gap-2">

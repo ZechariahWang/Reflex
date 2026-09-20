@@ -30,8 +30,9 @@ You control a wearable exoskeleton hand with 5 fingers, each with ONE degree of 
 A pose is 5 numbers in the order thumb, index, middle, ring, pinky: 0 = fully open, 1 = fully closed.
 A person's hand may be inside it: prefer small, slow movements when trying something out.
 
-The hand takes ~0.6 s for a full open-to-close travel (its controller limits the speed), so a step
-of a path needs at least about 0.3 s + 0.5 s per unit of travel before the next pose makes sense.
+The hand takes ~0.3 s for a full open-to-close travel (its controller limits the speed; the real
+motors can be slower), so a step of a path needs at least about 0.1 s + 0.25 s per unit of travel
+before the next pose makes sense - give quick repeated strokes a short travel, so each one arrives.
 
 Skills are named hard-coded paths. To do what the user wants: look at list_skills first; if a
 skill fits, run_skill. If not, design a path (try poses with move_hand, check get_hand_state),

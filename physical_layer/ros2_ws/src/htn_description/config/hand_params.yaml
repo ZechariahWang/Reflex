@@ -60,7 +60,7 @@ camera:
 # Servo / hinge physics (sim only)
 joint:
   max_effort: 1.0      # N m
-  max_velocity: 3.0    # rad/s
+  max_velocity: 6.0    # rad/s (sim only). Above the HAL's max_speed of 4.0 travels/s (~5 rad/s), or the sim caps it
   damping: 0.01
   friction: 0.0
 

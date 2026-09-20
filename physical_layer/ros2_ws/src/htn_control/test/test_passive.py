@@ -150,10 +150,10 @@ def test_a_move_is_one_sweep_within_its_limits_and_never_overshoots(hal):
         position, velocity = new_position, new_velocity
 
 
-def test_a_full_close_takes_about_600_ms(hal):
+def test_a_full_close_takes_about_300_ms(hal):
     node, _ = hal
     position, velocity, ticks = 0.0, 0.0, 0
     while (position, velocity) != (1.0, 0.0):
         position, velocity = node.sweep(position, velocity, 1.0)
         ticks += 1
-    assert 0.5 <= ticks * node.dt <= 0.7
+    assert 0.25 <= ticks * node.dt <= 0.4  # 1 / max_speed + max_speed / max_accel = 0.32 s

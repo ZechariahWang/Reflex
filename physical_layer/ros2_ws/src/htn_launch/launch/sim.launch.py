@@ -127,10 +127,11 @@ def generate_launch_description():
                               description='Open the finger control window'),
         DeclareLaunchArgument('foxglove', default_value='true',
                               description='Start foxglove_bridge on ws://localhost:8765'),
-        DeclareLaunchArgument('max_speed', default_value='2.0',
+        DeclareLaunchArgument('max_speed', default_value='4.0',
                               description='HAL rate limit: fastest a finger may travel, in full ranges '
-                                          'per second (2.0 = open to closed in 0.5 s)'),
-        DeclareLaunchArgument('max_accel', default_value='20.0',
+                                          'per second (4.0 = open to closed in 0.25 s). The real servos reach what '
+                                          'their torque_limit (hand_params.yaml) lets them: ~1.8 at 600'),
+        DeclareLaunchArgument('max_accel', default_value='60.0',
                               description='HAL: how hard a finger speeds up and brakes, in full ranges per '
                                           'second^2 (a move eases in and brakes to rest at the target)'),
         DeclareLaunchArgument('rosbridge_port', default_value='9090',

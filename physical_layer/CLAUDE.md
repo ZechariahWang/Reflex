@@ -14,9 +14,11 @@ ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0
 
 Launch args: `gui:=true` (Gazebo window, sim only), `teleop:=false` (no control
 window), `foxglove:=false`, `rosbridge:=false`, `rosbridge_port:=9090`,
-`max_speed:=2.0` / `max_accel:=20.0` (HAL limits in full ranges per second and
-per second^2: a full close takes ~0.6 s; in sim the joint's `max_velocity` of
-3 rad/s caps the speed at ~2.3), `passive:=true` (hardware only:
+`max_speed:=4.0` / `max_accel:=60.0` (HAL limits in full ranges per second and
+per second^2: a full close takes ~0.3 s. The real servos reach what their
+`torque_limit` lets them - measured ~1.8 ranges/s at 600 - and their own ramp
+is `servo_acceleration`, 254 = the most; in sim the joint's `max_velocity` of
+6 rad/s is above it), `passive:=true` (hardware only:
 start with the torque off for a recording session), `camera:=none`, `head_camera:=iphone`
 (default `none`: the forehead iPhone, see below), `color_profile:=640x480x15`,
 `depth_profile:=480x270x15`, `params_file:=<yaml>`, `require_all_servos:=false`
@@ -167,7 +169,7 @@ rosbridge, see `docs/specs/policy-link-design.md`.
   `ros2 launch` dies with `package '<pkg>' not found`. Delete both folders (and
   the leftover `src/<pkg>/__pycache__`), then rebuild.
 - **Where the delay between a command and the hand comes from** (measured, full
-  close): the HAL ramp is 500 ms by design (`max_speed`). Gazebo added ~100 ms
+  close): the HAL ramp was 500 ms by design at the time (`max_speed` 2.0; it is 4.0 now). Gazebo added ~100 ms
   on top: gz_ros2_control 0.7.x makes every position-controlled joint a
   first-order lag (velocity = 0.1 * error * 100 Hz), and the gain cannot be set -
   the plugin creates its node before it loads the parameter file. `SimBackend`

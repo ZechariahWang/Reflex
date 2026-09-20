@@ -24,8 +24,12 @@ def test_hot_cross_buns_presses_index_middle_ring_and_nothing_else():
     index, middle, ring = 1, 2, 3
     assert pressed == [index, middle, ring] * 2 + [ring] * 4 + [middle] * 4 + [index, middle, ring]
     assert all(pose[0] == pose[4] == min(pose) for pose, _ in movement["steps"]), "thumb and pinky never press"
-    presses = [max(pose) - min(pose) for pose, _ in movement["steps"] if max(pose) > min(pose)]
-    assert min(presses) >= 0.8, "a press asks for nearly the whole travel; how far it gets is the HAL's max_speed"
+    presses = [(max(pose) - min(pose), seconds) for pose, seconds in movement["steps"] if max(pose) > min(pose)]
+    assert max(depth for depth, _ in presses) >= 0.8, "a quarter note asks for nearly the whole travel"
+    for depth, seconds in presses:
+        # at the HAL's defaults (max_speed 4.0, max_accel 60) a stroke must ARRIVE in its time, or the
+        # quick notes turn around in mid-air and blur into one wobble
+        assert depth / 4.0 + 4.0 / 60.0 <= seconds + 1e-9, f"a stroke of {depth:.2f} does not fit into {seconds:.3f} s"
     assert sum(seconds for _, seconds in movement["steps"]) < 13.0, "the whole tune, at ~86 bpm"
 
 

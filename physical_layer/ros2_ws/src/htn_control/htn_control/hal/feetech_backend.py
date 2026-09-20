@@ -38,7 +38,10 @@ class FeetechBackend(HandBackend):
         port = node.declare_parameter('serial_port', '/dev/ttyACM0').value
         baud = node.declare_parameter('baud_rate', 1_000_000).value
         # Unit 100 steps/s^2, 0 = no limit
-        acceleration = node.declare_parameter('servo_acceleration', 50).value
+        # The servo's own ramp, in 100 steps/s^2 (254 = the most). The HAL's sweep already eases every
+        # move in and out; at 50 the servo took another 0.3 s to reach its speed, and coasted as long
+        # past a goal that stopped - a quick key stroke was a wobble, not a stroke.
+        acceleration = node.declare_parameter('servo_acceleration', 254).value
         # False is for bench tests with part of the servos; the hand needs all 5
         require_all = node.declare_parameter('require_all_servos', True).value
         self.bus = FeetechBus(port, baud)

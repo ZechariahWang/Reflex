@@ -13,19 +13,19 @@ DESCRIPTION = "B A G on index, middle, ring: three key presses per bar"
 FINGERS = ["thumb", "index", "middle", "ring", "pinky"]
 NOTE_FINGER = {"B": "index", "A": "middle", "G": "ring"}
 
-REST = 0.05    # fingers hover over the keys, nearly open
-PRESS = 0.95   # a key is down: nearly the whole travel
-BEAT_S = 0.7   # one quarter note (~86 bpm)
-DOWN_SHARE = 0.5  # of a note's time the finger goes down; the rest of it, it comes back up
+REST = 0.05        # fingers hover over the keys, nearly open
+PRESS = 0.95       # a key is down: nearly the whole travel (quarter notes)
+FAST_PRESS = 0.45  # the quick notes ("one a penny, two a penny"): a shorter stroke, so that the finger
+                   # ARRIVES and stands still at the bottom and again at the top before the next one.
+                   # Asked for the whole travel in an eighth note, a finger never gets there, turns
+                   # around in mid-air and four strokes blur into one wobble
+BEAT_S = 0.7       # one quarter note (~86 bpm)
+DOWN_SHARE = 0.5   # of a note's time the finger goes down and stays; the rest of it, it comes back up
 
-# How far a finger really gets is the HAL's business, not this file's: it moves a finger at
-# `max_speed` (2.0 of its travel per second by default, eased in and out by `max_accel`), so in
-# the 0.35 s of a quarter note a finger gets 0.72 of its travel down, and in the 0.175 s of an
-# eighth note 0.36 (the HAL's own sweep, simulated) - PRESS is then a direction more than a
-# place. Launched faster, a quarter note reaches the full 0.90 and an eighth note 0.72:
-#     ros2 launch htn_launch hardware.launch.py max_speed:=4.0 max_accel:=60.0
-# (both launch files take them). On the real hand that is only as fast as the servos can go
-# with `servos.torque_limit` of hand_params.yaml, and everything a finger meets, it meets harder.
+# How fast a finger moves is the HAL's business (max_speed 4.0 of the travel per second and
+# max_accel 60 by default; the real servos reach what `servos.torque_limit` lets them). With
+# those, simulated on the HAL's own sweep: a quarter note reaches the full PRESS, and each of
+# the four quick strokes reaches FAST_PRESS and is back at REST before the next one.
 
 # (note, beats); "-" is a rest
 TUNE = [
@@ -36,8 +36,8 @@ TUNE = [
 ]
 
 
-def pose(pressed=None):
-    return [PRESS if finger == pressed else REST for finger in FINGERS]
+def pose(pressed=None, depth=PRESS):
+    return [depth if finger == pressed else REST for finger in FINGERS]
 
 
 def steps():
@@ -47,7 +47,8 @@ def steps():
         if note == "-":
             out.append((pose(), seconds))
         else:
-            out.append((pose(NOTE_FINGER[note]), seconds * DOWN_SHARE))
+            depth = PRESS if beats >= 1 else FAST_PRESS
+            out.append((pose(NOTE_FINGER[note], depth), seconds * DOWN_SHARE))
             out.append((pose(), seconds * (1.0 - DOWN_SHARE)))
     return out
 

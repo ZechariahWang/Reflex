@@ -43,11 +43,11 @@ class HandHal(Node):
         params_file = self.declare_parameter('params_file', '').value
         rate = self.declare_parameter('rate', 50.0).value
         # Fastest a finger may travel, in full ranges per second
-        self.max_speed = self.declare_parameter('max_speed', 2.0).value
+        self.max_speed = self.declare_parameter('max_speed', 4.0).value
         # How hard a finger may speed up and brake, in full ranges per second^2. A move is one
         # sweep: ease in, cruise at max_speed, brake to arrive with zero speed. Without it the
         # setpoint starts and stops dead, which a servo answers with a lurch and a crawl.
-        self.max_accel = self.declare_parameter('max_accel', 20.0).value
+        self.max_accel = self.declare_parameter('max_accel', 60.0).value
         # Start with the torque off (a data collection session)
         start_passive = self.declare_parameter('passive', False).value
 

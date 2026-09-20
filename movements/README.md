@@ -18,7 +18,7 @@ def steps():
 ```
 
 Rules the backend checks: at most 2000 steps, each 0 < seconds <= 30, values are clamped to 0..1.
-The HAL still rate-limits every move (`max_speed`, a full close takes ~0.6 s) and the contact stop
+The HAL still rate-limits every move (`max_speed` 4.0 of the travel per second: a full close takes ~0.3 s, a stroke of depth d about d / 4 + 0.07 s) and the contact stop
 still applies: a movement cannot go faster or push harder than a slider can. A movement can play
 while an episode is being recorded (that is a way to record demonstrations), not during a replay.
 

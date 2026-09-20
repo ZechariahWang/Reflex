@@ -145,12 +145,12 @@ def test_a_finger_outside_its_travel_is_swept_in_not_snapped_to_the_edge(hal):
     node.update()
     node.backend.read()
     # held where it is, plus at most the first step of the sweep - not the 200 steps to the edge
-    assert abs(from_u16(servos.registers[2][42:44]) - (OPEN - 200)) <= 10
+    assert abs(from_u16(servos.registers[2][42:44]) - (OPEN - 200)) <= 30  # max_accel x dt^2 = 25 steps
     goals = []
     for _ in range(40):
         node.update()
         goals.append(from_u16(servos.registers[2][42:44]))
-    assert goals[-1] == OPEN and max(abs(b - a) for a, b in zip(goals, goals[1:])) <= 45  # max_speed per cycle
+    assert goals[-1] == OPEN and max(abs(b - a) for a, b in zip(goals, goals[1:])) <= 85  # max_speed per cycle: 4.0 x 20 ms x 1024 steps
 
 
 def test_a_blocked_finger_gets_the_low_torque_and_a_frozen_setpoint_and_comes_back(hal):

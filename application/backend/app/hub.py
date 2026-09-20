@@ -21,7 +21,7 @@ import numpy as np
 from .config import Settings
 from .depth import Colorizer, decode
 from .frames import Frame, LatestChannel, jpeg_size
-from .objects import Detector, Intrinsics, Located, Tracker, locate, make_detector
+from .objects import Detector, Intrinsics, Located, Tracker, camera_mount, locate, make_detector, rotation_of
 
 LOGGER = logging.getLogger(__name__)
 
@@ -148,6 +148,12 @@ class Hub:
         self._realsense_seen = -math.inf
         self._head_depth: bytes | None = None
         self._head_intrinsics: Intrinsics | None = None
+        # base_link in the world (z up, yaw 0 = the start), from the wrist camera's IMU; and how the
+        # camera sits on the hand, to get from there to the camera's own orientation
+        self._orientation: tuple[float, float, float, float] | None = None
+        self._orientation_seen = -math.inf
+        self._world_from_base: np.ndarray | None = None
+        self._base_from_camera = camera_mount(settings.description_dir)
         self.frames: dict[str, dict[str, LatestChannel[Frame]]] = {
             source: {kind: LatestChannel() for kind in kinds} for source, kinds in CAMERA_STREAMS.items()
         }
@@ -178,6 +184,24 @@ class Hub:
             self._meters["hand_command"].tick(time.monotonic())
             if vector is not None:
                 self._command = vector
+
+    def on_orientation(self, message: dict) -> None:
+        """/hand/orientation (geometry_msgs/QuaternionStamped); a bad message keeps the old one."""
+        try:
+            q = message["quaternion"]
+            quaternion = (float(q["x"]), float(q["y"]), float(q["z"]), float(q["w"]))
+            world_from_base = rotation_of(quaternion)
+        except (KeyError, TypeError, ValueError):
+            return
+        with self._lock:
+            self._orientation, self._world_from_base = quaternion, world_from_base
+            self._orientation_seen = time.monotonic()
+
+    def _world_from_camera(self, now: float) -> np.ndarray | None:
+        """Call with the lock held. None without a fresh orientation."""
+        if self._world_from_base is None or now - self._orientation_seen > STALE_AFTER_MS / 1000:
+            return None
+        return self._world_from_base @ self._base_from_camera
 
     def on_passive(self, passive: object) -> None:
         with self._lock:
@@ -214,12 +238,13 @@ class Hub:
         with self._lock:
             self._head_depth = payload
 
-    def on_located(self, located: Sequence[Located]) -> None:
-        """One detection pass (real or synthetic) -> the tracks; counted as the `objects` rate."""
+    def on_located(self, located: Sequence[Located], on_the_hand: bool = True) -> None:
+        """One detection pass (real or synthetic) -> the tracks; counted as the `objects` rate.
+        `on_the_hand` False = seen by the head camera: the hand's orientation says nothing about it."""
         now = time.monotonic()
         with self._lock:
             self._meters["objects"].tick(now)
-            self._tracker.update(located, now)
+            self._tracker.update(located, now, self._world_from_camera(now) if on_the_hand else None)
 
     def on_color(self, jpeg: bytes) -> None:
         self._tick("color")
@@ -300,7 +325,7 @@ class Hub:
             except Exception:  # no single frame may end the loop
                 LOGGER.exception("dropping detection pass")
                 continue
-            self.on_located(located)
+            self.on_located(located, on_the_hand=not head)
 
     def _detect_and_locate(
         self, detector: Detector, jpeg: bytes, payload: bytes, intrinsics: Intrinsics | None
@@ -334,7 +359,8 @@ class Hub:
                 "state": list(self._state),
                 "command": None if self._command is None else list(self._command),
                 "passive": self._passive,
-                "objects": self._tracker.objects(now),
+                "orientation": None if self._world_from_camera(now) is None else list(self._orientation),
+                "objects": self._tracker.objects(now, self._world_from_camera(now)),
                 "rates": {topic: meter.hz(now) for topic, meter in self._meters.items()},
             }
 

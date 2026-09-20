@@ -29,8 +29,9 @@ MIN_DEPTH_SAMPLES = 24
 GATE_M = 0.20
 # Weight of a new measurement in a track's position and size
 SMOOTHING = 0.35
-# A track unseen for this long is forgotten
-MEMORY_S = 12.0
+# A track unseen for this long is forgotten. Long: an object that left the view is still there, and
+# with the hand's orientation (below) it is remembered where it IS, not where it was in the image.
+MEMORY_S = 120.0
 # Detections in a row before a track is reported: one-frame flicker never reaches the page
 CONFIRM_HITS = 2
 # Labels the detector may emit that are never "an object around the hand"
@@ -124,16 +125,71 @@ def _distance(a: Sequence[float], b: Sequence[float]) -> float:
     return math.sqrt(sum((p - q) ** 2 for p, q in zip(a, b)))
 
 
+def rotation_of(quaternion: Sequence[float]) -> np.ndarray:
+    """Rotation matrix of a quaternion (x, y, z, w)."""
+    x, y, z, w = (float(v) for v in quaternion)
+    n = math.sqrt(x * x + y * y + z * z + w * w)
+    if n < 1e-9:
+        raise ValueError("zero quaternion")
+    x, y, z, w = x / n, y / n, z / n, w / n
+    return np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ]
+    )
+
+
+def rotation_of_rpy(roll: float, pitch: float, yaw: float) -> np.ndarray:
+    """URDF rpy (fixed axes x, y, z in that order), e.g. the camera's mount in hand_params.yaml."""
+    cr, sr, cp, sp, cy, sy = math.cos(roll), math.sin(roll), math.cos(pitch), math.sin(pitch), math.cos(yaw), math.sin(yaw)
+    return np.array(
+        [
+            [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+            [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+            [-sp, cp * sr, cp * cr],
+        ]
+    )
+
+
+def camera_mount(description_dir) -> np.ndarray:
+    """base_link <- camera_link: how the wrist camera sits on the hand (hand_params.yaml `camera.rpy`).
+    The identity if the file is not there: the map then turns about the wrong axes, nothing worse."""
+    import yaml
+
+    try:
+        with open(description_dir / "config" / "hand_params.yaml") as f:
+            return rotation_of_rpy(*(float(v) for v in yaml.safe_load(f)["camera"]["rpy"]))
+    except (OSError, KeyError, TypeError, ValueError, yaml.YAMLError):
+        LOGGER.warning("no camera.rpy under %s: the object memory takes the camera as unturned", description_dir)
+        return np.eye(3)
+
+
 class Tracker:
-    """Greedy nearest-neighbour association by label, exponential smoothing, and a memory."""
+    """Greedy nearest-neighbour association by label, exponential smoothing, and a memory.
+
+    With `world_from_camera` (the camera's orientation, from the hand's IMU) the tracks live in a
+    frame that does not turn with the hand: an object out of view stays where it is while the hand
+    turns away from it, and comes back under its box when the hand turns back. The IMU gives no
+    position, so a hand that MOVES still drags its memories along. Without an orientation the
+    tracks live in the camera's frame, as before.
+    """
 
     def __init__(self, gate_m: float = GATE_M, memory_s: float = MEMORY_S) -> None:
         self._gate = gate_m
         self._memory = memory_s
         self._tracks: dict[int, Track] = {}
         self._next_id = 1
+        self._stable = False
 
-    def update(self, located: Sequence[Located], now: float) -> None:
+    def update(self, located: Sequence[Located], now: float, world_from_camera: np.ndarray | None = None) -> None:
+        self._same_frame(world_from_camera is not None)
+        if world_from_camera is not None:
+            located = [
+                Located(item.label, item.confidence, tuple(world_from_camera @ np.array(item.xyz)), item.size)
+                for item in located
+            ]
         candidates = sorted(
             (_distance(track.xyz, item.xyz), track.id, i)
             for track in self._tracks.values()
@@ -163,13 +219,27 @@ class Tracker:
         for track_id in [t.id for t in self._tracks.values() if now - t.last_seen > self._memory]:
             del self._tracks[track_id]
 
-    def objects(self, now: float) -> list[dict]:
-        """What the page sees: confirmed tracks, oldest first. `age` is seconds since the last sighting."""
+    def _same_frame(self, stable: bool) -> None:
+        """Tracks of the camera's frame and of the stable frame do not mix: the IMU came or went."""
+        if stable != self._stable:
+            self._tracks.clear()
+            self._stable = stable
+
+    def objects(self, now: float, world_from_camera: np.ndarray | None = None) -> list[dict]:
+        """What the page sees, in the camera's frame as it is turned NOW: confirmed tracks, oldest
+        first. `age` is seconds since the last sighting."""
+        if self._stable and world_from_camera is None:
+            return []  # the orientation went away; the next detection pass starts over in the camera's frame
+        turn = world_from_camera.T if self._stable else None
+
+        def xyz(track: Track) -> Sequence[float]:
+            return track.xyz if turn is None else turn @ np.array(track.xyz)
+
         return [
             {
                 "id": track.id,
                 "label": track.label,
-                "xyz": [round(v, 4) for v in track.xyz],
+                "xyz": [round(float(v), 4) for v in xyz(track)],
                 "size": [round(v, 4) for v in track.size],
                 "confidence": round(track.confidence, 3),
                 "age": round(max(0.0, now - track.last_seen), 2),

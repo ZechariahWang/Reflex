@@ -1,3 +1,4 @@
+import pytest
 import numpy as np
 
 from app.hub import Hub
@@ -85,3 +86,34 @@ def test_mock_objects_flow_through_the_hub():
     hub.on_located(scene.located(away))
     assert "cup" not in {o.label for o in scene.located(away)}
     assert "cup" in {o["label"] for o in hub.snapshot(True)["objects"]}  # still remembered
+
+
+def test_with_the_hands_orientation_a_remembered_object_stays_put_while_the_hand_turns():
+    import math
+
+    from app.objects import rotation_of
+
+    tracker = Tracker()
+    ahead = Located("cup", 0.9, (0.5, 0.0, 0.0), (0.08, 0.08, 0.1))
+    straight = rotation_of((0.0, 0.0, 0.0, 1.0))
+    for now in (0.0, 0.25):
+        tracker.update([ahead], now, straight)
+    left = rotation_of((0.0, 0.0, math.sin(math.pi / 4), math.cos(math.pi / 4)))  # the camera turned 90 deg left
+    tracker.update([], 1.0, left)
+    (cup,) = tracker.objects(1.0, left)
+    assert cup["xyz"] == pytest.approx([0.0, -0.5, 0.0], abs=1e-3), "now it is to the camera's right"
+    (cup,) = tracker.objects(2.0, straight)
+    assert cup["xyz"] == pytest.approx([0.5, 0.0, 0.0], abs=1e-3), "and ahead again when the hand turns back"
+
+
+def test_tracks_of_the_two_frames_never_mix():
+    from app.objects import rotation_of
+
+    tracker = Tracker()
+    ahead = Located("cup", 0.9, (0.5, 0.0, 0.0), (0.08, 0.08, 0.1))
+    for now in (0.0, 0.25):
+        tracker.update([ahead], now)
+    assert len(tracker.objects(0.3)) == 1
+    tracker.update([ahead], 0.5, rotation_of((0.0, 0.0, 0.0, 1.0)))  # the IMU came up: start over
+    assert tracker.objects(0.5, rotation_of((0.0, 0.0, 0.0, 1.0))) == []
+    assert tracker.objects(0.5, None) == [], "the orientation went away again: nothing until the next pass"

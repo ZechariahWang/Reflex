@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { ContactShadows, Environment, Grid, Lightformer, OrbitControls } from "@react-three/drei"
-import { MathUtils, NeutralToneMapping, Quaternion, Spherical, Vector3 } from "three"
+import { MathUtils, NeutralToneMapping, Quaternion, Spherical, Vector3, type Group } from "three"
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib"
 
 import { useSimStore } from "@/lib/sim-store"
@@ -145,6 +145,7 @@ function Hand({ solid, ghost, ghostEnabled, hud, onMovingChange }: HandProps) {
   })
   // Starts as moving, so the first frames draw their shadows.
   const motion = useRef({ moving: true, stillFor: 0 })
+  const heading = useRef<Group | null>(null)
 
   // A new model needs its shadows drawn even if no finger is moving.
   useEffect(() => {
@@ -165,6 +166,16 @@ function Hand({ solid, ghost, ghostEnabled, hud, onMovingChange }: HandProps) {
     const message = useSimStore.getState().live.message
     const { angles, curls, ghostAngles } = pose.current
     const follow = damp(FOLLOW_RATE, dt)
+
+    // The real hand's yaw (the wrist camera's IMU) turns the model about the vertical: base_link's
+    // z is this scene's y. The map's objects hang on the hand's camera_link, and the backend gives
+    // them in the camera's frame as it is turned now, so they stay put in the scene while it turns.
+    const q = message?.orientation
+    if (heading.current && q) {
+      const yaw = Math.atan2(2 * (q[3] * q[2] + q[0] * q[1]), 1 - 2 * (q[1] * q[1] + q[2] * q[2]))
+      const turn = Math.atan2(Math.sin(yaw - heading.current.rotation.y), Math.cos(yaw - heading.current.rotation.y))
+      heading.current.rotation.y += turn * follow // the short way round
+    }
 
     let moved = 0
     for (const rig of solid.fingers) {
@@ -270,10 +281,10 @@ function Hand({ solid, ghost, ghostEnabled, hud, onMovingChange }: HandProps) {
   })
 
   return (
-    <>
+    <group ref={heading}>
       <primitive object={solid.root} />
       <primitive object={ghost.root} />
-    </>
+    </group>
   )
 }
 

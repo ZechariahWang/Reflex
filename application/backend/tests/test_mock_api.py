@@ -33,7 +33,7 @@ def test_urdf(client):
 def test_state_shape_and_command_override(client):
     with client.websocket_connect("/ws/state") as ws:
         message = ws.receive_json()
-        assert list(message) == ["t", "ros_connected", "fingers", "joints", "state", "command", "passive", "objects", "rates"]
+        assert list(message) == ["t", "ros_connected", "fingers", "joints", "state", "command", "passive", "orientation", "objects", "rates"]
         assert message["fingers"] == list(FINGERS)
         assert set(message["joints"]) == {f"{finger}_joint" for finger in FINGERS}
         assert len(message["state"]) == 5 and message["command"] is None

@@ -41,6 +41,13 @@ def robot(tmp_path, clock):
     return robot
 
 
+@pytest.fixture
+def wrist_only(robot):
+    """The same robot with no head camera: the old datasets and a bench with no phone."""
+    robot.config.head_topic = ""
+    return robot
+
+
 def action(value):
     return dict.fromkeys(KEYS, value)
 
@@ -51,29 +58,66 @@ def test_lerobot_finds_the_robot_from_its_config(tmp_path):
 
 
 def test_features_are_known_before_connect(tmp_path):
-    robot = ExoHand(ExoHandConfig(host="unused", calibration_dir=tmp_path, width=320, height=240))
+    config = ExoHandConfig(
+        host="unused", calibration_dir=tmp_path, width=320, height=240, head_width=160, head_height=120
+    )
+    robot = ExoHand(config)
 
-    assert robot.observation_features == {**dict.fromkeys(KEYS, float), "camera2": (240, 320, 3)}
+    assert robot.observation_features == {
+        **dict.fromkeys(KEYS, float),
+        "camera1": (120, 160, 3),
+        "camera2": (240, 320, 3),
+    }
     assert robot.action_features == dict.fromkeys(KEYS, float)
     assert not robot.is_connected
-    assert len(robot.cameras) == 1  # lerobot-record sizes its image writer from this
+    assert len(robot.cameras) == 2  # lerobot-record sizes its image writer from this
+
+
+def test_features_with_no_head_camera(tmp_path):
+    robot = ExoHand(ExoHandConfig(host="unused", calibration_dir=tmp_path, head_topic=""))
+
+    assert robot.observation_features == {**dict.fromkeys(KEYS, float), "camera2": (480, 640, 3)}
+    assert len(robot.cameras) == 1
 
 
 def test_get_observation_returns_latest_state_and_frame(robot):
     robot._on_state({"data": [0.9] * 5})
     robot._on_state({"data": [0.0, 0.1, 0.2, 0.3, 0.4]})
     robot._on_color(jpeg_message())
+    robot._on_head(jpeg_message(height=240, width=320))
+    robot.config.head_width, robot.config.head_height = 320, 240
 
     obs = robot.get_observation()
 
     assert obs["index.pos"] == 0.1 and obs["pinky.pos"] == 0.4
+    assert obs["camera1"].shape == (240, 320, 3)
     assert obs["camera2"].shape == (480, 640, 3)
 
 
-def test_get_observation_fails_until_both_streams_arrived(robot):
+def test_get_observation_fails_until_all_streams_arrived(robot):
     robot._on_state({"data": [0.0] * 5})
     with pytest.raises(ConnectionError):
         robot.get_observation()
+    robot._on_color(jpeg_message())
+    with pytest.raises(ConnectionError):
+        robot.get_observation()
+
+
+def test_get_observation_fails_on_a_frozen_head_stream(robot, clock):
+    robot._on_head(jpeg_message())
+    clock.value += 0.4
+    robot._on_state({"data": [0.0] * 5})
+    robot._on_color(jpeg_message())  # state and wrist frame are fresh, the head frame is 0.4 s old
+
+    with pytest.raises(ConnectionError):
+        robot.get_observation()
+
+
+def test_get_observation_with_no_head_camera(wrist_only):
+    wrist_only._on_state({"data": [0.0] * 5})
+    wrist_only._on_color(jpeg_message())
+
+    assert list(wrist_only.get_observation()) == [*KEYS, "camera2"]
 
 
 def test_get_observation_fails_on_a_frozen_stream(robot, clock):
@@ -81,6 +125,7 @@ def test_get_observation_fails_on_a_frozen_stream(robot, clock):
     robot._on_color(jpeg_message())
     clock.value += 0.2
     robot._on_state({"data": [0.0] * 5})
+    robot._on_head(jpeg_message())
     clock.value += 0.2  # state is fresh, the frame is 0.4 s old
 
     with pytest.raises(ConnectionError):
@@ -90,6 +135,15 @@ def test_get_observation_fails_on_a_frozen_stream(robot, clock):
 def test_get_observation_rejects_a_frame_of_the_wrong_size(robot):
     robot._on_state({"data": [0.0] * 5})
     robot._on_color(jpeg_message(height=240, width=320))
+    robot._on_head(jpeg_message())
+    with pytest.raises(ValueError):
+        robot.get_observation()
+
+
+def test_get_observation_rejects_a_head_frame_of_the_wrong_size(robot):
+    robot._on_state({"data": [0.0] * 5})
+    robot._on_color(jpeg_message())
+    robot._on_head(jpeg_message(height=240, width=320))
     with pytest.raises(ValueError):
         robot.get_observation()
 

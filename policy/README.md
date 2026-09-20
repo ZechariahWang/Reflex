@@ -26,8 +26,10 @@ camera plugged in (the sim has no simulated camera):
 python -m lerobot_robot_exo_hand.exo_hand --host <ros-ip>
 ```
 
-It prints one observation, closes the hand, opens it again, and fails if
-`/hand/state` does not follow.
+It prints one observation (the state and the shapes of `camera1`, the head
+iPhone, and `camera2`, the wrist RealSense), closes the hand, opens it again, and
+fails if `/hand/state` does not follow. With no phone: `--head-topic ""`, and
+`--robot.head_topic=""` in the commands below.
 
 ## Data collection: mirror teleop (torque on)
 

@@ -9,8 +9,9 @@ import numpy as np
 # Contract order of /hand/command and /hand/state
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 KEYS = tuple(f"{finger}.pos" for finger in FINGERS)
-# An image slot of smolvla_base. lerobot async inference has no rename_map, so the key must match the policy
+# Image slots of smolvla_base. lerobot async inference has no rename_map, so the keys must match the policy
 CAMERA = "camera2"
+HEAD_CAMERA = "camera1"
 
 
 def decode_color(jpeg: bytes) -> np.ndarray:
@@ -21,10 +22,13 @@ def decode_color(jpeg: bytes) -> np.ndarray:
     return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
 
-def to_observation(state: Sequence[float], rgb: np.ndarray) -> dict[str, float | np.ndarray]:
+def to_observation(
+    state: Sequence[float], rgb: np.ndarray, head: np.ndarray | None = None
+) -> dict[str, float | np.ndarray]:
     if len(state) != len(FINGERS):
         raise ValueError(f"state has {len(state)} values, expected {len(FINGERS)}")
-    return {**{key: float(value) for key, value in zip(KEYS, state)}, CAMERA: rgb}
+    images = {CAMERA: rgb} if head is None else {HEAD_CAMERA: head, CAMERA: rgb}
+    return {**{key: float(value) for key, value in zip(KEYS, state)}, **images}
 
 
 def to_command(action: Mapping[str, float]) -> list[float]:

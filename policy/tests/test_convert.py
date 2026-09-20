@@ -43,6 +43,15 @@ def test_to_observation_keeps_finger_order():
     assert obs["camera2"] is rgb
 
 
+def test_to_observation_puts_the_head_image_before_the_wrist_image():
+    rgb, head = np.zeros((4, 4, 3), np.uint8), np.ones((4, 4, 3), np.uint8)
+
+    obs = to_observation([0.0] * 5, rgb, head)
+
+    assert list(obs) == [f"{f}.pos" for f in FINGERS] + ["camera1", "camera2"]
+    assert obs["camera1"] is head and obs["camera2"] is rgb
+
+
 def test_to_observation_rejects_wrong_length():
     with pytest.raises(ValueError):
         to_observation([0.0] * 4, np.zeros((4, 4, 3), np.uint8))

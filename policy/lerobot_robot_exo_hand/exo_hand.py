@@ -17,6 +17,7 @@ from .config_exo_hand import ExoHandConfig
 from .convert import (
     CAMERA,
     FINGERS,
+    HEAD_CAMERA,
     KEYS,
     decode_color,
     differs,
@@ -41,7 +42,7 @@ class ExoHand(Robot):
         super().__init__(config)
         self.config = config
         # lerobot-record counts these for its image writer threads; the frames come from rosbridge
-        self.cameras = {CAMERA: None}
+        self.cameras = dict.fromkeys(self._image_shapes())
         self._ros: roslibpy.Ros | None = None
         self._command_out: roslibpy.Topic | None = None
         self._lock = threading.Lock()
@@ -49,6 +50,8 @@ class ExoHand(Robot):
         self._state_stamp: float | None = None
         self._jpeg: bytes | None = None
         self._jpeg_stamp: float | None = None
+        self._head_jpeg: bytes | None = None
+        self._head_stamp: float | None = None
         # Last command on the topic, from us or from another publisher
         self._last_command: list[float] | None = None
         # Latched by the HAL; None until it arrives (or with a HAL that has no passive mode)
@@ -56,7 +59,13 @@ class ExoHand(Robot):
 
     @property
     def observation_features(self) -> dict[str, type | tuple[int, int, int]]:
-        return {**dict.fromkeys(KEYS, float), CAMERA: (self.config.height, self.config.width, 3)}
+        return {**dict.fromkeys(KEYS, float), **self._image_shapes()}
+
+    def _image_shapes(self) -> dict[str, tuple[int, int, int]]:
+        shapes = {CAMERA: (self.config.height, self.config.width, 3)}
+        if self.config.head_topic:
+            shapes = {HEAD_CAMERA: (self.config.head_height, self.config.head_width, 3), **shapes}
+        return shapes
 
     @property
     def action_features(self) -> dict[str, type]:
@@ -84,9 +93,12 @@ class ExoHand(Robot):
         for name, message_type, callback in (
             (STATE_TOPIC, MULTI_ARRAY, self._on_state),
             (self.config.color_topic, COMPRESSED_IMAGE, self._on_color),
+            (self.config.head_topic, COMPRESSED_IMAGE, self._on_head),
             (COMMAND_TOPIC, MULTI_ARRAY, self._on_command),
             (PASSIVE_TOPIC, BOOL, self._on_passive),
         ):
+            if not name:
+                continue
             roslibpy.Topic(ros, name, message_type, queue_length=1).subscribe(callback)
         # A Topic replays only one of subscribe / advertise on reconnect, so publishing gets its own
         self._command_out = roslibpy.Topic(ros, COMMAND_TOPIC, MULTI_ARRAY, queue_size=1)
@@ -98,9 +110,8 @@ class ExoHand(Robot):
         while not self._fresh():
             if time.monotonic() > deadline:
                 self.disconnect()
-                raise ConnectionError(
-                    f"rosbridge is up but {STATE_TOPIC} or {self.config.color_topic} is silent"
-                )
+                topics = (STATE_TOPIC, self.config.color_topic, self.config.head_topic)
+                raise ConnectionError(f"rosbridge is up but one of {', '.join(filter(None, topics))} is silent")
             time.sleep(0.05)
 
     def disconnect(self) -> None:
@@ -118,6 +129,11 @@ class ExoHand(Robot):
         with self._lock:
             self._jpeg, self._jpeg_stamp = jpeg, time.monotonic()
 
+    def _on_head(self, message: dict) -> None:
+        jpeg = base64.b64decode(message["data"])
+        with self._lock:
+            self._head_jpeg, self._head_stamp = jpeg, time.monotonic()
+
     def _on_command(self, message: dict) -> None:
         with self._lock:
             self._last_command = list(message["data"])
@@ -126,23 +142,35 @@ class ExoHand(Robot):
         with self._lock:
             self._hal_passive = bool(message["data"])
 
+    def _stamps(self) -> tuple[float | None, ...]:
+        """Call with the lock held. A dead phone stops the client the same way as a dead RealSense."""
+        stamps = (self._state_stamp, self._jpeg_stamp)
+        return (*stamps, self._head_stamp) if self.config.head_topic else stamps
+
     def _fresh(self) -> bool:
         with self._lock:
-            stamps = (self._state_stamp, self._jpeg_stamp)
+            stamps = self._stamps()
         return is_fresh(stamps, time.monotonic(), self.config.max_age_s)
 
     def get_observation(self) -> dict:
         with self._lock:
-            state, jpeg = self._state, self._jpeg
-            stamps = (self._state_stamp, self._jpeg_stamp)
+            state, jpeg, head_jpeg = self._state, self._jpeg, self._head_jpeg
+            stamps = self._stamps()
         # Without this a dead link returns the last frame forever and the policy acts on it
-        if state is None or jpeg is None or not is_fresh(stamps, time.monotonic(), self.config.max_age_s):
+        if not is_fresh(stamps, time.monotonic(), self.config.max_age_s):
             raise ConnectionError(f"no data from rosbridge within {self.config.max_age_s} s")
+        # The latest frame of each camera, not synchronized: at 15 fps the skew is at most ~70 ms
+        shapes = self._image_shapes()
+        rgb = self._decode(jpeg, self.config.color_topic, shapes[CAMERA])
+        head = self._decode(head_jpeg, self.config.head_topic, shapes[HEAD_CAMERA]) if self.config.head_topic else None
+        return to_observation(state, rgb, head)
+
+    @staticmethod
+    def _decode(jpeg: bytes, topic: str, expected: tuple[int, int, int]):
         rgb = decode_color(jpeg)
-        expected = (self.config.height, self.config.width, 3)
         if rgb.shape != expected:
-            raise ValueError(f"{self.config.color_topic} is {rgb.shape}, the config says {expected}")
-        return to_observation(state, rgb)
+            raise ValueError(f"{topic} is {rgb.shape}, the config says {expected}")
+        return rgb
 
     def send_action(self, action: dict) -> dict:
         """Returns the command that the HAL has after the call, which is the old one inside the deadband."""
@@ -164,11 +192,11 @@ class ExoHand(Robot):
         return dict(zip(KEYS, command if publish else last))
 
 
-def smoke(host: str, port: int) -> None:
+def smoke(host: str, port: int, head_topic: str) -> None:
     """Against a running sim or hand: read one observation, close the hand, open it again."""
-    with ExoHand(ExoHandConfig(host=host, port=port, id="smoke")) as robot:
+    with ExoHand(ExoHandConfig(host=host, port=port, head_topic=head_topic, id="smoke")) as robot:
         obs = robot.get_observation()
-        print({key: (value.shape if key == CAMERA else round(value, 3)) for key, value in obs.items()})
+        print({key: (value.shape if key in (CAMERA, HEAD_CAMERA) else round(value, 3)) for key, value in obs.items()})
         for target in (1.0, 0.0):
             robot.send_action(dict.fromkeys(KEYS, target))
             time.sleep(1.5)
@@ -182,5 +210,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=smoke.__doc__)
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, default=9090)
+    parser.add_argument("--head-topic", default=ExoHandConfig.head_topic, help='"" = no head camera')
     args = parser.parse_args()
-    smoke(args.host, args.port)
+    smoke(args.host, args.port, args.head_topic)

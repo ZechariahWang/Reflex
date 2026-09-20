@@ -14,6 +14,10 @@ class ExoHandConfig(RobotConfig):
     # Size of the color stream; lerobot needs it before the first frame arrives
     width: int = 640
     height: int = 480
+    # Head camera (the forehead iPhone). Empty = one camera, for the old datasets and a bench with no phone
+    head_topic: str = "/head_camera/color/image_raw/compressed"
+    head_width: int = 640
+    head_height: int = 480
     # Oldest state or frame that get_observation() accepts
     max_age_s: float = 0.3
     # send_action() publishes only a command that differs by more than this

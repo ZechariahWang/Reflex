@@ -34,10 +34,10 @@ export const RADAR_RANGE_M = 1.0
 export const RADAR_RADIUS = 44
 
 /** An object counts as in view for this long after its last detection. */
-const SEEN_S = 0.6
+const SEEN_S = 0.4
 /** Age at which a remembered object has faded to its floor; the backend forgets it at about this point. */
-const FADE_S = 12
-const PRESENCE_FLOOR = 0.18
+const FADE_S = 1.0
+const PRESENCE_FLOOR = 0
 /** 1/s. A track update arrives at 10 Hz; the mark glides to it rather than stepping. */
 const GLIDE_RATE = 9
 const MAX_FRAME_DT = 1 / 20

@@ -117,3 +117,24 @@ def test_tracks_of_the_two_frames_never_mix():
     tracker.update([ahead], 0.5, rotation_of((0.0, 0.0, 0.0, 1.0)))  # the IMU came up: start over
     assert tracker.objects(0.5, rotation_of((0.0, 0.0, 0.0, 1.0))) == []
     assert tracker.objects(0.5, None) == [], "the orientation went away again: nothing until the next pass"
+
+
+def test_the_detector_is_told_to_look_only_for_the_labels_of_the_list():
+    pytest.importorskip("ultralytics")
+    from app.objects import DETECT_LABELS, YoloDetector
+
+    detector = YoloDetector("yolov8n.pt")
+    assert DETECT_LABELS == ["bottle"]
+    assert [detector._model.names[index] for index in detector._classes] == DETECT_LABELS
+    assert detector.detect(np.zeros((480, 640, 3), np.uint8)) == []
+
+
+def test_an_object_that_is_not_detected_any_more_is_gone_within_a_second():
+    tracker = Tracker()
+    cup = Located("bottle", 0.9, (0.5, 0.0, 0.0), (0.08, 0.08, 0.2))
+    for now in (0.0, 0.25):
+        tracker.update([cup], now)
+    tracker.update([], 0.5)
+    assert [item["age"] for item in tracker.objects(0.5)] == [0.25], "one missed pass: still there, ageing"
+    tracker.update([], 1.3)
+    assert tracker.objects(1.3) == []

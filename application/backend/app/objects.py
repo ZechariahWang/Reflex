@@ -29,13 +29,18 @@ MIN_DEPTH_SAMPLES = 24
 GATE_M = 0.20
 # Weight of a new measurement in a track's position and size
 SMOOTHING = 0.35
-# A track unseen for this long is forgotten. Long: an object that left the view is still there, and
-# with the hand's orientation (below) it is remembered where it IS, not where it was in the image.
-MEMORY_S = 120.0
+# A track unseen for this long is forgotten. Short: an object that is not detected any more goes
+# from the map at once; this is only the time the page needs to fade it out (world-layer.tsx: gone
+# from SEEN_S to FADE_S), and it rides out a single missed pass of the detector.
+MEMORY_S = 1.0
 # Detections in a row before a track is reported: one-frame flicker never reaches the page
 CONFIRM_HITS = 2
-# Labels the detector may emit that are never "an object around the hand"
-IGNORED_LABELS = frozenset({"person"})
+# What the detector looks for: names of the model's classes (COCO for yolov8n: "cup", "bowl",
+# "cell phone", "remote", "scissors", ... - the full list is `YOLO(model).names`). Add to this
+# list to see more; everything else is never reported, and the model is told to skip it.
+DETECT_LABELS = [
+    "bottle",
+]
 
 
 @dataclass(frozen=True)
@@ -272,16 +277,23 @@ class YoloDetector:
         self._model = YOLO(model)
         self._confidence = confidence
         self._image_size = image_size
+        ids = {name: index for index, name in self._model.names.items()}
+        unknown = [label for label in DETECT_LABELS if label not in ids]
+        if unknown:
+            LOGGER.warning("DETECT_LABELS has names that %s does not know: %s", model, unknown)
+        self._classes = [ids[label] for label in DETECT_LABELS if label in ids]
 
     def detect(self, bgr: np.ndarray) -> list[Detection]:
-        result = self._model.predict(bgr, imgsz=self._image_size, conf=self._confidence, verbose=False)[0]
+        if not self._classes:
+            return []
+        result = self._model.predict(
+            bgr, imgsz=self._image_size, conf=self._confidence, classes=self._classes, verbose=False
+        )[0]
         names = result.names
         boxes = result.boxes
         detections = []
         for box, conf, cls in zip(boxes.xyxy.tolist(), boxes.conf.tolist(), boxes.cls.tolist()):
             label = str(names[int(cls)])
-            if label in IGNORED_LABELS:
-                continue
             detections.append(Detection(label, float(conf), (box[0], box[1], box[2], box[3])))
         return detections
 

@@ -15,8 +15,6 @@ def generate_launch_description():
         # Defaults fit a USB 2 link; on USB 3 go up to e.g. 640x480x30
         DeclareLaunchArgument('color_profile', default_value='640x480x15'),
         DeclareLaunchArgument('depth_profile', default_value='480x270x15'),
-        # Declared by the launch files that include this one; here for a run on its own ('' = the package's)
-        DeclareLaunchArgument('params_file', default_value=''),
         # none by default: a launch with no phone must not print errors without end
         DeclareLaunchArgument('head_camera', default_value='none',
                               description='Head camera backend: iphone | none'),
@@ -39,23 +37,7 @@ def generate_launch_description():
                 'rgb_camera.color_profile': LaunchConfiguration('color_profile'),
                 'depth_module.depth_profile': LaunchConfiguration('depth_profile'),
                 'align_depth.enable': True,
-                # The IMU of a D435i as one /camera/imu (2 = the accelerometer interpolated onto
-                # the gyro's samples). A camera with no IMU only logs that it has none.
-                'enable_gyro': True,
-                'enable_accel': True,
-                'unite_imu_method': 2,
             }],
-            condition=IfCondition(PythonExpression(["'", camera, "' == 'realsense'"])),
-            output='screen',
-        ),
-
-        # Which way the hand points, from that IMU: /hand/orientation (hand_orientation_node.py).
-        # It publishes nothing until IMU samples arrive, so it is harmless with a D435.
-        Node(
-            package='htn_control',
-            executable='hand_orientation_node',
-            name='hand_orientation',
-            parameters=[{'params_file': LaunchConfiguration('params_file')}],
             condition=IfCondition(PythonExpression(["'", camera, "' == 'realsense'"])),
             output='screen',
         ),

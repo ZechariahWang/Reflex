@@ -4,7 +4,7 @@
 
 A one-screen web console for the exoskeleton hand: a three.js viewport of the hand
 moving live with a map of the objects around it (detected in the wrist camera, placed with its
-depth, remembered when they leave the view), a RealSense panel that switches between RGB and
+depth, faded out when they are not detected any more), a RealSense panel that switches between RGB and
 colorized depth, an iPhone (head camera) panel, per-finger telemetry,
 and an ARM-gated command block. It only consumes ROS topics from `physical_layer/`,
 so it looks the same for the Gazebo sim and the real hardware.

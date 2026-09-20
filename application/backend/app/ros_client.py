@@ -95,7 +95,6 @@ class RosClient:
 
         # Latched by the HAL: true while the torque is off and the fingers are backdriven
         self._subscribe(ros, "/hand/passive", "std_msgs/Bool", 0, lambda m: hub.on_passive(m["data"]))
-        self._subscribe(ros, "/hand/orientation", "geometry_msgs/QuaternionStamped", STATE_THROTTLE_MS, hub.on_orientation)
         self._passive_service = roslibpy.Service(ros, "/hand/set_passive", "std_srvs/SetBool")
 
         # A Topic replays only one message on reconnect, so publishing gets its own.

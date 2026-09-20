@@ -58,11 +58,6 @@ export interface StateMessage {
   command: FingerValues | null
   /** Backdrive mode: the HAL has the torque off, a person moves the fingers, commands are ignored. */
   passive: boolean
-  /**
-   * Which way the real hand points: base_link as a quaternion (x, y, z, w) in a world with z up,
-   * from the wrist camera's IMU. Yaw 0 = where it pointed at the start. null without an IMU.
-   */
-  orientation?: [number, number, number, number] | null
   /** The surroundings: objects the backend currently tracks (empty without a detector). */
   objects: TrackedObject[]
   rates: TopicRates

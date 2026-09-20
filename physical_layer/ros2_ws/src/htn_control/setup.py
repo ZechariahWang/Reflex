@@ -24,7 +24,6 @@ setup(
             'servo_tool = htn_control.servo_tool:main',
             'linkage_publisher = htn_control.linkage_publisher:main',
             'iphone_camera_node = htn_control.iphone_camera_node:main',
-            'hand_orientation_node = htn_control.hand_orientation_node:main',
         ],
     },
 )

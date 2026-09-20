@@ -129,6 +129,12 @@ export interface CameraMeta {
   hz: number
   /** false = no frame received from ROS in the last 2 s. */
   available: boolean
+  /**
+   * Degrees clockwise by which the page turns the picture to stand it upright (the wrist camera
+   * sits portrait on the hand). The frames arrive as the camera sent them; `width` / `height`
+   * here are already those of the turned picture (`useCameraStream` swaps them).
+   */
+  rotation?: number
   /** Depth only: colormap range in millimetres. */
   min_mm?: number
   max_mm?: number

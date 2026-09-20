@@ -33,6 +33,10 @@ class Settings:
     detect_threads: int = 2
     # Live ROS, but synthetic objects: a sim has no camera, and the map view still needs something to show
     mock_objects: bool = False
+    # The wrist RealSense sits portrait on the hand: how far to turn its picture clockwise (0, 90, 180,
+    # 270) to stand it upright - on the page, and for the object detector, which knows upright bottles.
+    # The ROS topics, the recordings and the policy keep the picture as the camera sends it.
+    realsense_rotation: int = 90
     # Episodes recorded from the console (app/episodes.py). Next to the LeRobot datasets, ignored by git
     recordings_dir: Path = Path(__file__).resolve().parents[3] / "policy" / "datasets" / "console"
     # Pre-written movements for the Movement dropdown: the repo's movements/ folder (its README has the format)
@@ -61,6 +65,7 @@ class Settings:
             detect_hz=float(env.get("DETECT_HZ", "4")),
             detect_threads=int(env.get("DETECT_THREADS", "2")),
             mock_objects=env.get("MOCK_OBJECTS", "0") == "1",
+            realsense_rotation=int(env.get("REALSENSE_ROTATION", "90")),
             recordings_dir=Path(env.get("RECORDINGS_DIR", str(cls.recordings_dir))),
             movements_dir=Path(env.get("MOVEMENTS_DIR", str(cls.movements_dir))),
         )

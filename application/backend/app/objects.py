@@ -130,6 +130,22 @@ def _distance(a: Sequence[float], b: Sequence[float]) -> float:
     return math.sqrt(sum((p - q) ** 2 for p, q in zip(a, b)))
 
 
+ROTATIONS = (0, 90, 180, 270)
+
+
+def box_before_rotation(box: tuple[float, float, float, float], rotation: int, width: int, height: int):
+    """A box found in a picture that was turned clockwise by `rotation` -> the same box in the
+    picture as the camera sent it (`width` x `height`), where the depth and the intrinsics live."""
+    x0, y0, x1, y1 = box
+    if rotation == 90:
+        return (y0, height - 1 - x1, y1, height - 1 - x0)
+    if rotation == 180:
+        return (width - 1 - x1, height - 1 - y1, width - 1 - x0, height - 1 - y0)
+    if rotation == 270:
+        return (width - 1 - y1, x0, width - 1 - y0, x1)
+    return box
+
+
 class Tracker:
     """Greedy nearest-neighbour association by label, exponential smoothing, and a memory."""
 

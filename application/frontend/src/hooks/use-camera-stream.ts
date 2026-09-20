@@ -57,7 +57,13 @@ export function useCameraStream(source: CameraSource, kind: CameraKind): CameraS
         const changed = (Object.keys(patch) as (keyof typeof patch)[]).some((key) => base[key] !== patch[key])
         return changed || base !== prev ? { ...base, ...patch } : prev
       })
-    const setMeta = (meta: CameraMeta) => update({ meta })
+    let rotation = 0
+    // The server describes the frames as it sends them; everything on the page works with the
+    // picture as it is shown, so a quarter turn swaps the sides here, once.
+    const setMeta = (meta: CameraMeta) => {
+      rotation = meta.rotation === 90 || meta.rotation === 180 || meta.rotation === 270 ? meta.rotation : 0
+      update({ meta: rotation % 180 === 0 ? meta : { ...meta, width: meta.height, height: meta.width } })
+    }
     const setStatus = (status: CameraStreamStatus) => update({ status })
     const setFps = (fps: number) => update({ fps })
 
@@ -85,11 +91,21 @@ export function useCameraStream(source: CameraSource, kind: CameraKind): CameraS
         const canvas = canvasRef.current
         if (!frame) return
         if (canvas) {
-          if (canvas.width !== frame.width || canvas.height !== frame.height) {
-            canvas.width = frame.width
-            canvas.height = frame.height
+          const quarter = rotation % 180 !== 0
+          const width = quarter ? frame.height : frame.width
+          const height = quarter ? frame.width : frame.height
+          if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width
+            canvas.height = height
           }
-          canvas.getContext("2d", { alpha: false, desynchronized: true })?.drawImage(frame, 0, 0)
+          const context = canvas.getContext("2d", { alpha: false, desynchronized: true })
+          if (context) {
+            // Turned clockwise about the canvas centre; the frame is drawn centred on the origin.
+            context.setTransform(1, 0, 0, 1, width / 2, height / 2)
+            context.rotate((rotation * Math.PI) / 180)
+            context.drawImage(frame, -frame.width / 2, -frame.height / 2)
+            context.setTransform(1, 0, 0, 1, 0, 0)
+          }
           drawn++
           lastFrameAt = performance.now()
           setStatus("live")

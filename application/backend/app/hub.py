@@ -21,7 +21,7 @@ import numpy as np
 from .config import Settings
 from .depth import Colorizer, decode
 from .frames import Frame, LatestChannel, jpeg_size
-from .objects import Detector, Intrinsics, Located, Tracker, locate, make_detector
+from .objects import ROTATIONS, Detection, Detector, Intrinsics, Located, Tracker, box_before_rotation, locate, make_detector
 
 LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +31,7 @@ TOPICS = ("joint_states", "hand_state", "hand_command", "color", "depth", "iphon
 CAMERA_STREAMS = {"realsense": ("color", "depth"), "iphone": ("color",)}
 RATE_WINDOW_S = 2.0
 STALE_AFTER_MS = 2000
+_CV_ROTATIONS = {90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
 DETECT_FALLBACK_S = 2.0  # no wrist camera frame for this long: the detector takes the head camera
 MAX_COMMAND_CHARS = 512  # a valid command is under 150
 
@@ -348,7 +349,9 @@ class Hub:
             if payload is None:
                 continue
             try:
-                located = await asyncio.to_thread(self._detect_and_locate, detector, jpeg, payload, intrinsics)
+                # the wrist camera sits portrait: the detector gets the picture upright (the phone's is already)
+                rotation = 0 if head else self._settings.realsense_rotation
+                located = await asyncio.to_thread(self._detect_and_locate, detector, jpeg, payload, intrinsics, rotation)
             except ValueError as error:
                 LOGGER.warning("dropping detection pass: %s", error)
                 continue
@@ -358,14 +361,21 @@ class Hub:
             self.on_located(located)
 
     def _detect_and_locate(
-        self, detector: Detector, jpeg: bytes, payload: bytes, intrinsics: Intrinsics | None
+        self, detector: Detector, jpeg: bytes, payload: bytes, intrinsics: Intrinsics | None, rotation: int = 0
     ) -> list[Located]:
         bgr = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
         if bgr is None:
             raise ValueError("colour frame is not a decodable image")
         depth = decode(payload)
         intrinsics = intrinsics or Intrinsics.default(bgr.shape[1], bgr.shape[0])
-        placed = (locate(detection, depth, intrinsics) for detection in detector.detect(bgr))
+        height, width = bgr.shape[:2]
+        upright = bgr if rotation not in _CV_ROTATIONS else cv2.rotate(bgr, _CV_ROTATIONS[rotation])
+        # found in the upright picture, placed in the picture as it was sent: depth and intrinsics are of that one
+        detections = [
+            Detection(d.label, d.confidence, box_before_rotation(d.box, rotation, width, height))
+            for d in detector.detect(upright)
+        ]
+        placed = (locate(detection, depth, intrinsics) for detection in detections)
         return [item for item in placed if item is not None]
 
     @property
@@ -429,6 +439,8 @@ class Hub:
             "hz": round(hz * 2) / 2,  # half-hertz steps keep jitter from re-sending meta
             "available": age_ms is not None and age_ms < STALE_AFTER_MS,
         }
+        if source == "realsense" and self._settings.realsense_rotation in ROTATIONS:
+            meta["rotation"] = self._settings.realsense_rotation  # the page turns the picture: it is sent as it came
         if kind == "depth":
             meta["min_mm"] = self._settings.depth_min_mm
             meta["max_mm"] = self._settings.depth_max_mm

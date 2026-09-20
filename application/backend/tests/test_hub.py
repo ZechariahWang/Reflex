@@ -1,3 +1,4 @@
+import pytest
 import asyncio
 
 from app.config import Settings
@@ -130,3 +131,39 @@ def test_while_the_wrist_camera_runs_the_head_camera_is_not_detected_in(monkeypa
         hub.on_head_color(jpeg)  # ... and the phone, which could be, must not take over
 
     assert detected_labels(monkeypatch, both) == []
+
+
+def test_the_detector_sees_the_wrist_picture_upright_and_the_object_lands_where_the_camera_saw_it(monkeypatch):
+    import cv2
+    import numpy as np
+
+    seen = {}
+
+    class CupAtTheTopOfTheUprightPicture:
+        def detect(self, bgr):
+            from app.objects import Detection
+
+            seen["shape"] = bgr.shape
+            return [Detection("cup", 0.9, (200.0, 40.0, 280.0, 120.0))]  # upright: 480 wide, 640 high
+
+    monkeypatch.setattr("app.hub.make_detector", lambda model, threads: CupAtTheTopOfTheUprightPicture())
+    jpeg = cv2.imencode(".jpg", np.zeros((480, 640, 3), np.uint8))[1].tobytes()
+    depth = np.zeros((480, 640), np.uint16)
+    depth[180:300, 20:140] = 500  # only where that box is in the picture AS SENT (turned back from 90 cw)
+
+    async def scenario() -> Hub:
+        hub = Hub(Settings(realsense_rotation=90))
+        hub.bind(asyncio.get_running_loop())
+        worker = asyncio.create_task(hub.run_object_worker("fake", max_hz=0))
+        for _ in range(4):
+            hub.on_depth(encode_compressed_depth(depth))
+            hub.on_color(jpeg)
+            await asyncio.sleep(0.05)
+        worker.cancel()
+        return hub
+
+    hub = asyncio.run(scenario())
+    assert seen["shape"] == (640, 480, 3), "the detector got a portrait picture"
+    (cup,) = hub.snapshot(True)["objects"]
+    assert cup["xyz"][0] == pytest.approx(0.5, abs=0.01), "placed with the depth under the box turned back"
+    assert hub.camera_meta("realsense", "color")["rotation"] == 90 and "rotation" not in hub.camera_meta("iphone", "color")

@@ -107,3 +107,19 @@ def test_an_object_that_is_not_detected_any_more_is_gone_within_a_second():
     assert [item["age"] for item in tracker.objects(0.5)] == [0.25], "one missed pass: still there, ageing"
     tracker.update([], 1.3)
     assert tracker.objects(1.3) == []
+
+
+@pytest.mark.parametrize("rotation,code", [(90, "ROTATE_90_CLOCKWISE"), (180, "ROTATE_180"), (270, "ROTATE_90_COUNTERCLOCKWISE")])
+def test_a_box_found_in_the_turned_picture_is_put_back_where_the_camera_saw_it(rotation, code):
+    import cv2
+
+    from app.objects import box_before_rotation
+
+    sent = np.zeros((480, 640), np.uint8)
+    sent[100:180, 400:460] = 255  # the object, in the picture as the camera sent it
+    upright = cv2.rotate(sent, getattr(cv2, code))
+    ys, xs = np.nonzero(upright)
+    found = (float(xs.min()), float(ys.min()), float(xs.max()), float(ys.max()))  # what a detector would report
+
+    assert box_before_rotation(found, rotation, 640, 480) == (400.0, 100.0, 459.0, 179.0)
+    assert box_before_rotation(found, 0, 640, 480) == found

@@ -31,6 +31,7 @@ TOPICS = ("joint_states", "hand_state", "hand_command", "color", "depth", "iphon
 CAMERA_STREAMS = {"realsense": ("color", "depth"), "iphone": ("color",)}
 RATE_WINDOW_S = 2.0
 STALE_AFTER_MS = 2000
+DETECT_FALLBACK_S = 2.0  # no wrist camera frame for this long: the detector takes the head camera
 MAX_COMMAND_CHARS = 512  # a valid command is under 150
 
 
@@ -141,6 +142,12 @@ class Hub:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._colorizer = Colorizer(settings.depth_min_mm, settings.depth_max_mm)
         self._depth_payloads: LatestChannel[bytes] = LatestChannel()
+        # The object detector's input: (source, colour JPEG). The wrist RealSense when it runs,
+        # else the head camera (the iPhone, with its LiDAR depth) - a bench with only the phone.
+        self._detect_frames: LatestChannel[tuple[str, bytes]] = LatestChannel()
+        self._realsense_seen = -math.inf
+        self._head_depth: bytes | None = None
+        self._head_intrinsics: Intrinsics | None = None
         self.frames: dict[str, dict[str, LatestChannel[Frame]]] = {
             source: {kind: LatestChannel() for kind in kinds} for source, kinds in CAMERA_STREAMS.items()
         }
@@ -194,6 +201,19 @@ class Hub:
         with self._lock:
             self._intrinsics = intrinsics
 
+    def on_head_camera_info(self, message: dict) -> None:
+        try:
+            intrinsics = Intrinsics.from_camera_info(message)
+        except (KeyError, IndexError, TypeError, ValueError):
+            return
+        with self._lock:
+            self._head_intrinsics = intrinsics
+
+    def on_head_depth(self, payload: bytes) -> None:
+        """The iPhone's LiDAR, on the pixels of its colour picture. Only the detector reads it."""
+        with self._lock:
+            self._head_depth = payload
+
     def on_located(self, located: Sequence[Located]) -> None:
         """One detection pass (real or synthetic) -> the tracks; counted as the `objects` rate."""
         now = time.monotonic()
@@ -205,6 +225,8 @@ class Hub:
         self._tick("color")
         width, height = jpeg_size(jpeg)
         self._to_loop(self.frames["realsense"]["color"].publish, Frame(jpeg, width, height))
+        self._realsense_seen = time.monotonic()
+        self._to_loop(self._detect_frames.publish, ("realsense", jpeg))
 
     def on_depth(self, payload: bytes) -> None:
         self._tick("depth")
@@ -215,6 +237,8 @@ class Hub:
         self._tick("iphone")
         width, height = jpeg_size(jpeg)
         self._to_loop(self.frames["iphone"]["color"].publish, Frame(jpeg, width, height))
+        if time.monotonic() - self._realsense_seen > DETECT_FALLBACK_S:
+            self._to_loop(self._detect_frames.publish, ("iphone", jpeg))
 
     def _tick(self, topic: str) -> None:
         with self._lock:
@@ -248,7 +272,9 @@ class Hub:
 
         At most `max_hz` passes a second, and no faster than the detector manages; frames that
         arrive meanwhile are skipped, never queued. Without a depth image nothing can be placed,
-        so that pass is skipped too.
+        so that pass is skipped too. The frames are the wrist camera's, or the head camera's while
+        the wrist camera is silent; the map then shows the objects as the head sees them, hung on
+        the hand's camera_link all the same (nothing knows where the head is).
         """
         detector = await asyncio.to_thread(make_detector, model, threads)
         if detector is None:
@@ -258,13 +284,16 @@ class Hub:
         last_pass = 0.0
         while True:
             await asyncio.sleep(max(0.0, last_pass + period - time.monotonic()))
-            seen, frame = await self.frames["realsense"]["color"].next(seen)
+            seen, (source, jpeg) = await self._detect_frames.next(seen)
             last_pass = time.monotonic()
-            payload = self._depth_payloads.latest
+            with self._lock:
+                head = source == "iphone"
+                payload = self._head_depth if head else self._depth_payloads.latest
+                intrinsics = self._head_intrinsics if head else self._intrinsics
             if payload is None:
                 continue
             try:
-                located = await asyncio.to_thread(self._detect_and_locate, detector, frame.data, payload)
+                located = await asyncio.to_thread(self._detect_and_locate, detector, jpeg, payload, intrinsics)
             except ValueError as error:
                 LOGGER.warning("dropping detection pass: %s", error)
                 continue
@@ -273,13 +302,13 @@ class Hub:
                 continue
             self.on_located(located)
 
-    def _detect_and_locate(self, detector: Detector, jpeg: bytes, payload: bytes) -> list[Located]:
+    def _detect_and_locate(
+        self, detector: Detector, jpeg: bytes, payload: bytes, intrinsics: Intrinsics | None
+    ) -> list[Located]:
         bgr = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
         if bgr is None:
             raise ValueError("colour frame is not a decodable image")
         depth = decode(payload)
-        with self._lock:
-            intrinsics = self._intrinsics
         intrinsics = intrinsics or Intrinsics.default(bgr.shape[1], bgr.shape[0])
         placed = (locate(detection, depth, intrinsics) for detection in detector.detect(bgr))
         return [item for item in placed if item is not None]

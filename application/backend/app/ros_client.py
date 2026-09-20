@@ -27,6 +27,9 @@ COLOR_TOPIC = "/camera/color/image_raw/compressed"
 HEAD_COLOR_TOPIC = "/head_camera/color/image_raw/compressed"
 DEPTH_TOPIC = "/camera/aligned_depth_to_color/image_raw/compressedDepth"
 CAMERA_INFO_TOPIC = "/camera/aligned_depth_to_color/camera_info"
+HEAD_DEPTH_TOPIC = "/head_camera/aligned_depth_to_color/image_raw/compressedDepth"
+HEAD_CAMERA_INFO_TOPIC = "/head_camera/color/camera_info"  # the head depth is on the colour picture's pixels
+HEAD_DEPTH_THROTTLE_MS = 200  # only the object detector reads it, a few times a second
 CAMERA_INFO_THROTTLE_MS = 1000  # intrinsics do not change; one a second is plenty
 MULTI_ARRAY = "std_msgs/Float64MultiArray"
 COMPRESSED_IMAGE = "sensor_msgs/CompressedImage"
@@ -79,6 +82,16 @@ class RosClient:
         )
 
         self._subscribe(ros, CAMERA_INFO_TOPIC, "sensor_msgs/CameraInfo", CAMERA_INFO_THROTTLE_MS, hub.on_camera_info)
+        self._subscribe(
+            ros,
+            HEAD_DEPTH_TOPIC,
+            COMPRESSED_IMAGE,
+            HEAD_DEPTH_THROTTLE_MS,
+            lambda m: hub.on_head_depth(base64.b64decode(m["data"])),
+        )
+        self._subscribe(
+            ros, HEAD_CAMERA_INFO_TOPIC, "sensor_msgs/CameraInfo", CAMERA_INFO_THROTTLE_MS, hub.on_head_camera_info
+        )
 
         # Latched by the HAL: true while the torque is off and the fingers are backdriven
         self._subscribe(ros, "/hand/passive", "std_msgs/Bool", 0, lambda m: hub.on_passive(m["data"]))

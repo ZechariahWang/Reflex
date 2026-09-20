@@ -1,4 +1,10 @@
 # Optional: the object detector behind the map view (DETECT_MODEL, default yolov8n.pt).
 # CPU torch is enough for yolov8n at a few Hz:
 #   .venv/bin/pip install -r requirements-detect.txt --extra-index-url https://download.pytorch.org/whl/cpu
+# That also pulls opencv-python next to the headless one and whatever numpy it likes. To leave the
+# numpy and cv2 of MediaPipe alone (done on the dev laptop, 2026-09-19):
+#   echo numpy==2.2.6 > /tmp/c.txt
+#   .venv/bin/pip install -c /tmp/c.txt --extra-index-url https://download.pytorch.org/whl/cpu torch torchvision
+#   .venv/bin/pip install --no-deps ultralytics==8.3.63 ultralytics-thop
+#   .venv/bin/pip install -c /tmp/c.txt tqdm requests psutil
 ultralytics==8.3.63

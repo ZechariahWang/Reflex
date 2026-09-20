@@ -1,7 +1,7 @@
 # Contact stop: a block that stays, and a sign of it in the console
 
 Status: design, agreed in the discussion of 2026-09-20. Nothing of it is built. It changes the
-"Released" rule of `hal-safety-design.md` and adds one topic.
+"Blocked" and "Released" rules of `hal-safety-design.md` and adds one topic.
 
 ## The problem
 
@@ -64,6 +64,7 @@ Valid near probe speed 2.0 and `torque_limit` 600 only. The HAL runs at `max_spe
 
 | | Now | New |
 |---|---|---|
+| Blocked | the summed excess current, OR the encoder rule (far from the setpoint and not moving for 0.2 s) | the summed excess current only |
 | Hold setpoint while blocked | blocked position + `hold_lead`, frozen | furthest position reached in the blocked direction + `hold_lead`: it follows the finger forward and never goes back |
 | Release by motion | more than `hold_lead / 2` past the blocked position | more than `release_travel` past the blocked position |
 | Release by command | the target is on the other side of the finger | the same |
@@ -76,8 +77,14 @@ Valid near probe speed 2.0 and `torque_limit` 600 only. The HAL runs at `max_spe
 - `release_travel: 0.15` in `contact_stop:` of `hand_params.yaml`, next to `hold_lead`. A
   tuning value: the coast after the torque drops is estimated at 0.04 to 0.08 of the travel,
   not measured.
-- Nothing else changes: how a finger gets blocked (the summed excess current, the encoder
-  rule), the thresholds, `reset()`.
+- The encoder rule goes, out of the code, the yaml (`blocked_error`, `blocked_motion`,
+  `blocked_cycles`) and the tests. It made the 39 false stops of one tune (commit `4ccee1a`),
+  and a hard stall draws a high current, which the current rule sees in 1 to 4 cycles, not 10.
+  `blocked_current` is no longer optional: `enabled: false` is the way to turn the stop off. A
+  backend without a current reading has no contact stop (there is none with a torque limit).
+- The encoder is still what RELEASES a finger (`release_travel`): on `hold_torque` the current
+  is low on purpose and cannot say that the obstacle is gone.
+- The summed excess current and its two thresholds do not change.
 
 ### Topic `/hand/blocked`
 
@@ -111,8 +118,9 @@ The sim never publishes a 1: `SimBackend` has no torque limit, so the HAL makes 
 
 - `test_contact.py`: rows of the resisted log, inline. The finger gets blocked and STAYS blocked
   to the end of the move (now: it flaps). While blocked, the hold setpoint is never behind the
-  finger. A blocked finger that then travels more than `release_travel` is free. The existing
-  tests keep passing (release by command, the encoder rule).
+  finger. A blocked finger that then travels more than `release_travel` is free. A finger far
+  from its setpoint that does not move, at a low current, stays free. The tests of the encoder
+  rule go; release by command keeps passing.
 - HAL on the fake servo bus: `/hand/blocked` says 1 for a finger driven against a stop, 0 after
   the open command.
 - Backend: a `/hand/blocked` message shows up as `blocked` in the state JSON.
@@ -131,6 +139,9 @@ The sim never publishes a 1: `SimBackend` has no torque limit, so the HAL makes 
 
 ## Risks
 
+- With the encoder rule gone, a current reading that fails or sticks at 0 leaves a jammed finger
+  on the full `torque_limit`. Not likely: the current comes in the same 15-byte block as the
+  position. The servo's own overload protection is the layer below.
 - A false stop makes the finger crawl on `hold_torque` for 0.15 of the travel before it is free
   again. At 4.0 / 700 false stops are likely until step 2 is done.
 - An object that gives way more than `release_travel` (a sponge) gets pulses: full torque,

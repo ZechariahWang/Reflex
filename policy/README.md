@@ -223,8 +223,12 @@ cp .env.example .env     # once: POLICY_CHECKPOINT = the pretrained_model folder
 ./run_policy.sh          # the policy server, then the robot client. Ctrl+C stops both
 ```
 
-`run_policy.sh` refuses a checkpoint folder with no `model.safetensors`, and gives the client the
-instruction above. The hand does not move yet: the policy waits for the **Policy** switch of the web
+`run_policy.sh` refuses a checkpoint folder with no `model.safetensors` and a `POLICY_PORT` that is
+already in use (any listener there passes the wait for the server, and the client then talks to the
+wrong one), drops the `PYTHONPATH` of a shell that has sourced ROS (its Python 3.10 packages break the
+import of lerobot), and gives the client the instruction above. With no phone on the forehead,
+`POLICY_HEAD_TOPIC=` (set, and empty) in `.env` runs on the wrist camera only: a model that was
+trained with both cameras does worse like that. The hand does not move yet: the policy waits for the **Policy** switch of the web
 console (command block, armed). The switch is the latched `/policy/enabled`; while it is off the
 adapter drops every action, and the step to off opens the hand once. `/policy/active` is the
 heartbeat that the console shows as offline / ready / running. `POLICY_GATE=0` in `.env` is a run
@@ -243,6 +247,14 @@ python -m lerobot.async_inference.robot_client \
     --fps=30 --actions_per_chunk=20 --chunk_size_threshold=0.7 \
     --debug_visualize_queue_size=True
 ```
+
+Measured on the RTX 4050 laptop (2026-09-20, the 5000-step checkpoint): an inference takes 0.15 .. 1.2 s.
+`POLICY_ACTIONS_PER_CHUNK` times the tick must be longer than that, or the hand waits between chunks:
+20 actions are 0.67 s at 30 fps, too short there; 50 (the whole chunk of the model, 1.67 s) is not.
+
+A client that dies without closing its websocket leaves rosbridge queueing camera images for it:
+its memory grew ~3 MB/s, every client saw gaps of up to 0.7 s, and the robot client logged `no data
+from rosbridge within 0.3 s`. Seen once, after two such clients; a fresh rosbridge cured it.
 
 `--fps` (`POLICY_FPS`) is the rate of `send_action()`, and it is the tick rate of the dataset: 30
 for a dataset of the web console, the `--dataset.fps` of a `lerobot-record` one. One action of the

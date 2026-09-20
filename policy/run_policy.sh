@@ -22,10 +22,21 @@ checkpoint="${POLICY_CHECKPOINT:?is not set (policy/.env)}"
   exit 1
 }
 python="${PYTHON:-.venv/bin/python}"
+# A shell that has sourced ROS puts its Python 3.10 packages in front of the venv's: lerobot then
+# imports the dynamixel_sdk of ROS and dies. Nothing here uses rclpy
+unset PYTHONPATH
 # The switch of the web console: no action reaches the hand until the console says on
 gate=(--robot.enable_topic=/policy/enabled)
 [[ "${POLICY_GATE:-1}" == 0 ]] && gate=()
+# No phone on the forehead: POLICY_HEAD_TOPIC= (set, and empty) runs with the wrist camera only
+head=()
+[[ -n "${POLICY_HEAD_TOPIC+x}" ]] && head=(--robot.head_topic="$POLICY_HEAD_TOPIC")
 port="${POLICY_PORT:-8080}"
+# Any listener there passes the wait below, and the client then talks to the wrong server
+if (exec 3<>"/dev/tcp/localhost/$port") 2>/dev/null; then
+  echo "error: port $port is already in use: set POLICY_PORT in policy/.env" >&2
+  exit 1
+fi
 
 "$python" -m lerobot.async_inference.policy_server --port="$port" &
 server=$!
@@ -36,7 +47,7 @@ until (exec 3<>"/dev/tcp/localhost/$port") 2>/dev/null; do
 done
 
 "$python" -m lerobot.async_inference.robot_client \
-  --robot.type=exo_hand --robot.host="${ROS_HOST:-localhost}" --robot.id=exo "${gate[@]}" \
+  --robot.type=exo_hand --robot.host="${ROS_HOST:-localhost}" --robot.id=exo "${gate[@]}" "${head[@]}" \
   --server_address="localhost:$port" \
   --policy_type=smolvla --pretrained_name_or_path="$checkpoint" \
   --policy_device="${POLICY_DEVICE:-cuda}" \

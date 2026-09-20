@@ -78,7 +78,11 @@ file at the end of a session; the designs themselves are in `../specs/`.
 
 ## Not run yet
 
-- The inference loop (`policy_server` + `robot_client`), with any checkpoint.
+- The policy MOVING the hand. On 2026-09-20 the inference loop ran on the GPU laptop against the sim
+  and against the real HAL (5 servos), with the 5000-step SmolVLA checkpoint of RUN-20260920T093202Z,
+  the wrist camera only (no phone), the gate off: the console showed `ready`, nothing reached
+  `/hand/command`. Left: the Policy switch on, with the hand off the wearer first, and the head camera
+  (the checkpoint was trained with it). Numbers and traps: `policy/README.md`, Inference loop.
 - Anything with a real camera on this laptop: the ROS container (Kilted) has no
   RealSense driver and no Gazebo. Use `hardware.launch.py camera:=none`, and
   run `physical_layer/build.sh` after a pull that adds files.

@@ -135,7 +135,7 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
     library never closes its socket; the docstring of the worker has the rest);
     the node turns, shrinks and JPEG-encodes each frame and starts a new worker
     after 1 .. 8 s when one ends, logging the reason once. What to do on the
-    phone is in the node log. Parameters `rotation` (90), `width` / `height`
+    phone is in the node log. Parameters `rotation` (270), `width` / `height`
     (640 x 480), `max_fps` (15), `jpeg_quality` (80): rotation and size are part
     of a recorded dataset, do not change them after the first recording. Tests
     on a fake phone: `test_iphone.py`.

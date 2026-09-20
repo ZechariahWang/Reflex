@@ -87,7 +87,7 @@ Parameters:
 
 | Parameter | Default | |
 |---|---|---|
-| `rotation` | `90` | clockwise degrees, `0 / 90 / 180 / 270`. The sensor is portrait; 90 = landscape with the phone's charge port to the right. Check on the forehead mount before the first recording. |
+| `rotation` | `270` | clockwise degrees, `0 / 90 / 180 / 270`. The sensor is portrait; 270 = landscape with the phone's charge port to the left, which is how it sits on the forehead mount (90 came out upside down). |
 | `width`, `height` | `640`, `480` | the output size. The phone's 4:3 picture fits with no crop. |
 | `max_fps` | `15` | the phone sends 60. 15 = the RealSense colour profile and the rate of the policy link. |
 | `jpeg_quality` | `80` | |

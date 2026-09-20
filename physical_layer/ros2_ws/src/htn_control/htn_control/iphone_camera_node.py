@@ -94,7 +94,7 @@ class IphoneCamera(Node):
 
     def __init__(self):
         super().__init__('iphone_camera')
-        self.rotation = self.declare_parameter('rotation', 90).value
+        self.rotation = self.declare_parameter('rotation', 270).value
         self.width = self.declare_parameter('width', 640).value
         self.height = self.declare_parameter('height', 480).value
         self.max_fps = self.declare_parameter('max_fps', 15.0).value

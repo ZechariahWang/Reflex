@@ -113,12 +113,12 @@ def test_the_node_publishes_the_turned_jpeg_and_its_camera_info(monkeypatch):
         picture = cv2.imdecode(np.frombuffer(bytes(images[0].data), np.uint8), cv2.IMREAD_COLOR)
         assert images[0].format == 'jpeg' and images[0].header.frame_id == FRAME_ID
         assert picture.shape == (480, 640, 3)
-        assert picture[20, 620, 2] > 200 and picture[20, 620, 0] < 60, 'rotation 90: the red corner is top right (BGR)'
+        assert picture[460, 20, 2] > 200 and picture[460, 20, 0] < 60, 'rotation 270: the red corner is bottom left (BGR)'
         assert (infos[0].width, infos[0].height) == (640, 480) and infos[0].header.frame_id == FRAME_ID
         assert infos[0].k[0] == pytest.approx(710.0 * 640 / ROWS)
         mm = cv2.imdecode(np.frombuffer(bytes(depths[0].data), np.uint8, offset=12), cv2.IMREAD_UNCHANGED)
         assert depths[0].format == '16UC1; compressedDepth png' and mm.shape == (480, 640)
-        assert (mm[20, 620], mm[240, 320]) == (500, 1500), 'the near corner is where the red corner is'
+        assert (mm[460, 20], mm[240, 320]) == (500, 1500), 'the near corner is where the red corner is'
     finally:
         node.close()
         node.destroy_node()

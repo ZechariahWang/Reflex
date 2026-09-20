@@ -22,7 +22,6 @@ export interface LiveData {
   message: StateMessage | null
   /** `performance.now()` when `message` arrived. */
   receivedAt: number
-  /** Last ~10 s of `state` per finger. */
 }
 
 export interface SimStore {

@@ -17,7 +17,8 @@ window), `foxglove:=false`, `rosbridge:=false`, `rosbridge_port:=9090`,
 `max_speed:=2.0` / `max_accel:=20.0` (HAL limits in full ranges per second and
 per second^2: a full close takes ~0.6 s; in sim the joint's `max_velocity` of
 3 rad/s caps the speed at ~2.3), `passive:=true` (hardware only:
-start with the torque off for a recording session), `camera:=none`, `color_profile:=640x480x15`,
+start with the torque off for a recording session), `camera:=none`, `head_camera:=iphone`
+(default `none`: the forehead iPhone, see below), `color_profile:=640x480x15`,
 `depth_profile:=480x270x15`, `params_file:=<yaml>`, `require_all_servos:=false`
 (hardware only: bench test with fewer than 5 servos). Foxglove connects to
 `ws://localhost:8765`, rosbridge (JSON websocket for `application/`) listens on
@@ -39,7 +40,10 @@ stay LF: the repo sets `core.autocrlf false` for that (a CRLF `build.sh` dies wi
 
 One-time camera setup on a new machine: `sudo apt install
 ros-humble-realsense2-camera`, the librealsense udev rules, and
-`udev/99-realsense-nolpm.rules` (install steps in the file).
+`udev/99-realsense-nolpm.rules` (install steps in the file). For the head camera:
+`python3 -m pip install --user --no-deps record3d==1.4.1` into the ROS Python
+(`--no-deps`: it must not pull numpy 2 over the one ROS and `cv2` use) and a running
+`usbmuxd`. Checked on x86-64 / Python 3.10 (a wheel, nothing to compile); not on ARM.
 
 With `--symlink-install`, edits to Python, launch, YAML and xacro files need no
 rebuild - just relaunch. Rebuild after adding files, entry points or packages.
@@ -84,7 +88,8 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
   `worlds/`. `camera.launch.py` is the camera HAL, included by both (the camera
   is real even when the hand is simulated): it pins the RealSense driver to the
   `/camera/...` topics of the root CLAUDE.md contract. Another camera = another
-  node in that file publishing the same topics, selected by `camera:=`.
+  node in that file publishing the same topics, selected by `camera:=`. The head
+  camera (`head_camera:=iphone`) is the same idea for `/head_camera/...`.
 - `htn_control` - the HAL and manual control:
   - `hal_node.py`: subscribes `/hand/command` (5 x 0..1), clamps, and turns
     every change of target into ONE sweep (`sweep()`: ease in at `max_accel`,
@@ -115,6 +120,17 @@ rebuild - just relaunch. Rebuild after adding files, entry points or packages.
     and `SEQUENCES` (list of (pose, seconds)). The control window builds one
     toggle button per entry.
   - `hand_config.py`: `FINGERS` order and the YAML loader.
+  - `iphone_camera_node.py` + `iphone_worker.py`: the forehead iPhone (Record3D
+    app in USB Streaming mode) as `/head_camera/color/image_raw/compressed` +
+    `camera_info` (design: `docs/specs/iphone-camera-design.md`). The record3d
+    library runs in a child process that the node kills to disconnect (the
+    library never closes its socket; the docstring of the worker has the rest);
+    the node turns, shrinks and JPEG-encodes each frame and starts a new worker
+    after 1 .. 8 s when one ends, logging the reason once. What to do on the
+    phone is in the node log. Parameters `rotation` (90), `width` / `height`
+    (640 x 480), `max_fps` (15), `jpeg_quality` (80): rotation and size are part
+    of a recorded dataset, do not change them after the first recording. Tests
+    on a fake phone: `test_iphone.py`.
 
 The learned policy is not in this workspace. It lives in `policy/` at the repo
 root and reaches `/hand/command`, `/hand/state` and the camera topics through

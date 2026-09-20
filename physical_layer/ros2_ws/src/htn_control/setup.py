@@ -23,6 +23,7 @@ setup(
             'teleop_gui = htn_control.teleop_gui:main',
             'servo_tool = htn_control.servo_tool:main',
             'linkage_publisher = htn_control.linkage_publisher:main',
+            'iphone_camera_node = htn_control.iphone_camera_node:main',
         ],
     },
 )

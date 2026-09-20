@@ -43,6 +43,12 @@ everything else goes in a top-level subfolder per concern.
   and `/camera/aligned_depth_to_color/image_raw` (16UC1, millimetres), each
   with a `camera_info` next to it. Nothing outside the camera launch file knows
   it is a RealSense.
+- The head camera is `/head_camera/color/image_raw/compressed`
+  (`sensor_msgs/CompressedImage`, `jpeg`, 640 x 480, landscape, max 15 fps) with
+  `/head_camera/color/camera_info` next to it. `header.stamp` is the ROS time at
+  which the frame arrived; `frame_id` is `head_camera_color_optical_frame` (no TF:
+  the head is not attached to the hand). Nothing outside the camera launch file
+  knows it is an iPhone.
 - Physical numbers (sizes, masses, angle limits, servo calibration) live only in
   `physical_layer/ros2_ws/src/htn_description/config/hand_params.yaml`.
 

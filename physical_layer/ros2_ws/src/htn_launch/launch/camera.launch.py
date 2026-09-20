@@ -7,6 +7,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     camera = LaunchConfiguration('camera')
+    head_camera = LaunchConfiguration('head_camera')
 
     return LaunchDescription([
         DeclareLaunchArgument('camera', default_value='realsense',
@@ -14,6 +15,9 @@ def generate_launch_description():
         # Defaults fit a USB 2 link; on USB 3 go up to e.g. 640x480x30
         DeclareLaunchArgument('color_profile', default_value='640x480x15'),
         DeclareLaunchArgument('depth_profile', default_value='480x270x15'),
+        # none by default: a launch with no phone must not print errors without end
+        DeclareLaunchArgument('head_camera', default_value='none',
+                              description='Head camera backend: iphone | none'),
 
         # Camera HAL: whatever the camera is, it shows up as /camera/color/...,
         # /camera/depth/... and /camera/aligned_depth_to_color/... (node name
@@ -35,6 +39,17 @@ def generate_launch_description():
                 'align_depth.enable': True,
             }],
             condition=IfCondition(PythonExpression(["'", camera, "' == 'realsense'"])),
+            output='screen',
+        ),
+
+        # Head camera HAL: /head_camera/color/image_raw/compressed + camera_info, whatever the
+        # camera is. The forehead iPhone (Record3D app, USB); its rotation and size are node
+        # parameters and part of a recorded dataset (docs/specs/iphone-camera-design.md).
+        Node(
+            package='htn_control',
+            executable='iphone_camera_node',
+            name='iphone_camera',
+            condition=IfCondition(PythonExpression(["'", head_camera, "' == 'iphone'"])),
             output='screen',
         ),
     ])

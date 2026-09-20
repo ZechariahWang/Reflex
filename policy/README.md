@@ -248,7 +248,7 @@ python -m lerobot.async_inference.robot_client \
     --debug_visualize_queue_size=True
 ```
 
-Measured on the RTX 4050 laptop (2026-09-20, the 5000-step checkpoint): an inference takes 0.15 .. 1.2 s.
+Measured on the RTX 4050 laptop (2026-09-20, the 3000-step checkpoint): an inference takes 0.15 .. 1.2 s.
 `POLICY_ACTIONS_PER_CHUNK` times the tick must be longer than that, or the hand waits between chunks:
 20 actions are 0.67 s at 30 fps, too short there; 50 (the whole chunk of the model, 1.67 s) is not.
 

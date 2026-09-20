@@ -74,7 +74,7 @@ policy/lambda/
   check_instance.sh  laptop: which instance would terminate target
   run_logged.sh      instance: run one long command with log, EXIT= marker, liveness
   tests/             shell tests for watchdog.sh and run_logged.sh
-  .env.example
+  .env.example       keys, LAMBDA_INSTANCE_TYPE, LAMBDA_DATASET, LAMBDA_MAX_HOURS
 policy/lerobot_robot_exo_hand/
   heldout.py         the seeded split and the held-out evaluation
   synth_dataset.py   a fake dataset in the recorder's format, for the smoke test
@@ -109,10 +109,21 @@ watchdog.sh --ssh, every 60 s--> reads 4 marker files
             --API-----> terminate
 ```
 
+The dataset is a launch setting, not a part of the plan: `LAMBDA_DATASET` in
+`policy/lambda/.env` names one folder of `policy/datasets/`, and only that
+folder goes up. No script parses `plan.md`. `.env` holds secrets and stays on
+the laptop, so `launch.sh` writes the facts of the rental that the agent needs
+to `~/htn/policy/lambda/rental.env` on the instance: the dataset name, the
+instance type, the cap and the launch time. The agent copies them into the run
+notes, because `.env` is not in git and the notes are the only record of which
+dataset a run used. Several recording sessions are merged into one dataset on
+the laptop before a rental.
+
 Before anything bills, `launch.sh` shows a confirm screen: the instance type,
-its price from the API, the cap, and every path that goes up with its size. It
-refuses to start if `plan.md` is absent, if the dataset folder is absent, or if
-an `.env` file is inside the upload set.
+its price from the API, the cap, the dataset with its episode count, and every
+path that goes up with its size. It refuses to start if `plan.md` is absent, if
+`policy/datasets/$LAMBDA_DATASET/meta/info.json` is absent, or if an `.env`
+file is inside the upload set.
 
 After launch, a local tmux session `htn-train` has four windows: `watch` (the
 watchdog), `train`, `agent` and `work` (ssh into the remote sessions; each
@@ -196,18 +207,25 @@ The measure is the action error, not the flow-matching loss: that loss has a
 random timestep and random noise, so it moves between two runs of one
 checkpoint. The error is on the `0 .. 1` command scale.
 
+The split depends on the episode count, so the numbers compare inside one
+rental, where every variant has the same lists. They do not compare across
+versions of a dataset: after a deletion (always with the `lerobot` edit tool,
+which renumbers the episodes, never by hand) the seed picks other held-out
+episodes. The run notes record both lists.
+
 The evaluation runs in the `work` session while the next steps train (a default
 fine-tune uses 10-24 GB). If the training batch already fills the VRAM, the
 agent evaluates between variants.
 
 ## Plan format
 
-`docs/notes/training/plan.md` is prose for people plus one fenced `yaml` block
-that the agent reads:
+`docs/notes/training/plan.md` is prose plus one fenced `yaml` block. Only the
+agent reads it, and it reads both: the prose is the place for what the agent
+cannot see (for example "the lighting changed after episode 30"). The plan
+names no dataset, so one plan serves several datasets. The task string comes
+from the dataset itself.
 
 ```yaml
-dataset: exo_grasp            # folder in policy/datasets/
-task: "<the constant instruction of the dataset>"
 heldout: {fraction: 0.1, seed: 0}
 stop_rule: "held-out error rises at two consecutive checkpoints: stop, keep the best"
 common: "--policy.path=lerobot/smolvla_base --policy.device=cuda --policy.push_to_hub=false --batch_size=64 --save_freq=1000 --wandb.enable=false"

@@ -300,7 +300,8 @@ function CameraRig({
   const controls = useRef<OrbitControlsImpl>(null)
   const aspect = useThree((state) => state.size.width / Math.max(1, state.size.height))
   const fit = fitDistance(model.bounds.radius, aspect)
-  const target = useMemo(() => new Vector3(0, 0, 0), [model])
+  // The hand's centre, not the origin: the hand stands above the ground, so aiming at the origin puts it high in the picture.
+  const target = useMemo(() => model.bounds.center.clone(), [model])
 
   const rig = useRef({
     goal: null as Spherical | null,

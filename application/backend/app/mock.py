@@ -111,6 +111,7 @@ class MockSource:
         self._tasks: list[asyncio.Task[None]] = []
         self._command = [0.0] * len(FINGERS)
         self._command_until = 0.0
+        self._policy = False
 
     def start(self) -> None:
         self._hub.on_urdf(MOCK_URDF_PATH.read_text())
@@ -118,12 +119,22 @@ class MockSource:
             asyncio.create_task(self._run_joints()),
             asyncio.create_task(self._run_camera()),
             asyncio.create_task(run_mock_objects(self._hub)),
+            asyncio.create_task(self._run_policy()),
         ]
 
     async def stop(self) -> None:
         for task in self._tasks:
             task.cancel()
         await asyncio.gather(*self._tasks, return_exceptions=True)
+
+    def set_policy(self, enabled: bool) -> None:
+        self._policy = enabled
+        self._hub.on_policy_active(enabled)
+
+    async def _run_policy(self) -> None:
+        """A policy that is always there: its heartbeat, so the switch of the console has something to show."""
+        async for _ in ticks(1.0):
+            self._hub.on_policy_active(self._policy)
 
     def set_passive(self, passive: bool) -> None:
         self._hub.on_passive(passive)  # the mock hand has no torque to cut; the UI still follows

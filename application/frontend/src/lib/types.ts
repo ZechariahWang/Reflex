@@ -53,6 +53,8 @@ export interface TrackedObject {
 export type TopicRates = Record<TopicKey, number>
 
 /** Server -> client on /ws/state, 60 Hz. */
+export type PolicyStatus = "offline" | "ready" | "running"
+
 export interface StateMessage {
   /** Unix time in seconds. */
   t: number
@@ -68,6 +70,8 @@ export interface StateMessage {
   command: FingerValues | null
   /** Backdrive mode: the HAL has the torque off, a person moves the fingers, commands are ignored. */
   passive: boolean
+  /** The learned policy (policy/run_policy.sh): no heartbeat, waiting for the switch, or its actions reach the hand. */
+  policy: PolicyStatus
   /** Finger order: the HAL's contact stop holds that finger (it met resistance and pushes on softly). */
   blocked: boolean[]
   /** Finger order, mA: each motor's highest current of the last half second; null without a measurement (sim). */

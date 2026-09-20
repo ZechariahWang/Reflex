@@ -191,3 +191,16 @@ def test_motor_currents_show_as_the_peak_of_the_last_half_second(monkeypatch):
     hub.on_current([26.0, 26.0, 40.0, 26.0, 26.0])
     assert hub.snapshot(True)["current"] == [26.0, 26.0, 40.0, 26.0, 26.0]
 
+
+
+def test_the_policy_is_offline_until_its_heartbeat_and_again_after_three_silent_seconds(monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr("app.hub.time.monotonic", lambda: clock[0])
+    hub = Hub(Settings())
+    assert hub.snapshot(True)["policy"] == "offline"
+    hub.on_policy_active(False)
+    assert hub.snapshot(True)["policy"] == "ready"
+    hub.on_policy_active(True)
+    assert hub.snapshot(True)["policy"] == "running"
+    clock[0] += 3.5
+    assert hub.snapshot(True)["policy"] == "offline"

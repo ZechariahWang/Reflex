@@ -42,6 +42,7 @@ def test_state_shape_and_command_override(client):
             "state",
             "command",
             "passive",
+            "policy",
             "blocked",
             "current",
             "objects",
@@ -100,6 +101,18 @@ def test_unknown_camera_is_refused(client, path):
 def test_the_phone_endpoints_are_gone(client):
     assert client.get("/api/iphone").status_code == 404
     assert client.post("/api/iphone", json={"host": "usb"}).status_code == 404
+
+
+def test_the_policy_switch_round_trips_through_the_state(client):
+    with client.websocket_connect("/ws/state") as ws:
+        ws.send_text(json.dumps({"type": "policy", "data": True}))
+        for _ in range(10):
+            message = ws.receive_json()
+        assert message["policy"] == "running"
+        ws.send_text(json.dumps({"type": "policy", "data": False}))
+        for _ in range(10):
+            message = ws.receive_json()
+        assert message["policy"] == "ready"
 
 
 def test_passive_request_round_trips_through_the_state(client):

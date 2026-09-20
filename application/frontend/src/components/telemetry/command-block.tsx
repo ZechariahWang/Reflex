@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { setMirrorEnabled, useMirrorStore } from "@/lib/mirror-store"
-import { selectIsLive, selectPassive, selectSnapshot, useSimStore } from "@/lib/sim-store"
+import { selectIsLive, selectPassive, selectPolicy, selectSnapshot, useSimStore } from "@/lib/sim-store"
 import { FINGERS, TOPIC_NAMES, type FingerValues } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -42,6 +42,9 @@ export function CommandBlock() {
   const passive = useSimStore(selectPassive)
   // Mirror teleop: the controller's webcam is the command source, so the sliders and presets lock.
   const mirror = useMirrorStore((store) => store.enabled)
+  // The learned policy (policy/run_policy.sh): while it runs it owns /hand/command, so the rest locks.
+  const policy = useSimStore(selectPolicy)
+  const policyOn = policy === "running"
   const [armed, setArmed] = useState(false)
   /** Local target while the user is driving; null = mirror the hand. */
   const [target, setTarget] = useState<FingerValues | null>(null)
@@ -62,6 +65,7 @@ export function CommandBlock() {
     setArmed(false)
     setTarget(null)
     setMirrorEnabled(false)
+    if (selectPolicy(useSimStore.getState()) === "running") useSimStore.getState().setPolicy(false)
   }, [clearTimers])
 
   useEffect(() => {
@@ -115,7 +119,7 @@ export function CommandBlock() {
         <Switch
           size="sm"
           checked={passive}
-          disabled={!armed || mirror}
+          disabled={!armed || mirror || policyOn}
           onCheckedChange={(next) => useSimStore.getState().setPassive(next)}
           aria-label="Backdrive mode: torque off, move the fingers by hand"
           className={switchClass}
@@ -127,9 +131,24 @@ export function CommandBlock() {
         <Switch
           size="sm"
           checked={mirror}
-          disabled={!armed || passive}
+          disabled={!armed || passive || policyOn}
           onCheckedChange={setMirrorEnabled}
           aria-label="Mirror teleop: a hand in front of the webcam commands the fingers"
+          className={switchClass}
+        />
+      </label>
+      <label
+        className="flex items-center gap-2"
+        title={policy === "offline" ? "No policy runs: start policy/run_policy.sh on the GPU laptop" : undefined}
+      >
+        <StatusDot status={policyOn ? "live" : "offline"} />
+        <span className={cn("label-micro", policyOn && "text-ink")}>Policy</span>
+        <Switch
+          size="sm"
+          checked={policyOn}
+          disabled={!armed || passive || mirror || policy === "offline"}
+          onCheckedChange={(next) => useSimStore.getState().setPolicy(next)}
+          aria-label="Policy: the learned policy moves the fingers; off opens the hand"
           className={switchClass}
         />
       </label>
@@ -142,7 +161,7 @@ export function CommandBlock() {
             key={name}
             variant="outline"
             size="xs"
-            disabled={!armed || passive || mirror}
+            disabled={!armed || passive || mirror || policyOn}
             onClick={() => {
               drive(pose)
               release()
@@ -174,7 +193,7 @@ export function CommandBlock() {
                 min={0}
                 max={100}
                 step={1}
-                disabled={!armed || passive || mirror}
+                disabled={!armed || passive || mirror || policyOn}
                 value={[Math.round(shown[i] * 100)]}
                 onValueChange={([value]) => drive(shown.with(i, value / 100) as FingerValues)}
                 onValueCommit={release}
@@ -206,6 +225,8 @@ export function CommandBlock() {
           ? `torque off: move the fingers by hand, ${TOPIC_NAMES.hand_state} records them`
           : mirror
             ? `the webcam hand publishes ${TOPIC_NAMES.hand_command}`
+            : policyOn
+              ? `the policy publishes ${TOPIC_NAMES.hand_command} · off opens the hand`
             : armed
               ? `publishing ${TOPIC_NAMES.hand_command} · 40 Hz max`
               : online

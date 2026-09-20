@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from .config import Settings
 from .episodes import EpisodeError, Episodes
 from .movements import MovementError, Movements
-from .hub import CAMERA_STREAMS, Hub, Source, parse_command, parse_passive, ticks
+from .hub import CAMERA_STREAMS, Hub, Source, parse_command, parse_passive, parse_policy, ticks
 from .frames import LatestChannel
 from .mirror.session import MirrorSession, Tracker, parse_calibrate
 from .mirror.synthetic import MockTracker
@@ -326,6 +326,10 @@ def create_app(settings: Settings) -> FastAPI:
             passive = parse_passive(text)
             if passive is not None:
                 source.set_passive(passive)
+            policy = parse_policy(text)
+            # A movement or a replay owns /hand/command: the policy does not start under it
+            if policy is False or (policy and not movements.playing and episodes.status()["mode"] != "replaying"):
+                source.set_policy(policy)
 
         await serve_socket(ws, settings.cors_origins, send_state, on_text)
 

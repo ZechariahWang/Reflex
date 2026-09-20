@@ -3,7 +3,7 @@ import { create } from "zustand"
 
 import { WS } from "@/lib/config"
 import { backoffDelay, closeQuietly } from "@/lib/socket"
-import { FINGERS, type CommandMessage, type FingerValues, type EpisodeSession, type MovementStatus, type StateMessage, type TrackedObject } from "@/lib/types"
+import { FINGERS, type CommandMessage, type FingerValues, type EpisodeSession, type MovementStatus, type PolicyStatus, type StateMessage, type TrackedObject } from "@/lib/types"
 
 /** Rate of /ws/state. */
 export const STATE_HZ = 60
@@ -37,6 +37,8 @@ export interface SimStore {
   sendCommand: (data: number[]) => boolean
   /** Ask the HAL for backdrive mode (torque off) or back; the result shows up as `snapshot.passive`. */
   setPassive: (passive: boolean) => boolean
+  /** The policy switch: on lets the actions of a running policy reach the hand, off opens the hand once. */
+  setPolicy: (enabled: boolean) => boolean
 }
 
 let socket: WebSocket | null = null
@@ -60,6 +62,11 @@ export const useSimStore = create<SimStore>()(() => ({
   setPassive: (passive) => {
     if (socket?.readyState !== WebSocket.OPEN) return false
     socket.send(JSON.stringify({ type: "passive", data: passive }))
+    return true
+  },
+  setPolicy: (enabled) => {
+    if (socket?.readyState !== WebSocket.OPEN) return false
+    socket.send(JSON.stringify({ type: "policy", data: enabled }))
     return true
   },
 }))
@@ -150,6 +157,7 @@ export function useSimConnection(): void {
 export const selectStatus = (s: SimStore): ConnectionStatus => s.status
 export const selectSnapshot = (s: SimStore): StateMessage | null => s.snapshot
 export const selectPassive = (s: SimStore): boolean => s.snapshot?.passive ?? false
+export const selectPolicy = (s: SimStore): PolicyStatus => s.snapshot?.policy ?? "offline"
 const NO_OBJECTS: TrackedObject[] = []
 export const selectObjects = (s: SimStore): TrackedObject[] => s.snapshot?.objects ?? NO_OBJECTS
 /** Which objects exist, as one string: components that key children by id re-render only when the set changes. */

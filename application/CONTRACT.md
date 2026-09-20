@@ -74,6 +74,8 @@ Server -> client, JSON text, one message every 16.7 ms (60 Hz, one per display f
 ```
 `passive` (bool, also in the JSON above as `"passive": false`) mirrors the HAL's latched `/hand/passive`: torque off, a person moves the fingers, `/hand/command` is ignored.
 
+`policy` (between `passive` and `blocked` in the JSON above, as `"policy": "offline"`) is the learned policy of `policy/run_policy.sh`, from its `/policy/active` heartbeat (`std_msgs/Bool`, once a second): `"offline"` = no heartbeat for 3 s, `"ready"` = it runs and waits for the switch, `"running"` = its actions reach the hand.
+
 `blocked` (5 booleans in finger order, also in the JSON above as `"blocked": [false, false, false, false, false]`) mirrors the HAL's latched `/hand/blocked`: the contact stop holds that finger - it met resistance and pushes on with a low torque. A normal state of a grasp, not a fault. All `false` until the HAL says otherwise, in the sim and in mock mode. The console tints that finger's contact pad on the measured hand and its letter in the command block.
 
 `current` (5 numbers in finger order, mA, also in the JSON above as `"current": null`) is per finger the HIGHEST `/hand/current` of the last 0.5 s, not the latest: the contact stop blocks on one 20 ms cycle at 250 mA, and that must stay readable. `null` while nothing arrives (the sim, mock mode, the HAL down). The command block shows it after each finger's slider, to tune `contact_stop:` in `hand_params.yaml` from.
@@ -93,6 +95,10 @@ Client -> server, JSON text:
 {"type": "passive", "data": true}
 ```
 -> calls `/hand/set_passive` (`std_srvs/SetBool`); the result comes back as `passive` in the state. The Backdrive switch in the command block sends it (only while armed) and locks the sliders and presets while it is on.
+```json
+{"type": "policy", "data": true}
+```
+-> published latched to `/policy/enabled` (`std_msgs/Bool`), the switch that the policy's robot adapter reads: while it is off no action of the policy reaches `/hand/command`, and the step to off opens the hand once. The backend publishes `false` when it connects, and ignores `true` while a movement or an episode replay plays. The Policy switch in the command block sends it (only while armed, and not while `policy` is `"offline"`) and locks Backdrive, Mirror, the sliders and the presets. It is a convenience, not an emergency stop: Ctrl+C on `run_policy.sh` and the limits of the HAL are.
 
 ### `WS /ws/camera/realsense/{color|depth}`, `WS /ws/camera/iphone/color`
 Three streams, same protocol (`iphone` is the head camera: the source keeps that name in the API; it has no depth, and any other pair is closed with 1008). The page opens only the one each panel is showing, and the backend only renders streams that have a viewer (`LatestChannel.viewers`). Client -> server, text `ready`: the server sends the next (newest) frame only after it, so a slow page is one frame behind at most and never watches a backlog; a client that never sends it is streamed as fast as frames come (a websocket's send buffer is unbounded, and on a busy laptop that backlog reached minutes). The page sends it on open and on every frame received. Server -> client, **binary** messages, each one complete JPEG. Latest-frame only: if the client is slow, drop frames, never queue.

@@ -35,6 +35,7 @@ CURRENT_PEAK_S = 0.5  # the state shows each finger's highest motor current of t
 _CV_ROTATIONS = {90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
 DETECT_FALLBACK_S = 2.0  # no wrist camera frame for this long: the detector takes the head camera
 MAX_COMMAND_CHARS = 512  # a valid command is under 150
+POLICY_SILENCE_S = 3.0  # /policy/active comes once a second while a policy runs
 
 
 class Source(Protocol):
@@ -46,6 +47,7 @@ class Source(Protocol):
     async def stop(self) -> None: ...
     def send_command(self, values: list[float]) -> None: ...
     def set_passive(self, passive: bool) -> None: ...
+    def set_policy(self, enabled: bool) -> None: ...
 
 
 def is_finite_number(value: object) -> bool:
@@ -135,13 +137,22 @@ def parse_command(text: str) -> list[float] | None:
 
 def parse_passive(text: str) -> bool | None:
     """{"type": "passive", "data": true|false} -> the flag; None for anything else."""
+    return parse_flag(text, "passive")
+
+
+def parse_policy(text: str) -> bool | None:
+    """{"type": "policy", "data": true|false} -> the policy switch; None for anything else."""
+    return parse_flag(text, "policy")
+
+
+def parse_flag(text: str, kind: str) -> bool | None:
     if len(text) > MAX_COMMAND_CHARS:
         return None
     try:
         message = json.loads(text)
     except (ValueError, RecursionError):
         return None
-    if not isinstance(message, dict) or message.get("type") != "passive":
+    if not isinstance(message, dict) or message.get("type") != kind:
         return None
     return message["data"] if isinstance(message.get("data"), bool) else None
 
@@ -166,6 +177,7 @@ class Hub:
         self._command: list[float] | None = None
         self._orientation: dict[str, float] | None = None
         self._passive = False
+        self._policy: tuple[float, bool] | None = None  # (arrival, active) of the last /policy/active
         self._blocked = [False] * len(FINGERS)
         self._currents: deque[tuple[float, list[float]]] = deque()  # (arrival, mA per finger)
         self._urdf: str | None = None
@@ -237,6 +249,10 @@ class Hub:
     def on_passive(self, passive: object) -> None:
         with self._lock:
             self._passive = passive is True
+
+    def on_policy_active(self, active: object) -> None:
+        with self._lock:
+            self._policy = (time.monotonic(), active is True)
 
     def on_blocked(self, values: Sequence[object]) -> None:
         vector = finger_vector(values)
@@ -420,6 +436,12 @@ class Hub:
         with self._lock:
             return self._urdf
 
+    def _policy_status(self, now: float) -> str:
+        """Call with the lock held. The policy says /policy/active once a second while it runs."""
+        if self._policy is None or now - self._policy[0] > POLICY_SILENCE_S:
+            return "offline"
+        return "running" if self._policy[1] else "ready"
+
     def snapshot(self, ros_connected: bool) -> dict:
         now = time.monotonic()
         with self._lock:
@@ -432,6 +454,7 @@ class Hub:
                 "state": list(self._state),
                 "command": None if self._command is None else list(self._command),
                 "passive": self._passive,
+                "policy": self._policy_status(now),
                 "blocked": list(self._blocked),
                 "current": self._peak_current(now),
                 "objects": self._tracker.objects(now),

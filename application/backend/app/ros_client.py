@@ -44,6 +44,7 @@ class RosClient:
         self._ros: roslibpy.Ros | None = None
         self._command_out: roslibpy.Topic | None = None
         self._passive_service: roslibpy.Service | None = None
+        self._policy_out: roslibpy.Topic | None = None
 
     @property
     def connected(self) -> bool:
@@ -107,6 +108,12 @@ class RosClient:
         # A Topic replays only one message on reconnect, so publishing gets its own.
         self._command_out = roslibpy.Topic(ros, "/hand/command", MULTI_ARRAY, queue_size=1)
         self._command_out.advertise()
+        # The heartbeat of the policy (policy/run_policy.sh), and the switch that lets its actions reach the hand
+        self._subscribe(ros, "/policy/active", "std_msgs/Bool", 0, lambda m: hub.on_policy_active(m["data"]))
+        self._policy_out = roslibpy.Topic(ros, "/policy/enabled", "std_msgs/Bool", latch=True, queue_size=1)
+        self._policy_out.advertise()
+        # A switch that an earlier console left on would let a new policy move the hand with nobody at the console
+        self._policy_out.publish(roslibpy.Message({"data": False}))
         self._ros = ros
         ros.factory.manager.run()
 
@@ -117,6 +124,10 @@ class RosClient:
     def send_command(self, values: list[float]) -> None:
         if self.connected and self._command_out is not None:
             self._command_out.publish(roslibpy.Message({"data": values}))
+
+    def set_policy(self, enabled: bool) -> None:
+        if self.connected and self._policy_out is not None:
+            self._policy_out.publish(roslibpy.Message({"data": enabled}))
 
     def set_passive(self, passive: bool) -> None:
         """Ask the HAL for backdrive mode; the answer arrives on /hand/passive."""

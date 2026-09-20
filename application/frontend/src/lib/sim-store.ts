@@ -95,6 +95,9 @@ function handleMessage(event: MessageEvent): void {
   if (!isStateMessage(message)) return
 
   const { live, snapshot } = useSimStore.getState()
+  // Every message parses into a new `objects` array: keep the old one while nothing changed, or
+  // whoever selects it (the hand viewport) renders again for every snapshot, objects or none.
+  if (snapshot && JSON.stringify(snapshot.objects) === JSON.stringify(message.objects)) message.objects = snapshot.objects
   const now = performance.now()
   live.message = message
   live.receivedAt = now

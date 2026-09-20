@@ -31,6 +31,9 @@ gate=(--robot.enable_topic=/policy/enabled)
 # No phone on the forehead: POLICY_HEAD_TOPIC= (set, and empty) runs with the wrist camera only
 head=()
 [[ -n "${POLICY_HEAD_TOPIC+x}" ]] && head=(--robot.head_topic="$POLICY_HEAD_TOPIC")
+# How old the newest state and picture may be. On a loaded laptop rosbridge delivers a camera frame
+# late now and then, and every tick past the default 0.3 s is an error line and no observation
+[[ -n "${POLICY_MAX_AGE_S:-}" ]] && head+=(--robot.max_age_s="$POLICY_MAX_AGE_S")
 port="${POLICY_PORT:-8080}"
 # Any listener there passes the wait below, and the client then talks to the wrong server
 if (exec 3<>"/dev/tcp/localhost/$port") 2>/dev/null; then

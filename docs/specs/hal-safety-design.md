@@ -55,6 +55,12 @@ it sets the grip force on an object.
   `blocked_error` from the measured position, and the measured position changed
   by less than `blocked_motion` over the last `blocked_cycles` cycles. Not the
   lag alone: a slow servo (low torque limit) lags in free motion too.
+- The window of "does not move" holds only cycles in which the finger has to move (it is
+  emptied whenever the error is small), and movement is max - min over it. Found on the hand
+  at `max_speed` 4.0 (2026-09-19): with the rest before a command in the window every quick
+  start was blocked at once (39 blocks in one tune, all at 0 - 32 mA), and a finger turning
+  around far from its setpoint ended the window where it began. Each false block put the
+  finger on `hold_torque` and made it crawl: a key stroke took about a second.
 - **Released** when the command goes to the other side of the finger, or when
   the encoder shows that the finger moves again (the obstacle is gone). The
   full torque returns. The current cannot be the release signal: it is low in

@@ -30,6 +30,26 @@ def test_far_from_the_setpoint_and_not_moving_is_blocked_then_held_just_past_the
     assert contact.direction == 1.0 and contact.hold_setpoint() == pytest.approx(0.33)
 
 
+def test_a_quick_start_after_a_long_rest_is_not_blocked():
+    """Found on the hand at max_speed 4.0: the setpoint is 0.07 ahead within two cycles, the servo has
+    not started yet, and the 0.2 s of rest BEFORE the command counted as "does not move"."""
+    contact = detector()
+    for _ in range(50):
+        assert contact.update(0.05, 0.05, 0.05) == FREE  # resting on the target
+    measured = 0.05
+    for cycle in range(40):  # the command: the setpoint runs ahead, the finger starts 3 cycles late
+        setpoint = min(0.45, 0.05 + 0.08 * (cycle + 1))
+        measured = min(0.45, measured + (0.03 if cycle >= 3 else 0.0))
+        assert contact.update(setpoint, measured, 0.45) == FREE, f'cycle {cycle}'
+
+
+def test_a_finger_that_turns_around_far_from_its_setpoint_is_not_blocked():
+    contact = detector()
+    up_and_back = [0.50, 0.55, 0.59, 0.62, 0.64, 0.65, 0.64, 0.62, 0.59, 0.55, 0.50, 0.44]
+    for measured in up_and_back:  # asked back to 0.05 while it still coasts up: ends where it began
+        assert contact.update(0.05, measured, 0.05) == FREE
+
+
 def test_at_rest_on_the_target_is_not_blocked():
     contact = detector()
     assert all(contact.update(0.5, 0.49, 0.5) == FREE for _ in range(50))

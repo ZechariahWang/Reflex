@@ -50,7 +50,6 @@ class ContactDetector:
 
     def update(self, setpoint, measured, target, current=None):
         """One HAL cycle. Returns the state; read `hold_setpoint()` while it is BLOCKED."""
-        self.history.append(measured)
         if self.state == BLOCKED:
             wants_other_way = (target - measured) * self.direction < 0
             # With the setpoint only hold_lead ahead, a finger that gets there was let go
@@ -60,11 +59,20 @@ class ContactDetector:
             return self.state
 
         error = setpoint - measured
+        # The window of "does not move" holds only cycles in which the finger HAS to move. With the
+        # cycles of the rest before a command in it, every quick start was "far from the setpoint
+        # and has not moved for 0.2 s" at once: blocked, low torque, a crawl (seen on the hand).
+        if abs(error) > self.blocked_error:
+            self.history.append(measured)
+        else:
+            self.history.clear()
         pushing = error or target - measured  # which way: the setpoint leads the finger, else the target
         if self.blocked_current is not None and current is not None:
             self.excess = max(0.0, self.excess + current - self.blocked_current)
-        stuck = (abs(error) > self.blocked_error and len(self.history) == self.history.maxlen
-                 and abs(self.history[-1] - self.history[0]) < self.blocked_motion)
+        # max - min, not last - first: a finger that turns around comes back to where the window
+        # began, and that is a movement too
+        stuck = (len(self.history) == self.history.maxlen
+                 and max(self.history) - min(self.history) < self.blocked_motion)
         if pushing and (stuck or (self.excess and self.excess >= self.blocked_excess)):
             self.state, self.direction, self.held_at = BLOCKED, (1.0 if pushing > 0 else -1.0), measured
             self.history.clear()

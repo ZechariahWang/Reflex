@@ -1,16 +1,16 @@
-"""Mary had a little lamb, the short version, on three keys, one finger per note.
+"""Mary had a little lamb on three keys, one finger per note.
 
-Only "Mary had a little lamb, its fleece was white as snow": that line needs three notes, C D E
-(the G of "little lamb, little lamb" is in the part that is left out). It is a LEFT hand, so the
-higher note is nearer the thumb: ring on C, middle on D, index on E, side by side on the keys; the
-thumb and the pinky stay at REST. A note is a key press: the finger goes down to PRESS and comes
-back to REST before the next note, so the repeated notes (E E E E) are separate strokes.
+The whole tune on three notes, C D E = keys 1 2 3: the three-key version plays "little lamb" the
+second time on E E E instead of E G G. It is a LEFT hand, so the higher note is nearer the thumb:
+ring on C (1), middle on D (2), index on E (3), side by side on the keys; the thumb and the pinky
+stay at REST. A note is a key press: the finger goes down to PRESS and comes back to REST before
+the next note, so the repeated notes (E E E) are separate strokes.
 
-    E D C D | E E E E | D D E D | C - - -
+    3 2 1 2 | 3 3 3 - | 2 2 2 - | 3 3 3 - | 3 2 1 2 | 3 3 3 3 | 2 2 3 2 | 1 - - -
 """
 
 TITLE = "Mary had a little lamb"
-DESCRIPTION = "short version, C D E on ring, middle, index (left hand): no thumb, quarter notes at ~86 bpm"
+DESCRIPTION = "the whole tune, C D E on ring, middle, index (left hand): no thumb, quarter notes at ~86 bpm"
 
 FINGERS = ["thumb", "index", "middle", "ring", "pinky"]
 NOTE_FINGER = {"C": "ring", "D": "middle", "E": "index"}
@@ -24,6 +24,10 @@ RELEASE_S = BEAT_S * (1.0 - DOWN_SHARE)  # a long note holds the key and still c
 
 # (note, beats); "-" is a rest
 TUNE = [
+    ("E", 1), ("D", 1), ("C", 1), ("D", 1),
+    ("E", 1), ("E", 1), ("E", 2),
+    ("D", 1), ("D", 1), ("D", 2),
+    ("E", 1), ("E", 1), ("E", 2),
     ("E", 1), ("D", 1), ("C", 1), ("D", 1),
     ("E", 1), ("E", 1), ("E", 1), ("E", 1),
     ("D", 1), ("D", 1), ("E", 1), ("D", 1),

@@ -2,21 +2,32 @@
 
 # Reflex
 
+**Hack the North 2026 Finalist | Built in 36 hours**
+
+[Devpost](https://devpost.com/software/reflex-e0jkih) |
+[GitHub](https://github.com/ZechariahWang/Reflex)
+
 **Usually, humans write skills for Claude. We wanted a hand where Claude could write skills for humans.**
 
-Reflex is a five-finger robotic exoskeleton hand built at Hack the North 2026.
-It combines programmable finger movements, hand-tracking teleoperation, and an
-imitation-learning pipeline with a live digital twin. The same control interface
-drives the simulated hand and the real servos.
+Reflex is a wearable, 3D-printed gauntlet that gives AI control over five independently
+actuated fingers. Built from the ground up at Hack the North 2026, it combines
+programmable movements, hand-tracking teleoperation, and a fine-tuned SmolVLA policy
+with a live digital twin. The same control interface drives the simulated hand
+and the real servos.
 
 The inspiration is hand-over-hand teaching: capture a physical motion, repeat it,
 and explore how an AI can help guide it. Reflex is a hackathon prototype, not a
 validated rehabilitation device.
 
+Our vision is assistance with dexterous tasks: helping people with limited hand
+mobility, guiding someone through a new skill, or supporting hands fatigued by
+repetitive work. Those are the applications we want to explore, not established
+clinical or workplace outcomes.
+
 ## What It Does
 
 - **Agent-controlled movement:** an MCP server lets Claude inspect finger positions,
-  command poses, and write or run named movement sequences.
+  command poses, and write, run, or edit named movement sequences.
 - **Hand mirroring:** MediaPipe tracks a controller's hand through a webcam and
   translates its motion into finger commands after calibration.
 - **Demonstration recording:** record and replay episodes from the console. The
@@ -25,6 +36,21 @@ validated rehabilitation device.
   IMU orientation, and tracked objects alongside RGB/depth feeds and motor telemetry.
 - **Reusable skills:** rehearsed piano routines and taught movements live as
   readable Python files in [`movements/`](movements/README.md).
+
+## The Piano Demo
+
+One of our favorite demos paired Reflex with Claude to guide someone who had never
+played piano through a tune, moving their fingers note by note. Claude runs the
+finger routines through MCP while the console shows the commanded and measured
+movement. It is a concrete example of the idea behind Reflex: an AI-authored skill
+becoming a physical motion a person can experience.
+
+## Built in 36 Hours
+
+Reflex was built from the ground up in 36 hours at Hack the North, with Kevin Zhao,
+Zechariah Wang, and Eric Liu. The project was selected as a Hack the North finalist.
+See the [Devpost submission](https://devpost.com/software/reflex-e0jkih) for the
+project story.
 
 ## Architecture
 
@@ -53,8 +79,8 @@ and learned policies use that same low-level interface.
 
 | Area | Technology |
 | --- | --- |
-| Hardware | Feetech ST3215 bus servos, 3D-printed linkages, USB servo adapter |
-| Sensing | Intel RealSense D435i RGB/depth/IMU; iPhone + Record3D head camera |
+| Hardware | 3D-printed 5-DOF exoskeleton, Feetech STS3215 bus servos, USB servo adapter |
+| Sensing | Gauntlet-mounted Intel RealSense D435i RGB/depth/IMU; iPhone + Record3D for an additional overhead or head-mounted view |
 | Robot control | ROS 2 Humble, `ros2_control`, Gazebo Fortress, rosbridge |
 | Backend | Python, FastAPI, `roslibpy`, OpenCV, MediaPipe |
 | Console | Next.js, React, TypeScript, Three.js, React Three Fiber, `urdf-loader`, Zustand, Tailwind, shadcn |
@@ -144,13 +170,21 @@ disables motor torque and ignores motion commands.
 
 ## Learning From Demonstrations
 
-The hand is packaged as a LeRobot robot. Record demonstrations using the console
-or LeRobot tooling, then use the policy pipeline for SmolVLA training and inference.
-The policy runs separately from ROS and communicates through rosbridge.
+The hand is packaged as a LeRobot robot. For the hackathon, demonstrations were
+collected through MediaPipe hand tracking while controlling the simulated hand,
+then used to fine-tune SmolVLA for grasp-related finger movements. This let us build
+the training workflow without collecting demonstrations by driving a wearer's hand.
+
+The recorded training run used 49 episodes, with 44 for training and five held out,
+and completed 5,000 fine-tuning steps. See the
+[training run notes](docs/notes/training/runs/RUN-20260920T093202Z/notes.md) for evaluation
+results and limitations. The policy runs separately from ROS and communicates
+through rosbridge; the RealSense also supplies depth for scene perception in the console.
 
 See the [policy guide](policy/README.md) for Python requirements, dataset collection,
-training, and inference commands. Policy performance depends on the demonstrations
-and checkpoint; the presence of training tooling is not a guarantee of general skill transfer.
+training, and inference commands. Held-out prediction accuracy measures how well
+the model matches recorded actions; it does not by itself establish reliable
+closed-loop grasping or general skill transfer.
 
 ## Repository Map
 

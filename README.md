@@ -1,74 +1,173 @@
-# htn-2026
+![Reflex robotic exoskeleton hand](docs/image.png)
 
-Monorepo for the exoskeleton hand.
+# Reflex
 
-- `physical_layer/` - everything that touches the hand itself
-  - `ros2_ws/` - ROS 2 (Humble) workspace
-    - `htn_description` - URDF of the hand, generated from `config/hand_params.yaml`
-    - `htn_launch` - `sim.launch.py` and `hardware.launch.py`
-    - `htn_control` - hand HAL (sim / feetech backends) and keyboard teleop
-- `policy/` - LeRobot side of the learned policy (runs on the GPU laptop, talks to ROS through rosbridge), see `policy/README.md`
+**Usually, humans write skills for Claude. We wanted a hand where Claude could write skills for humans.**
 
-## Run
+Reflex is a five-finger robotic exoskeleton hand built at Hack the North 2026.
+It combines programmable finger movements, hand-tracking teleoperation, and an
+imitation-learning pipeline with a live digital twin. The same control interface
+drives the simulated hand and the real servos.
+
+The inspiration is hand-over-hand teaching: capture a physical motion, repeat it,
+and explore how an AI can help guide it. Reflex is a hackathon prototype, not a
+validated rehabilitation device.
+
+## What It Does
+
+- **Agent-controlled movement:** an MCP server lets Claude inspect finger positions,
+  command poses, and write or run named movement sequences.
+- **Hand mirroring:** MediaPipe tracks a controller's hand through a webcam and
+  translates its motion into finger commands after calibration.
+- **Demonstration recording:** record and replay episodes from the console. The
+  LeRobot integration connects demonstrations to SmolVLA training and inference.
+- **Live digital twin:** a Three.js URDF view shows measured and commanded motion,
+  IMU orientation, and tracked objects alongside RGB/depth feeds and motor telemetry.
+- **Reusable skills:** rehearsed piano routines and taught movements live as
+  readable Python files in [`movements/`](movements/README.md).
+
+## Architecture
+
+```text
+Web console / Claude MCP
+           |
+     FastAPI backend
+           |
+        rosbridge <--- LeRobot / learned policy
+           |
+     ROS 2 hand HAL
+       /         \
+ros2_control   USB bus adapter
+     |               |
+   Gazebo       Feetech servos
+
+Camera frames, IMU, and measured state flow back to the console.
+```
+
+Commands use five normalized finger positions in **thumb, index, middle, ring,
+pinky** order: `0` is open and `1` is closed. Each finger has one controlled degree
+of freedom. The HAL applies motion limits and hardware-specific control; agents
+and learned policies use that same low-level interface.
+
+## Tech Stack
+
+| Area | Technology |
+| --- | --- |
+| Hardware | Feetech ST3215 bus servos, 3D-printed linkages, USB servo adapter |
+| Sensing | Intel RealSense D435i RGB/depth/IMU; iPhone + Record3D head camera |
+| Robot control | ROS 2 Humble, `ros2_control`, Gazebo Fortress, rosbridge |
+| Backend | Python, FastAPI, `roslibpy`, OpenCV, MediaPipe |
+| Console | Next.js, React, TypeScript, Three.js, React Three Fiber, `urdf-loader`, Zustand, Tailwind, shadcn |
+| Agent interface | MCP tools for inspection, movement, and skill creation |
+| Learning | LeRobot, SmolVLA, PyTorch |
+
+## Quick Start
+
+### Console Without Hardware
+
+On Linux or WSL, install Python with `venv`, Node.js/npm, and the standard shell
+utilities used by the launcher. From the repository root:
 
 ```bash
-physical_layer/build.sh      # colcon build, output always lands in physical_layer/ros2_ws
+MOCK=1 ./application/dev.sh
+```
+
+Open **http://localhost:3000**. The launcher installs backend/frontend dependencies
+on first run and starts FastAPI on port `8000` and Next.js on port `3000`.
+Mock mode supplies synthetic hand state and camera feeds without ROS or hardware.
+
+See the [console guide](application/README.md) for configuration and the
+[API contract](application/CONTRACT.md) for topics and message formats.
+
+### ROS Simulation
+
+With ROS 2 Humble and Gazebo Fortress installed:
+
+```bash
+./physical_layer/build.sh
 source physical_layer/ros2_ws/install/setup.bash
-
-# simulated hand (Gazebo, headless) + HAL + camera + Foxglove bridge + finger control window
-ros2 launch htn_launch sim.launch.py            # gui:=true for the Gazebo window
+ros2 launch htn_launch sim.launch.py camera:=none
 ```
 
-Finger control window: hold a key to move a finger, let go and it holds its
-position (window must be focused). Several keys can be held at once.
+In a second terminal:
 
-| finger | thumb | index | middle | ring | pinky |
-|---|---|---|---|---|---|
-| open  | `Q` | `W` | `E` | `R` | `T` |
-| close | `A` | `S` | `D` | `F` | `G` |
-
-Sliders do the same with the mouse, the bars show the measured position.
-
-Below the sliders are buttons for pre-written movements: **poses** (open, fist,
-point, peace, thumbs up, pinch, ...) and **sequences** (wave, grab + release,
-count). Click one to run it, click it again to go back to open; touching a
-finger key takes manual control back. They are plain lists in
-`htn_control/htn_control/poses.py` - add an entry there and a button appears.
-`teleop:=false` skips the window; `ros2 run htn_control teleop` is a terminal
-version with the same keys.
-
-Visualization: open Foxglove, *Open connection* -> `ws://localhost:8765`, add a
-**3D** panel (the hand shows up from `/robot_description` + `/tf`) and a **Plot**
-panel on `/hand/state.data[0]` ... `[4]`. Or import `physical_layer/foxglove/htn_hand.json`
-(Layouts -> Import from file) for the hand model + RealSense color and depth.
-`camera:=none` runs without the camera.
-
-Real hand: `ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0`,
-same control window.
-
-No Ubuntu 22.04 at hand (Windows, mac, 24.04)? `physical_layer/docker/run.sh` drops you
-into a container with Humble + Gazebo and this repo mounted; the same commands work in it,
-and the console ports come through to the host. Its `-d` mode keeps one running in the
-background for `docker exec`. A RealSense on that host reaches the sim through
-`physical_layer/camera_bridge/realsense_bridge.py` (Python, no ROS): it publishes the camera
-topics over rosbridge.
-
-## How it fits together
-
-```
-teleop / auto --/hand/command--> HAL --+-- sim backend    -> ros2_control -> Gazebo
-               (5 x 0..1)         |    +-- feetech backend -> USB bus adapter -> servos
-                                  +--/hand/state-->
+```bash
+./application/dev.sh
 ```
 
-- Everything above the HAL speaks normalized finger positions in
-  thumb, index, middle, ring, pinky order: `0` = open, `1` = closed (each finger
-  is 1 DOF). The HAL clamps and rate-limits (`max_speed`) before anything moves.
-- `physical_layer/ros2_ws/src/htn_description/config/hand_params.yaml` holds the physical description:
-  handedness (currently **left**), palm and finger sizes, masses, angle limits, mount poses, joint physics, and
-  servo calibration. The URDF and the HAL both read it; pass
-  `params_file:=/path/to/other.yaml` to either launch file to try another hand.
-- New hardware = a new `HandBackend` subclass in `htn_control/hal/`, registered
-  in `hal/__init__.py`. The real hand uses Feetech ST bus servos
-  (`hal/feetech.py`, `hal/feetech_backend.py`); `servo_tool` sets ids and finds
-  calibration steps.
+Use `gui:=true` for the Gazebo window or `teleop:=false` to skip the finger-control
+window. The simulator does not supply synthetic camera images: connect a real
+camera for vision workflows, or use console mock mode.
+
+Without a native Humble environment,
+[`physical_layer/docker/run.sh`](physical_layer/docker/run.sh) provides a container
+with the repository mounted. The host-side
+[RealSense bridge](physical_layer/camera_bridge/realsense_bridge.py) can publish
+camera data over rosbridge without a local ROS installation.
+
+### Real Hand
+
+After configuring servo IDs, calibration, and the serial device:
+
+```bash
+ros2 launch htn_launch hardware.launch.py serial_port:=/dev/ttyACM0
+```
+
+Physical dimensions, joint limits, and servo calibration live in
+[`hand_params.yaml`](physical_layer/ros2_ws/src/htn_description/config/hand_params.yaml).
+Read the [physical-layer notes](physical_layer/CLAUDE.md) before changing hardware settings.
+
+The finger-control window uses `Q W E R T` to open the thumb through pinky and
+`A S D F G` to close them. Release a key to hold position. Sliders and preset
+gestures are available too. Foxglove can connect at `ws://localhost:8765`; import
+the [hand layout](physical_layer/foxglove/htn_hand.json) for robot and camera views.
+
+## Connect Claude
+
+The MCP server is a separate client of the backend. Starting the console does
+not automatically register it. On Linux/WSL, from the repository root:
+
+```bash
+python3 -m venv mcp_server/.venv
+mcp_server/.venv/bin/pip install -r mcp_server/requirements.txt
+claude mcp add htn-hand -- "$PWD/mcp_server/.venv/bin/python" "$PWD/mcp_server/server.py"
+```
+
+With the backend running, Claude can use `get_hand_state`, `move_hand`,
+`list_skills`, `teach_skill`, `run_skill`, and `stop_skill`. For example:
+"Read the hand state, then make a peace sign."
+
+See the [MCP guide](mcp_server/README.md) for Claude Desktop, HTTP transport, and
+remote backend configuration. MCP commands use the backend directly, so the
+console's ARM switch does not gate them. HAL limits still apply; passive mode
+disables motor torque and ignores motion commands.
+
+## Learning From Demonstrations
+
+The hand is packaged as a LeRobot robot. Record demonstrations using the console
+or LeRobot tooling, then use the policy pipeline for SmolVLA training and inference.
+The policy runs separately from ROS and communicates through rosbridge.
+
+See the [policy guide](policy/README.md) for Python requirements, dataset collection,
+training, and inference commands. Policy performance depends on the demonstrations
+and checkpoint; the presence of training tooling is not a guarantee of general skill transfer.
+
+## Repository Map
+
+| Directory | Purpose |
+| --- | --- |
+| [`physical_layer/`](physical_layer/CLAUDE.md) | Robot description, ROS launch files, HAL, servo backends, teleop, camera bridges, and Docker setup |
+| [`application/`](application/README.md) | FastAPI backend and live web console |
+| [`mcp_server/`](mcp_server/README.md) | Claude-compatible hand-control and skill-management tools |
+| [`movements/`](movements/README.md) | Rehearsed and agent-taught finger routines |
+| [`policy/`](policy/README.md) | LeRobot integration, recording, training, and inference tooling |
+| [`docs/`](docs/) | Designs, development notes, and demo instructions |
+
+## What's Next
+
+- Finish compliant, torque-on hand-guiding control. Existing torque-off backdrive
+  mode is distinct from a tuned, soft hand-guiding controller.
+- Expand the demonstration dataset and evaluate learned skills beyond their
+  training examples.
+- Explore how recorded motions and agent-authored skills can support physical
+  skill practice and assistive tasks.

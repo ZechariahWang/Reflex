@@ -37,19 +37,19 @@ The base build is:
 | Waveshare Bus Servo Adapter (A) | 1 | USB to the servo bus. No MCU, nothing to flash. |
 | Intel RealSense D435i | 1 | Wrist camera. Cheaper cameras are listed in the BOM. |
 | 7.4 V power, 5 A or more | 1 | A 7.5 V DC adapter with a 5.5 × 2.1 mm center-positive plug, or a 2S LiPo. |
-| Chicago screws (binding posts), M2 | ~45 | One per linkage pivot, 9 per finger. |
-| M2 / M3 socket head screw kit | 1 | Mounting screws |
+| Chicago screws (binding posts), M2 | 2 packs of 40 | One per linkage pivot: 9 per finger, 45 in total. |
+| Ball bearing, 3 × 8 × 3 mm (MR83ZZ) | 5 | One in each fingertip pad. An M3 × 8 from the screw kit goes through it into the adapter. |
+| M2.5 standoff kit | 1 | 4 screws and 4 hex standoffs hold the Waveshare adapter on the electronics plate. |
+| Hook and loop (velcro) strap, 20 mm | ~1 m | Palm strap and one strap per finger cap |
+| M4 socket head screw kit | 1 | M4 × 6, × 10 and × 16 hold the finger modules and thumb mount on the base plate (step 6). Get socket heads: the counterbores are 7.3 mm, too small for button heads. |
+| M2 / M3 socket head screw kit | 1 | M2 and M3 screws for everything except the base, including the M3 × 8 for each fingertip bearing |
 
-Also needed (not in the BOM sheet yet):
+Not in the BOM sheet:
 
-| Item | Qty | Where it goes |
-| --- | --- | --- |
-| Ball bearing, 8 mm OD (the CAD uses McMaster 4668K106) | 5 | Pivot of each fingertip pad |
-| M3 × 8 socket head screw (McMaster 91290A113 in the CAD) | 5 | Through each bearing into the adapter |
-| M2.5 × 4 screws + M2.5 hex standoffs | 4 + 4 | Waveshare adapter on the electronics plate |
-| Inline DC power switch (5.5 × 2.1 mm) | 1 | Between the supply and the adapter. See [Safety](#safety). |
-| Velcro strap, 20 mm | ~1 m | Palm strap and one strap per finger cap |
-| Filament: a rigid one, plus TPU for the finger caps | | See printing |
+| Item | Where it goes |
+| --- | --- |
+| Inline DC power switch (5.5 × 2.1 mm), recommended | Between the supply and the adapter. See [Safety](#safety). |
+| Filament: PLA for the finger caps | See printing for the other parts |
 
 **Power: the servos are 7.4 V parts.** The Waveshare adapter passes its input straight
 to the servos, so whatever you plug into it goes straight to the motors. Feed it
@@ -69,8 +69,7 @@ STS3215 instead, you need a 12 V supply. Never mix servo voltages on one bus.
 
 - **Rigid parts** (everything except the caps): the build in the photo uses white
   filament. TODO(kevin): material, layer height, infill, walls, and which parts need supports.
-- **Finger caps** (`*_cap.stl`): flexible filament (TPU) so they hug the finger.
-  TODO(kevin): confirm TPU hardness and settings.
+- **Finger caps** (`*_cap.stl`): PLA.
 - The `_a` / `_b` parts are the two side plates of the same link, one on each side
   of the finger. Print both.
 - Total print time is about 8 hours on a typical FDM printer.
@@ -92,7 +91,7 @@ servo horn --P-- rod --A-- triangle --B-- ternary --E-- adapter (+ contact pad +
 The servo turns the **horn**. The **rod** pushes the **triangle**, which pivots on
 the **pivot_base**. The **ternary**, **long** and **binary** links carry the
 motion out to the **adapter**, which curls the fingertip. The **contact** pad turns
-on a bearing under the adapter, and the TPU **cap** on the pad holds the wearer's
+on a bearing under the adapter, and the **cap** on the pad holds the wearer's
 fingertip.
 
 ![Linkage render](images/linkage-render.png)
@@ -111,28 +110,35 @@ ships with ID 1, and two servos with the same ID cannot share the bus.
    The thumb stays ID 1. Label each servo with its finger.
 2. **Servos into their mounts.** Put each servo into its `servo_mount` (and
    `servo_clamp` for index to pinky) with the screws that come with the servo.
+   Screw each `servo_mount` to its `pivot_base` with M3 screws: M3 × 10 from the
+   `servo_mount` side and M3 × 16 from the `pivot_base` side. Fix each `servo_clamp`
+   with M2 × 8 screws.
 3. **Horns.** Screw each printed `horn` (and its `horn_plate`) to the round horn
-   disc that comes with the servo, using the disc's four holes. The exact angle
-   doesn't matter yet: calibration sets the open and closed positions later.
-   TODO(kevin): note the horn angle you used, if it matters.
+   disc that comes with the servo, using the disc's four holes. The angle doesn't
+   matter: calibration sets the open and closed positions later.
 4. **Linkage.** Build each finger on its `pivot_base` as in the diagram above,
-   with a Chicago screw through every pivot: triangle and long link on the
-   pivot_base (G1, G2), the rod from horn to triangle, the ternary and binary
-   between the side plates, and the adapter (with `adapter_plate_a` and `_b`) on
-   the end. Each finger should swing freely by hand before the servo is attached.
-   TODO(kevin): which holes take Chicago screws and which take plain M2 screws.
+   with a Chicago screw through every moving joint (every pivot where two parts
+   turn against each other): triangle and long link on the pivot_base (G1, G2),
+   the rod from horn to triangle, the ternary and binary between the side plates,
+   and the adapter (with `adapter_plate_a` and `_b`) on the end. Each finger should
+   swing freely by hand before the servo is attached.
 5. **Fingertip.** Press the bearing into the `contact` pad and screw it to the
-   adapter with the M3 × 8. Fit the TPU `cap`.
-   TODO(kevin): how the cap attaches to the pad (glue, the two screws in the photo, ...).
-6. **Onto the base.** Fix the four finger modules to the `base_plate`, and the thumb
-   module to the base through the `thumb_mount`. See the top view below for placement.
-   TODO(kevin): screws used here.
+   adapter with the M3 × 8. Screw the `cap` to the pad with two M3 × 8 screws
+   (M3 × 6 on the thumb, whose pad is thinner).
+6. **Onto the base.** Screw each finger's `pivot_base` to the `base_plate` with
+   M4 × 6 screws from underneath, through the counterbored holes in the
+   `base_plate`. Screw the `thumb_mount` to the `base_plate` the same way: M4 × 10
+   in the two shallower holes, M4 × 16 in the two deeper ones. Fix the thumb
+   `servo_mount` to the `thumb_mount` with two M2 × 10. See the top view below for
+   placement. TODO(kevin): what goes through the four 4 mm holes that run through
+   both the `thumb_mount` and the thumb `servo_mount` (about 37 mm long).
 7. **Electronics.** Mount the Waveshare adapter on the `electronics_plate` with the
-   M2.5 standoffs, and the plate on the base.
-8. **Camera.** Fix the RealSense to the `camera_mount`. The D435i has two M3
-   threaded holes on its back. Then fix the mount to the base.
+   M2.5 standoffs, then screw the plate to the `base_plate` with M3 × 12 screws.
+8. **Camera.** Fix the RealSense to the `camera_mount` with two M3 × 6 screws in the
+   threaded holes on its back. Don't go longer: those threads are only about 3 mm
+   deep. Then fix the mount to the base.
 9. **Straps.** Run a velcro strap around the palm, and one around each finger
-   cap, as in the photo. TODO(kevin): strap routing and slots.
+   cap, as in the photo.
 
 ![Top view of the assembly](images/top-view.png)
 

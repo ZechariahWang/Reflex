@@ -37,19 +37,18 @@ The base build is:
 | Waveshare Bus Servo Adapter (A) | 1 | USB to the servo bus. No MCU, nothing to flash. |
 | Intel RealSense D435i | 1 | Wrist camera. Cheaper cameras are listed in the BOM. |
 | 7.4 V power, 5 A or more | 1 | A 7.5 V DC adapter with a 5.5 × 2.1 mm center-positive plug, or a 2S LiPo. |
-| Chicago screws (binding posts), M2 | ~45 | One per linkage pivot, 9 per finger. |
-| M2 / M3 socket head screw kit | 1 | Mounting screws |
+| Chicago screws (binding posts), M2 | 2 packs of 40 | One per linkage pivot: 9 per finger, 45 in total. |
+| Ball bearing, 3 × 8 × 3 mm (MR83ZZ) | 5 | One in each fingertip pad. An M3 × 8 from the screw kit goes through it into the adapter. |
+| M2.5 standoff kit | 1 | 4 screws and 4 hex standoffs hold the Waveshare adapter on the electronics plate. |
+| Hook and loop (velcro) strap, 20 mm | ~1 m | Palm strap and one strap per finger cap |
+| M2 / M3 socket head screw kit | 1 | Mounting screws, and the M3 × 8 for each fingertip bearing |
 
-Also needed (not in the BOM sheet yet):
+Not in the BOM sheet:
 
-| Item | Qty | Where it goes |
-| --- | --- | --- |
-| Ball bearing, 8 mm OD (the CAD uses McMaster 4668K106) | 5 | Pivot of each fingertip pad |
-| M3 × 8 socket head screw (McMaster 91290A113 in the CAD) | 5 | Through each bearing into the adapter |
-| M2.5 × 4 screws + M2.5 hex standoffs | 4 + 4 | Waveshare adapter on the electronics plate |
-| Inline DC power switch (5.5 × 2.1 mm) | 1 | Between the supply and the adapter. See [Safety](#safety). |
-| Velcro strap, 20 mm | ~1 m | Palm strap and one strap per finger cap |
-| Filament: a rigid one, plus TPU for the finger caps | | See printing |
+| Item | Where it goes |
+| --- | --- |
+| Inline DC power switch (5.5 × 2.1 mm), recommended | Between the supply and the adapter. See [Safety](#safety). |
+| Filament: a rigid one, plus TPU for the finger caps | See printing |
 
 **Power: the servos are 7.4 V parts.** The Waveshare adapter passes its input straight
 to the servos, so whatever you plug into it goes straight to the motors. Feed it

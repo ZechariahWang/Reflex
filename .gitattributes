@@ -3,3 +3,5 @@
 *.png binary
 *.stl binary
 *.ico binary
+*.step binary
+*.jpg binary

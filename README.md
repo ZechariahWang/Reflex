@@ -133,6 +133,9 @@ camera data over rosbridge without a local ROS installation.
 
 ### Real Hand
 
+To build one, follow the [hardware build guide](hardware/README.md): CAD (STEP),
+print files (STL), parts, assembly, wiring, and first power-on.
+
 After configuring servo IDs, calibration, and the serial device:
 
 ```bash
@@ -190,6 +193,7 @@ closed-loop grasping or general skill transfer.
 
 | Directory | Purpose |
 | --- | --- |
+| [`hardware/`](hardware/README.md) | CAD (STEP), print files (STL), build guide and wiring; CERN-OHL-P-2.0 |
 | [`physical_layer/`](physical_layer/CLAUDE.md) | Robot description, ROS launch files, HAL, servo backends, teleop, camera bridges, and Docker setup |
 | [`application/`](application/README.md) | FastAPI backend and live web console |
 | [`mcp_server/`](mcp_server/README.md) | Claude-compatible hand-control and skill-management tools |

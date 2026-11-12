@@ -41,13 +41,13 @@ The base build is:
 | Ball bearing, 3 × 8 × 3 mm (MR83ZZ) | 5 | One in each fingertip pad. An M3 × 8 from the screw kit goes through it into the adapter. |
 | M2.5 standoff kit | 1 | 4 screws and 4 hex standoffs hold the Waveshare adapter on the electronics plate. |
 | Hook and loop (velcro) strap, 20 mm | ~1 m | Palm strap and one strap per finger cap |
+| M4 socket head screw kit | 1 | M4 × 6, × 10 and × 16 hold the finger modules and thumb mount on the base plate (step 6). Get socket heads: the counterbores are 7.3 mm, too small for button heads. |
 | M2 / M3 socket head screw kit | 1 | M2 and M3 screws for everything except the base, including the M3 × 8 for each fingertip bearing |
 
 Not in the BOM sheet:
 
 | Item | Where it goes |
 | --- | --- |
-| M4 socket head screws: M4 × 6, × 10 and × 16 | Finger modules and thumb mount onto the base plate (step 6) |
 | Inline DC power switch (5.5 × 2.1 mm), recommended | Between the supply and the adapter. See [Safety](#safety). |
 | Filament: PLA for the finger caps | See printing for the other parts |
 
